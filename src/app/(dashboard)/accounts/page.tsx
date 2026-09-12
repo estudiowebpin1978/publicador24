@@ -15,8 +15,17 @@ export default function AccountsPage() {
   const updateAccount = useMutation(api.socialAccounts.update)
   const createAccount = useMutation(api.socialAccounts.create)
 
+  const [bufferChannels, setBufferChannels] = React.useState<any[]>([])
+  const [loadingBuffer, setLoadingBuffer] = React.useState(true)
+
+  React.useEffect(() => {
+    fetch("/api/health")
+      .then(() => setLoadingBuffer(false))
+      .catch(() => setLoadingBuffer(false))
+  }, [])
+
   const handleConnect = async (platform: string) => {
-    console.log("Connect:", platform)
+    window.open("/setup", "_self")
   }
 
   const handleReconnect = async (platform: string) => {
