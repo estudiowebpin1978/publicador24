@@ -15,6 +15,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Search, Bell, Menu, LogOut, Settings, User, CreditCard } from "lucide-react"
+import { useAuth } from "@/lib/auth/auth-context"
+import { useRouter } from "next/navigation"
 
 interface HeaderProps {
   onMenuToggle?: () => void
@@ -24,6 +26,13 @@ interface HeaderProps {
 export function Header({ onMenuToggle, className }: HeaderProps) {
   const [searchValue, setSearchValue] = React.useState("")
   const notificationCount = 5
+  const { user, logout } = useAuth()
+  const router = useRouter()
+
+  const handleLogout = () => {
+    logout()
+    router.push("/login")
+  }
 
   return (
     <header
@@ -115,16 +124,16 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
               <Button variant="ghost" size="icon-sm" />
             }
           >
-            <Avatar size="sm">
-              <AvatarImage src="/avatars/user.jpg" alt="Usuario" />
-              <AvatarFallback>JD</AvatarFallback>
-            </Avatar>
+              <Avatar size="sm">
+                <AvatarImage src="/avatars/user.jpg" alt="Usuario" />
+                <AvatarFallback>EW</AvatarFallback>
+              </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span className="font-medium">John Doe</span>
-                <span className="text-xs text-muted-foreground">john@example.com</span>
+                <span className="font-medium">estudiowebpin</span>
+                <span className="text-xs text-muted-foreground">{user?.email || ".usuario@email.com"}</span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -141,7 +150,7 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
               Configuración
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">
+            <DropdownMenuItem variant="destructive" onClick={handleLogout}>
               <LogOut className="size-4" />
               Cerrar sesión
             </DropdownMenuItem>
