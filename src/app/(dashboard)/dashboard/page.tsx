@@ -1,4 +1,5 @@
 "use client"
+export const dynamic = 'force-dynamic'
 
 import { useQuery } from "@/hooks/use-convex"
 import { api } from "@/hooks/use-convex"
