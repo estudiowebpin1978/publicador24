@@ -20,6 +20,7 @@ import {
   TrendingUp,
   CheckCircle,
   Settings,
+  Key,
   ChevronDown,
   Sparkles,
 } from "lucide-react"
@@ -43,6 +44,7 @@ const navItems: NavItem[] = [
   { label: "Hashtags", href: "/hashtags", icon: Hash },
   { label: "Tendencias", href: "/trends", icon: TrendingUp },
   { label: "Aprobación", href: "/approval", icon: CheckCircle, badge: 3 },
+  { label: "Configuración API", href: "/setup", icon: Key },
   { label: "Configuración", href: "/settings", icon: Settings },
 ]
 

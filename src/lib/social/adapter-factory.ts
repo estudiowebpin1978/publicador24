@@ -2,10 +2,15 @@ import { SocialPlatform } from '@/types';
 import { SocialPlatformAdapter } from './types';
 import { MockSocialAdapter } from './mock-adapter';
 import { TikTokAdapter } from './tiktok/adapter';
+import { TikTokRealAdapter } from './tiktok/real-adapter';
 import { InstagramAdapter } from './instagram/adapter';
+import { InstagramRealAdapter } from './instagram/real-adapter';
 import { FacebookAdapter } from './facebook/adapter';
+import { FacebookRealAdapter } from './facebook/real-adapter';
 import { XAdapter } from './x/adapter';
+import { XRealAdapter } from './x/real-adapter';
 import { YouTubeAdapter } from './youtube/adapter';
+import { YouTubeRealAdapter } from './youtube/real-adapter';
 import { LinkedInAdapter } from './linkedin/adapter';
 
 function isMockMode(): boolean {
@@ -15,19 +20,19 @@ function isMockMode(): boolean {
 function createRealAdapter(platform: SocialPlatform): SocialPlatformAdapter {
   switch (platform) {
     case 'tiktok':
-      return new TikTokAdapter();
+      return new TikTokRealAdapter();
     case 'instagram':
-      return new InstagramAdapter();
+      return new InstagramRealAdapter();
     case 'facebook':
-      return new FacebookAdapter();
+      return new FacebookRealAdapter();
     case 'x':
-      return new XAdapter();
+      return new XRealAdapter();
     case 'youtube':
-      return new YouTubeAdapter();
+      return new YouTubeRealAdapter();
     case 'linkedin':
       return new LinkedInAdapter();
     default:
-      throw new Error(`Unsupported platform: ${platform}`);
+      throw new Error(`Plataforma no soportada: ${platform}`);
   }
 }
 
