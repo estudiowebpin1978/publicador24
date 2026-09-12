@@ -1,34 +1,28 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sparkles } from "lucide-react"
-import { useAuth } from "@/lib/auth/auth-context"
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
-  const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState("")
-  const { login } = useAuth()
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
     setError("")
 
-    const success = login(email, password)
-    if (success) {
-      router.push("/dashboard")
+    if (email === "estudiowebpin@gmail.com" && password === "admin24") {
+      localStorage.setItem("autopublisher_user", JSON.stringify({ email }))
+      window.location.href = "/dashboard"
     } else {
       setError("Credenciales incorrectas")
-      setIsLoading(false)
     }
   }
 
@@ -53,7 +47,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               {error && (
-                <div className="rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950 dark:text-red-400">
+                <div className="rounded-md bg-red-50 p-3 text-sm text-red-600">
                   {error}
                 </div>
               )}
@@ -81,8 +75,8 @@ export default function LoginPage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
+              <Button type="submit" className="w-full">
+                Iniciar sesión
               </Button>
             </CardFooter>
           </form>

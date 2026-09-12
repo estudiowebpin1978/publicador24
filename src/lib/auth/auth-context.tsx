@@ -5,27 +5,18 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 interface AuthContextType {
   isAuthenticated: boolean
   user: { email: string } | null
-  mounted: boolean
-  login: (email: string, password: string) => boolean
   logout: () => void
 }
 
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   user: null,
-  mounted: false,
-  login: () => false,
   logout: () => {},
 })
 
-const VALID_USER = {
-  email: "estudiowebpin@gmail.com",
-  password: "admin24",
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<{ email: string } | null>(null)
-  const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const stored = localStorage.getItem("autopublisher_user")
@@ -36,26 +27,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem("autopublisher_user")
       }
     }
-    setMounted(true)
+    setLoading(false)
   }, [])
-
-  const login = (email: string, password: string): boolean => {
-    if (email === VALID_USER.email && password === VALID_USER.password) {
-      const userData = { email }
-      setUser(userData)
-      localStorage.setItem("autopublisher_user", JSON.stringify(userData))
-      return true
-    }
-    return false
-  }
 
   const logout = () => {
     setUser(null)
     localStorage.removeItem("autopublisher_user")
+    window.location.href = "/login"
+  }
+
+  if (loading) {
+    return <div className="flex h-screen items-center justify-center"><p>Cargando...</p></div>
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated: !!user, user, mounted, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated: !!user, user, logout }}>
       {children}
     </AuthContext.Provider>
   )

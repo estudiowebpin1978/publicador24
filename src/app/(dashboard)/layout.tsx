@@ -1,27 +1,40 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import ConvexClientProvider from "@/components/providers/convex-provider"
 import { AppLayout } from "@/components/layout/app-layout"
-import { useAuth } from "@/lib/auth/auth-context"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, mounted } = useAuth()
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loading, setLoading] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
-    if (mounted && !isAuthenticated) {
+    const stored = localStorage.getItem("autopublisher_user")
+    if (stored) {
+      try {
+        const user = JSON.parse(stored)
+        if (user && user.email) {
+          setIsAuthenticated(true)
+        } else {
+          router.push("/login")
+        }
+      } catch {
+        router.push("/login")
+      }
+    } else {
       router.push("/login")
     }
-  }, [isAuthenticated, mounted, router])
+    setLoading(false)
+  }, [router])
+
+  if (loading) {
+    return <div className="flex h-screen items-center justify-center"><p>Cargando...</p></div>
+  }
 
   if (!isAuthenticated) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-muted-foreground">Cargando...</p>
-      </div>
-    )
+    return null
   }
 
   return (
