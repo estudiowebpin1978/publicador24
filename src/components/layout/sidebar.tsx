@@ -35,7 +35,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Panel", href: "/dashboard", icon: LayoutDashboard },
   { label: "Contenido", href: "/content", icon: FileText },
-  { label: "Crear", href: "/create", icon: PlusCircle },
+  { label: "Crear", href: "/content/create", icon: PlusCircle },
   { label: "Calendario", href: "/calendar", icon: Calendar },
   { label: "Piloto Automático", href: "/autopilot", icon: Zap },
   { label: "Cuentas", href: "/accounts", icon: Users },

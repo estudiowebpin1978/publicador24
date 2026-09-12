@@ -16,7 +16,7 @@ const actions = [
   {
     label: "Crear Contenido",
     icon: PlusCircle,
-    href: "/create",
+    href: "/content/create",
     color: "bg-violet-600 hover:bg-violet-700 text-white",
   },
   {
@@ -28,7 +28,7 @@ const actions = [
   {
     label: "Generar con IA",
     icon: Wand2,
-    href: "/create/ai",
+    href: "/content/create/ai",
     color: "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700",
   },
   {
