@@ -60,7 +60,7 @@ export const processMessage = action({
     const referenceImages = args.referenceImages || [];
 
     if (message.includes("parar") || message.includes("pausar") || message.includes("stop")) {
-      await ctx.runMutation(api.autopilot.updateSettings, {
+      await ctx.runMutation(api.autopilot.saveSettings, {
         level: "STOPPED",
         platformFrequencies: { instagram: "0", x: "0", facebook: "0", linkedin: "0", tiktok: "0" },
         topics: "", contentPillars: "", topicsToAvoid: "",
@@ -78,7 +78,7 @@ export const processMessage = action({
     }
 
     if (message.includes("reanudar") || message.includes("continuar") || message.includes("play")) {
-      await ctx.runMutation(api.autopilot.updateSettings, {
+      await ctx.runMutation(api.autopilot.saveSettings, {
         level: "FULL",
         platformFrequencies: { instagram: "3-5x por semana", x: "1-2x por semana", facebook: "2-3x por semana", linkedin: "1-2x por semana", tiktok: "3-5x por semana" },
         topics: "", contentPillars: "", topicsToAvoid: "",
@@ -166,8 +166,9 @@ export const processMessage = action({
     });
 
     let imagesGenerated = 0;
+    const createdPieceIds: string[] = [];
     for (const piece of pieces) {
-      await ctx.runMutation(api.contentPieces.create, {
+      const pieceId = await ctx.runMutation(api.contentPieces.create, {
         contentPackId: packId,
         campaignId,
         title: piece.title,
@@ -183,6 +184,7 @@ export const processMessage = action({
         score: piece.score,
         status: "GENERATED",
       });
+      createdPieceIds.push(pieceId);
       imagesGenerated++;
     }
 
@@ -197,8 +199,7 @@ export const processMessage = action({
     let scheduledCount = 0;
     const platforms = ["instagram", "facebook", "tiktok"];
 
-    for (let i = 0; i < pieces.length && scheduledCount < 15; i++) {
-      const piece = pieces[i];
+    for (let i = 0; i < createdPieceIds.length && scheduledCount < 15; i++) {
       const platform = platforms[i % platforms.length];
 
       const dayOffset = Math.floor(i / 3) + 1;
@@ -213,7 +214,7 @@ export const processMessage = action({
         const idempotencyKey = `sched_chat_${packId}_${i}_${platform}_${scheduleTime.getTime()}`;
 
         await ctx.runMutation(api.scheduledPosts.create, {
-          contentPieceId: (await ctx.runQuery(api.contentPieces.getByPack, { contentPackId: packId }))[i]?._id,
+          contentPieceId: createdPieceIds[i] as any,
           socialAccountId: account._id,
           platform,
           scheduledAt: scheduleTime.getTime(),
