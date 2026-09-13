@@ -14,6 +14,7 @@ import type * as actions_autoRefill from "../actions/autoRefill.js";
 import type * as actions_autonomousLoop from "../actions/autonomousLoop.js";
 import type * as actions_campaignGenerator from "../actions/campaignGenerator.js";
 import type * as actions_campaignHealth from "../actions/campaignHealth.js";
+import type * as actions_chatAI from "../actions/chatAI.js";
 import type * as actions_collectAnalytics from "../actions/collectAnalytics.js";
 import type * as actions_contentCalendar from "../actions/contentCalendar.js";
 import type * as actions_contentDiversity from "../actions/contentDiversity.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   "actions/autonomousLoop": typeof actions_autonomousLoop;
   "actions/campaignGenerator": typeof actions_campaignGenerator;
   "actions/campaignHealth": typeof actions_campaignHealth;
+  "actions/chatAI": typeof actions_chatAI;
   "actions/collectAnalytics": typeof actions_collectAnalytics;
   "actions/contentCalendar": typeof actions_contentCalendar;
   "actions/contentDiversity": typeof actions_contentDiversity;
