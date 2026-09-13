@@ -273,6 +273,7 @@ export default defineSchema({
     autopilotLevel: v.optional(v.string()),
     pillarConfig: v.optional(v.any()),
     funnelConfig: v.optional(v.any()),
+    referenceImages: v.optional(v.array(v.string())),
     contentCount: v.number(),
     publishedCount: v.number(),
     scheduledCount: v.optional(v.number()),

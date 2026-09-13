@@ -42,6 +42,7 @@ const STEPS = [
   { id: "objective", label: "Objetivo", icon: Target },
   { id: "audience", label: "Público", icon: Users },
   { id: "style", label: "Estilo", icon: Palette },
+  { id: "references", label: "Imágenes", icon: ImageIcon },
   { id: "generate", label: "Generar", icon: Sparkles },
   { id: "review", label: "Revisar", icon: Eye },
   { id: "adapt", label: "Plataformas", icon: Megaphone },
@@ -59,6 +60,7 @@ interface CampaignWizardState {
   style: string
   offer: string
   url: string
+  referenceImages: string[]
   contentCount: number
   generatedCampaign: any | null
   selectedPieces: string[]
@@ -75,6 +77,7 @@ const initialState: CampaignWizardState = {
   style: "profesional",
   offer: "",
   url: "",
+  referenceImages: [],
   contentCount: 30,
   generatedCampaign: null,
   selectedPieces: [],
@@ -127,13 +130,14 @@ export default function CampaignWizardPage() {
         style: state.style,
         offer: state.offer || undefined,
         url: state.url || undefined,
+        referenceImages: state.referenceImages.length > 0 ? state.referenceImages : undefined,
         contentCount: state.contentCount,
       })
       setState((prev) => ({
         ...prev,
         generatedCampaign: result,
         selectedPieces: result.pieces.map((p: any) => p.id),
-        currentStep: 5,
+        currentStep: 6,
         isGenerating: false,
       }))
     } catch (error) {
@@ -179,9 +183,10 @@ export default function CampaignWizardPage() {
       case 2: return true
       case 3: return state.platforms.length > 0
       case 4: return true
-      case 5: return state.selectedPieces.length > 0
-      case 6: return true
+      case 5: return true
+      case 6: return state.selectedPieces.length > 0
       case 7: return true
+      case 8: return true
       default: return false
     }
   }
@@ -469,6 +474,9 @@ export default function CampaignWizardPage() {
                 <div><strong>Estilo:</strong> {STYLES.find(s => s.id === state.style)?.name}</div>
                 <div><strong>Plataformas:</strong> {state.platforms.map(p => PLATFORMS.find(pl => pl.id === p)?.name).join(", ")}</div>
                 <div><strong>Piezas:</strong> {state.contentCount}</div>
+                {state.referenceImages.length > 0 && (
+                  <div><strong>Imágenes de referencia:</strong> {state.referenceImages.length} imagen(es)</div>
+                )}
                 {state.offer && <div><strong>Oferta:</strong> {state.offer}</div>}
               </div>
 
@@ -660,7 +668,7 @@ export default function CampaignWizardPage() {
           </Card>
         )}
 
-        {state.currentStep === 8 && (
+        {state.currentStep === 9 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -709,7 +717,99 @@ export default function CampaignWizardPage() {
         </Button>
 
         <div className="flex gap-2">
-          {state.currentStep === 4 && (
+        {state.currentStep === 4 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ImageIcon className="size-5 text-pink-500" />
+                Imágenes de referencia
+              </CardTitle>
+              <CardDescription>
+                Subí imágenes que representen el estilo visual que querés para tu campaña.
+                La IA las usará como inspiración para generar imágenes consistentes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border-2 border-dashed border-white/10 p-8 text-center hover:border-violet-500/30 transition-colors">
+                <ImageIcon className="mx-auto size-12 text-slate-500 mb-4" />
+                <p className="text-sm text-slate-400 mb-2">
+                  Arrastrá imágenes aquí o hacé click para seleccionar
+                </p>
+                <p className="text-xs text-slate-500 mb-4">
+                  Formatos: JPG, PNG, WebP. Máximo 5MB por imagen.
+                </p>
+                <input
+                  type="file"
+                  id="reference-images"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || [])
+                    files.forEach(file => {
+                      const reader = new FileReader()
+                      reader.onload = (ev) => {
+                        const result = ev.target?.result as string
+                        if (result) {
+                          setState(prev => ({
+                            ...prev,
+                            referenceImages: [...prev.referenceImages, result]
+                          }))
+                        }
+                      }
+                      reader.readAsDataURL(file)
+                    })
+                  }}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('reference-images')?.click()}
+                  className="border-white/10 bg-white/5 hover:bg-white/10"
+                >
+                  <ImageIcon className="size-4 mr-2" />
+                  Seleccionar imágenes
+                </Button>
+              </div>
+
+              {state.referenceImages.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Imágenes seleccionadas ({state.referenceImages.length})</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {state.referenceImages.map((img, idx) => (
+                      <div key={idx} className="relative group rounded-lg overflow-hidden border border-white/10">
+                        <img
+                          src={img}
+                          alt={`Referencia ${idx + 1}`}
+                          className="aspect-square w-full object-cover"
+                        />
+                        <button
+                          onClick={() => {
+                            setState(prev => ({
+                              ...prev,
+                              referenceImages: prev.referenceImages.filter((_, i) => i !== idx)
+                            }))
+                          }}
+                          className="absolute top-2 right-2 size-6 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-lg bg-white/5 p-4">
+                <p className="text-sm text-slate-400">
+                  <strong className="text-white">Tip:</strong> Subí imágenes de tu marca, productos,
+                  o ejemplos de contenido que te guste. La IA generará imágenes con un estilo visual similar.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {state.currentStep === 5 && (
             <Button onClick={handleGenerate} disabled={state.isGenerating} size="lg">
               {state.isGenerating ? (
                 <>
@@ -725,29 +825,29 @@ export default function CampaignWizardPage() {
             </Button>
           )}
 
-          {state.currentStep < 4 && (
+          {state.currentStep < 5 && (
             <Button onClick={() => setStep(state.currentStep + 1)} disabled={!canGoNext()}>
               Siguiente
               <ArrowRight className="size-4" />
             </Button>
           )}
 
-          {state.currentStep === 5 && (
-            <Button onClick={() => setStep(6)} disabled={state.selectedPieces.length === 0}>
-              Adaptar para plataformas
-              <ArrowRight className="size-4" />
-            </Button>
-          )}
-
           {state.currentStep === 6 && (
-            <Button onClick={() => setStep(7)}>
-              Programar
+            <Button onClick={() => setStep(7)} disabled={state.selectedPieces.length === 0}>
+              Adaptar para plataformas
               <ArrowRight className="size-4" />
             </Button>
           )}
 
           {state.currentStep === 7 && (
             <Button onClick={() => setStep(8)}>
+              Programar
+              <ArrowRight className="size-4" />
+            </Button>
+          )}
+
+        {state.currentStep === 8 && (
+            <Button onClick={() => setStep(9)}>
               Revisar y publicar
               <ArrowRight className="size-4" />
             </Button>

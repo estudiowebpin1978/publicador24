@@ -54,33 +54,35 @@ const navItems: NavItem[] = [
   { label: "Configuración", href: "/settings", icon: Settings },
 ]
 
-const workspaces = [
-  { id: "1", name: "Mi Marca", plan: "Pro" },
-  { id: "2", name: "Proyecto Secundario", plan: "Gratis" },
-]
-
 interface SidebarProps {
   className?: string
 }
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
-  const [activeWorkspace, setActiveWorkspace] = React.useState(workspaces[0])
+  const [activeWorkspace, setActiveWorkspace] = React.useState({ id: "1", name: "Mi Marca", plan: "Pro" })
   const [workspaceOpen, setWorkspaceOpen] = React.useState(false)
 
   return (
-    <div className={cn("flex h-full w-64 flex-col bg-slate-900 text-white", className)}>
+    <div className={cn(
+      "flex h-full w-64 flex-col border-r border-white/5",
+      "bg-gradient-to-b from-[#0a0a14] via-[#0d0d1a] to-[#0a0a14]",
+      className
+    )}>
       {/* Logo */}
-      <div className="flex h-14 items-center gap-2 border-b border-slate-700/50 px-4">
-        <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-indigo-600">
-          <Sparkles className="size-4 text-white" />
+      <div className="flex h-16 items-center gap-3 px-5">
+        <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 shadow-lg shadow-violet-500/20">
+          <Sparkles className="size-5 text-white" />
         </div>
-        <span className="text-lg font-bold tracking-tight">Auto Publisher IA</span>
+        <div>
+          <span className="text-base font-bold tracking-tight text-white">Auto Publisher</span>
+          <span className="ml-1 text-xs font-medium text-violet-400">IA</span>
+        </div>
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 py-3">
-        <nav className="flex flex-col gap-0.5 px-2">
+      <ScrollArea className="flex-1 py-3 px-3">
+        <nav className="flex flex-col gap-0.5">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
             return (
@@ -88,18 +90,20 @@ export function Sidebar({ className }: SidebarProps) {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                   isActive
-                    ? "bg-violet-600/20 text-violet-400"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    ? "bg-violet-500/15 text-violet-400 shadow-sm shadow-violet-500/10"
+                    : "text-slate-400 hover:bg-white/5 hover:text-white"
                 )}
               >
-                <item.icon
-                  className={cn(
-                    "size-4 shrink-0",
-                    isActive ? "text-violet-400" : "text-slate-500 group-hover:text-slate-300"
-                  )}
-                />
+                <div className={cn(
+                  "flex size-8 items-center justify-center rounded-lg transition-all duration-200",
+                  isActive
+                    ? "bg-violet-500/20 text-violet-400"
+                    : "bg-white/5 text-slate-500 group-hover:bg-white/10 group-hover:text-slate-300"
+                )}>
+                  <item.icon className="size-4" />
+                </div>
                 <span className="flex-1">{item.label}</span>
                 {item.badge && item.badge > 0 && (
                   <Badge
@@ -116,12 +120,12 @@ export function Sidebar({ className }: SidebarProps) {
       </ScrollArea>
 
       {/* Workspace Selector */}
-      <div className="border-t border-slate-700/50 p-3">
+      <div className="border-t border-white/5 p-3">
         <button
           onClick={() => setWorkspaceOpen(!workspaceOpen)}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 transition-all duration-200 hover:bg-white/5 hover:text-white"
         >
-          <div className="flex size-8 items-center justify-center rounded-lg bg-slate-700 text-xs font-bold text-white">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 text-xs font-bold text-violet-400 border border-violet-500/20">
             {activeWorkspace.name.charAt(0)}
           </div>
           <div className="flex flex-1 flex-col items-start">
@@ -130,43 +134,32 @@ export function Sidebar({ className }: SidebarProps) {
           </div>
           <ChevronDown
             className={cn(
-              "size-4 text-slate-500 transition-transform",
+              "size-4 text-slate-500 transition-transform duration-200",
               workspaceOpen && "rotate-180"
             )}
           />
         </button>
         {workspaceOpen && (
           <div className="mt-1 flex flex-col gap-0.5 pl-2">
-            {workspaces.map((ws) => (
-              <button
-                key={ws.id}
-                onClick={() => {
-                  setActiveWorkspace(ws)
-                  setWorkspaceOpen(false)
-                }}
-                className={cn(
-                  "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors",
-                  activeWorkspace.id === ws.id
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-                )}
-              >
-                <span>{ws.name}</span>
-                <Badge variant="secondary" className="ml-auto text-xs">
-                  {ws.plan}
-                </Badge>
-              </button>
-            ))}
+            <button
+              onClick={() => setWorkspaceOpen(false)}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <span>{activeWorkspace.name}</span>
+              <Badge variant="secondary" className="ml-auto text-xs bg-violet-500/20 text-violet-400 border-0">
+                {activeWorkspace.plan}
+              </Badge>
+            </button>
           </div>
         )}
       </div>
 
       {/* User Info */}
-      <div className="border-t border-slate-700/50 p-3">
+      <div className="border-t border-white/5 p-3">
         <div className="flex items-center gap-3 px-3 py-2">
           <Avatar size="sm">
             <AvatarImage src="/avatars/user.jpg" alt="Usuario" />
-            <AvatarFallback className="bg-slate-700 text-slate-300">JD</AvatarFallback>
+            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white text-xs font-bold">JD</AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
             <span className="text-sm font-medium text-white">John Doe</span>

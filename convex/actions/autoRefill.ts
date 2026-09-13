@@ -349,16 +349,105 @@ function generateHashtags(strategy: GenerationStrategy, platform: string, index:
     .slice(0, 3)
     .map((w: string) => `#${w}`);
 
+  const topicKeywords = extractTopicKeywords(strategy);
+
+  const captureHashtags = generateCaptureHashtags(strategy.funnelStage, index);
+
   const platformTags: Record<string, string[]> = {
-    instagram: ["#instagram", "#reels", "#carousel"],
-    tiktok: ["#tiktok", "#fyp", "#viral"],
-    facebook: ["#facebook", "#comunidad"],
-    linkedin: ["#linkedin", "#networking"],
-    x: ["#twitter", "#thread"],
+    instagram: ["#instagram", "#reels", "#carousel", "#stories", "#contenidovisual"],
+    tiktok: ["#tiktok", "#fyp", "#viral", "#tendencia", "#tiktokargentina"],
+    facebook: ["#facebook", "#comunidad", "#emprendedores", "#negocios"],
+    linkedin: ["#linkedin", "#networking", "#profesional", "#negocios", "#oportunidades"],
+    x: ["#twitter", "#thread", "#hilo", "#tendencias"],
   };
 
-  const extras = platformTags[platform] || [];
-  return [...base, ...extras.slice(0, 2)].slice(0, 8);
+  const trendingTags: Record<string, string[]> = {
+    instagram: ["#tips", "#consejos", "#valor", "#aprende", "#mejora"],
+    tiktok: ["#tip", "#consejo", "#hack", "#curioso", "#sabiasque"],
+    facebook: ["# tips", "#consejos", "#interesante", "#compartir"],
+    linkedin: ["#tips", "#consejos", "#liderazgo", "#estrategia", "#innovación"],
+    x: ["#tips", "#dato", "#interesante", "#actualidad"],
+  };
+
+  const industryTags = getIndustryHashtags(strategy.campaignName);
+
+  const allTags = [
+    ...topicKeywords.slice(0, 3),
+    ...captureHashtags.slice(0, 3),
+    ...(platformTags[platform] || []).slice(0, 2),
+    ...(trendingTags[platform] || []).slice(0, 2),
+    ...industryTags.slice(0, 2),
+  ];
+
+  const uniqueTags = [...new Set(allTags.map(t => t.toLowerCase()))].slice(0, 10);
+
+  return uniqueTags;
+}
+
+function extractTopicKeywords(strategy: GenerationStrategy): string[] {
+  const text = `${strategy.campaignName} ${strategy.valueProposition} ${strategy.painPoints} ${strategy.targetAudience}`.toLowerCase();
+  const words = text
+    .replace(/[^a-záéíóúñ\s]/g, "")
+    .split(/\s+/)
+    .filter((w: string) => w.length > 4);
+
+  const freq: Record<string, number> = {};
+  for (const w of words) {
+    freq[w] = (freq[w] || 0) + 1;
+  }
+
+  return Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([w]) => `#${w}`);
+}
+
+function generateCaptureHashtags(funnelStage: string, index: number): string[] {
+  const hashtagsByStage: Record<string, string[][]> = {
+    TOFU: [
+      ["#conocimientolibre", "#aprendizaje", "#tips", "#consejos", "#valorgratuito"],
+      ["#descubrimiento", "#curiosidad", "#educación", "#aprende", "#crece"],
+      ["#inspiración", "#motivación", "#éxito", "#emprendimiento", "#creatividad"],
+    ],
+    MOFU: [
+      ["#solución", "#resultados", "#transformación", "#mejora", "#progreso"],
+      ["#estrategia", "#planificación", "#objetivos", "#logros", "#éxito"],
+      ["#comunidad", "#networking", "#colaboración", "#aprendizaje", "#crecimiento"],
+    ],
+    BOFU: [
+      ["#acción", "#compra", "#oferta", "#descuento", "#oportunidad"],
+      ["#consulta", "#asesoramiento", "#profesional", "#calidad", "#confianza"],
+      ["#transformación", "#resultado", "#satisfacción", "#éxito", "#garantía"],
+    ],
+  };
+
+  const stage = funnelStage || "TOFU";
+  const stageIndex = index % (hashtagsByStage[stage]?.length || 1);
+  return hashtagsByStage[stage]?.[stageIndex] || hashtagsByStage.TOFU[0];
+}
+
+function getIndustryHashtags(campaignName: string): string[] {
+  const industryKeywords: Record<string, string[]> = {
+    salud: ["#salud", "#bienestar", "#fitness", "#nutrición", "#vidasana"],
+    tecnología: ["#tecnología", "#innovación", "#digital", "#futuro", "#smart"],
+    educación: ["#educación", "#aprendizaje", "#formación", "#estudios", "#conocimiento"],
+    fitness: ["#fitness", "#gym", "#entrenamiento", "#salud", "#deporte"],
+    belleza: ["#belleza", "#skincare", "#maquillaje", "#estética", "#cuidado"],
+    comida: ["#comida", "#recetas", "#gastronomía", "#cocina", "#foodie"],
+    viajes: ["#viajes", "#turismo", "#aventura", "#destinos", "#travel"],
+    mascotas: ["#mascotas", "#perros", "#gatos", "#petlovers", "#animales"],
+    hogar: ["#hogar", "#decoración", "#interiores", "#casa", "#home"],
+    moda: ["#moda", "#fashion", "#estilo", "#outfit", "#tendencias"],
+  };
+
+  const text = campaignName.toLowerCase();
+  for (const [industry, tags] of Object.entries(industryKeywords)) {
+    if (text.includes(industry)) {
+      return tags;
+    }
+  }
+
+  return ["#emprendimiento", "#negocios", "#emprendedores", "#éxito"];
 }
 
 function extractKeywords(text: string): string[] {

@@ -404,6 +404,7 @@ export const generateCampaign = action({
     style: v.optional(v.string()),
     offer: v.optional(v.string()),
     url: v.optional(v.string()),
+    referenceImages: v.optional(v.array(v.string())),
     contentCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -435,6 +436,7 @@ export const generateCampaign = action({
         style: args.style || "profesional",
         offer: args.offer,
         url: args.url,
+        referenceImages: args.referenceImages,
         status: "DRAFT",
         contentCount: 0,
         publishedCount: 0,
