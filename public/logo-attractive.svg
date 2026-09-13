@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="120" viewBox="0 0 400 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="brandGrad" x1="0" y1="0" x2="100%" y2="0">
+      <stop offset="0%" stop-color="#7C3AED"/>
+      <stop offset="50%" stop-color="#9333EA"/>
+      <stop offset="100%" stop-color="#DB2777"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="120" rx="16" fill="#0f0f1a" stroke="url(#brandGrad)" stroke-width="2"/>
+  <text x="70" y="68" font-family="system-ui, sans-serif" font-size="44" font-weight="900" fill="url(#brandGrad)">
+    PUBLICADOR<tspan fill="#DB2777">24</tspan>
+  </text>
+  <text x="70" y="92" font-family="system-ui" font-size="14" font-weight="500" fill="#9333EA" letter-spacing="2">AUTÓNOMO · INTELIGENTE · ARGENTINA</text>
+</svg>

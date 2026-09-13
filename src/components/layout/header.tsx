@@ -126,8 +126,8 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
             }
           >
               <Avatar size="sm">
-                <AvatarImage src="/avatars/user.jpg" alt="Usuario" />
-                <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white text-xs font-bold">EW</AvatarFallback>
+                <AvatarImage src="/logo-ew.svg" alt="Publicador24" />
+                <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white text-sm font-black tracking-wider">P24</AvatarFallback>
               </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 bg-[#1a1a2e] border-white/10">
