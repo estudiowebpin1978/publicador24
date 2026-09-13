@@ -10,7 +10,18 @@ async function publishSinglePost(ctx: ActionCtx, postId: Id<"scheduledPosts">) {
   const post = await ctx.runQuery(api.scheduledPosts.get, { id: postId });
   if (!post) throw new Error("Scheduled post not found");
 
-  const content = await ctx.runQuery(api.content.get, { id: post.contentId });
+  let content: any = null;
+  if (post.contentPieceId) {
+    content = await ctx.runQuery(api.contentPieces.getById, { id: post.contentPieceId });
+    // Adapt contentPiece data to content format
+    content = {
+      title: content?.title || content?.hook,
+      description: content?.body || content?.hook,
+    };
+  }
+  if (!content && post.contentId) {
+    content = await ctx.runQuery(api.content.get, { id: post.contentId });
+  }
   if (!content) throw new Error("Content not found");
 
   let platformVariant: { caption?: string; hashtags?: string[] } | undefined = undefined;
