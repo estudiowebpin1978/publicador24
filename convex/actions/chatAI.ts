@@ -52,10 +52,12 @@ function getHumanTime(dayOffset: number, slotIndex: number): Date {
 export const processMessage = action({
   args: {
     message: v.string(),
+    referenceImages: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args): Promise<ChatResult> => {
     const message = args.message.toLowerCase().trim();
     const actions: string[] = [];
+    const referenceImages = args.referenceImages || [];
 
     if (message.includes("parar") || message.includes("pausar") || message.includes("stop")) {
       await ctx.runMutation(api.autopilot.updateSettings, {
@@ -151,6 +153,7 @@ export const processMessage = action({
       contentCount: pieces.length,
       publishedCount: 0,
       autopilotLevel: "AUTONOMOUS",
+      referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
     });
 
     const packId = await ctx.runMutation(api.contentPacks.create, {
@@ -227,10 +230,13 @@ export const processMessage = action({
     actions.push(`${pieces.length} piezas de contenido creadas`);
     actions.push(`${hashtags.length} hashtags optimizados generados`);
     actions.push(`${scheduledCount} publicaciones programadas en horarios humanos`);
+    if (referenceImages.length > 0) {
+      actions.push(`${referenceImages.length} imágenes de referencia cargadas`);
+    }
     actions.push("Zona horaria: Argentina (ART)");
     actions.push("Campaña activada en modo automático");
 
-    const response = generateResponse(strategy, pieces.length, hashtags, scheduledCount);
+    const response = generateResponse(strategy, pieces.length, hashtags, scheduledCount, referenceImages.length);
 
     return {
       response,
@@ -361,9 +367,13 @@ function generateSmartHashtags(idea: string): string[] {
   return [...base, ...general].slice(0, 10);
 }
 
-function generateResponse(strategy: any, piecesCount: number, hashtags: string[], scheduledCount: number): string {
+function generateResponse(strategy: any, piecesCount: number, hashtags: string[], scheduledCount: number, referenceImagesCount: number = 0): string {
   const now = new Date();
   const argentinaTime = now.toLocaleString("es-AR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+
+  const imagesLine = referenceImagesCount > 0
+    ? `\n🖼️ **Imágenes de referencia:** ${referenceImagesCount} cargadas`
+    : "";
 
   return `¡Listo! Creé tu campaña "${strategy.name}"
 
@@ -371,7 +381,7 @@ function generateResponse(strategy: any, piecesCount: number, hashtags: string[]
 • Generé ${piecesCount} piezas de contenido únicas
 • ${hashtags.length} hashtags optimizados por tema
 • Adapté el contenido para Instagram, Facebook y TikTok
-• Cada pieza tiene gancho, cuerpo y CTA optimizado
+• Cada pieza tiene gancho, cuerpo y CTA optimizado${imagesLine}
 
 🕐 **Programación (hora Argentina ${argentinaTime}):**
 • ${scheduledCount} publicaciones programadas
