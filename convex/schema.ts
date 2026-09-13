@@ -2,7 +2,17 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  // Social Accounts
+  projects: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    website: v.optional(v.string()),
+    industry: v.optional(v.string()),
+    brandProfileId: v.optional(v.id("brandProfiles")),
+    status: v.string(),
+    campaignCount: v.number(),
+    createdAt: v.number(),
+  }),
+
   socialAccounts: defineTable({
     platform: v.string(),
     platformUserId: v.string(),
@@ -85,7 +95,8 @@ export default defineSchema({
     .index("by_content_platform", ["contentId", "platform"]),
 
   scheduledPosts: defineTable({
-    contentId: v.id("content"),
+    contentId: v.optional(v.id("content")),
+    contentPieceId: v.optional(v.id("contentPieces")),
     socialAccountId: v.id("socialAccounts"),
     platform: v.string(),
     platformVariantId: v.optional(v.id("contentPlatformVariants")),
@@ -105,7 +116,8 @@ export default defineSchema({
   }).index("by_status", ["status"])
     .index("by_scheduled", ["scheduledAt"])
     .index("by_account", ["socialAccountId"])
-    .index("by_idempotency", ["idempotencyKey"]),
+    .index("by_idempotency", ["idempotencyKey"])
+    .index("by_content_piece", ["contentPieceId"]),
 
   publishedPosts: defineTable({
     scheduledPostId: v.id("scheduledPosts"),
@@ -239,6 +251,7 @@ export default defineSchema({
   }).index("by_date", ["date"]),
 
   campaigns: defineTable({
+    projectId: v.optional(v.id("projects")),
     name: v.string(),
     description: v.optional(v.string()),
     idea: v.optional(v.string()),
@@ -257,11 +270,20 @@ export default defineSchema({
     endDate: v.optional(v.string()),
     budget: v.optional(v.number()),
     status: v.string(),
+    autopilotLevel: v.optional(v.string()),
+    pillarConfig: v.optional(v.any()),
+    funnelConfig: v.optional(v.any()),
     contentCount: v.number(),
     publishedCount: v.number(),
+    scheduledCount: v.optional(v.number()),
+    queueMinimum: v.optional(v.number()),
+    healthScore: v.optional(v.number()),
+    lastGeneratedAt: v.optional(v.number()),
+    lastPublishedAt: v.optional(v.number()),
     metrics: v.optional(v.any()),
     brandProfileId: v.optional(v.id("brandProfiles")),
-  }).index("by_status", ["status"]),
+  }).index("by_status", ["status"])
+    .index("by_project", ["projectId"]),
 
   contentPacks: defineTable({
     campaignId: v.id("campaigns"),
@@ -350,6 +372,8 @@ export default defineSchema({
     jobKey: v.string(),
     idempotencyKey: v.string(),
     status: v.string(),
+    campaignId: v.optional(v.id("campaigns")),
+    priority: v.optional(v.number()),
     payload: v.optional(v.any()),
     result: v.optional(v.any()),
     error: v.optional(v.string()),
@@ -361,7 +385,38 @@ export default defineSchema({
   }).index("by_status", ["status"])
     .index("by_type", ["jobType"])
     .index("by_idempotency", ["idempotencyKey"])
-    .index("by_next_run", ["nextRunAt"]),
+    .index("by_next_run", ["nextRunAt"])
+    .index("by_campaign", ["campaignId"]),
+
+  strategyMemory: defineTable({
+    campaignId: v.id("campaigns"),
+    topic: v.string(),
+    hook: v.string(),
+    contentType: v.string(),
+    platform: v.string(),
+    funnelStage: v.string(),
+    score: v.number(),
+    impressions: v.optional(v.number()),
+    engagement: v.optional(v.number()),
+    publishedAt: v.number(),
+  }).index("by_campaign", ["campaignId"])
+    .index("by_campaign_platform", ["campaignId", "platform"]),
+
+  campaignInsights: defineTable({
+    campaignId: v.id("campaigns"),
+    date: v.string(),
+    totalPieces: v.number(),
+    publishedPieces: v.number(),
+    scheduledPieces: v.number(),
+    averageScore: v.number(),
+    healthScore: v.number(),
+    topPerformingHook: v.optional(v.string()),
+    topPerformingFormat: v.optional(v.string()),
+    topPerformingPlatform: v.optional(v.string()),
+    recommendations: v.optional(v.any()),
+    generatedAt: v.number(),
+  }).index("by_campaign", ["campaignId"])
+    .index("by_campaign_date", ["campaignId", "date"]),
 
   rateLimits: defineTable({
     socialAccountId: v.id("socialAccounts"),

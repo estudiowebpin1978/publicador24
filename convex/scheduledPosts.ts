@@ -51,7 +51,8 @@ export const get = query({
 
 export const create = mutation({
   args: {
-    contentId: v.id("content"),
+    contentId: v.optional(v.id("content")),
+    contentPieceId: v.optional(v.id("contentPieces")),
     socialAccountId: v.id("socialAccounts"),
     platform: v.string(),
     platformVariantId: v.optional(v.id("contentPlatformVariants")),

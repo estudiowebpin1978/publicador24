@@ -2,72 +2,22 @@ import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 export const list = query({
-  args: {
-    campaignId: v.optional(v.id("campaigns")),
-    packId: v.optional(v.id("contentPacks")),
-    platform: v.optional(v.string()),
-    status: v.optional(v.string()),
-    contentType: v.optional(v.string()),
-    limit: v.optional(v.number()),
-  },
+  args: { status: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 100;
-
-    if (args.packId) {
-      const results = await ctx.db
+    if (args.status) {
+      return await ctx.db
         .query("contentPieces")
-        .withIndex("by_pack", (q) => q.eq("contentPackId", args.packId!))
-        .order("desc")
-        .take(limit);
-      return results.filter((p) => {
-        if (args.platform && p.platform !== args.platform) return false;
-        if (args.status && p.status !== args.status) return false;
-        if (args.contentType && p.contentType !== args.contentType) return false;
-        return true;
-      });
+        .withIndex("by_status", (q) => q.eq("status", args.status!))
+        .collect();
     }
-
-    if (args.campaignId) {
-      const results = await ctx.db
-        .query("contentPieces")
-        .withIndex("by_campaign", (q) => q.eq("campaignId", args.campaignId!))
-        .order("desc")
-        .take(limit);
-      return results.filter((p) => {
-        if (args.platform && p.platform !== args.platform) return false;
-        if (args.status && p.status !== args.status) return false;
-        if (args.contentType && p.contentType !== args.contentType) return false;
-        return true;
-      });
-    }
-
-    const results = await ctx.db
-      .query("contentPieces")
-      .order("desc")
-      .take(limit);
-    return results.filter((p) => {
-      if (args.platform && p.platform !== args.platform) return false;
-      if (args.status && p.status !== args.status) return false;
-      if (args.contentType && p.contentType !== args.contentType) return false;
-      return true;
-    });
+    return await ctx.db.query("contentPieces").collect();
   },
 });
 
-export const get = query({
+export const getById = query({
   args: { id: v.id("contentPieces") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.id);
-  },
-});
-
-export const getByPack = query({
-  args: { packId: v.id("contentPacks") },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("contentPieces")
-      .withIndex("by_pack", (q) => q.eq("contentPackId", args.packId))
-      .collect();
   },
 });
 
@@ -77,6 +27,16 @@ export const getByCampaign = query({
     return await ctx.db
       .query("contentPieces")
       .withIndex("by_campaign", (q) => q.eq("campaignId", args.campaignId))
+      .collect();
+  },
+});
+
+export const getByPack = query({
+  args: { contentPackId: v.id("contentPacks") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("contentPieces")
+      .withIndex("by_pack", (q) => q.eq("contentPackId", args.contentPackId))
       .collect();
   },
 });
@@ -113,6 +73,9 @@ export const update = mutation({
     hook: v.optional(v.string()),
     body: v.optional(v.string()),
     cta: v.optional(v.string()),
+    contentType: v.optional(v.string()),
+    funnelStage: v.optional(v.string()),
+    platform: v.optional(v.string()),
     hashtags: v.optional(v.array(v.string())),
     keywords: v.optional(v.array(v.string())),
     imagePrompt: v.optional(v.string()),
@@ -122,11 +85,9 @@ export const update = mutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    const { id, ...fields } = args;
-    const nonUndefined = Object.fromEntries(
-      Object.entries(fields).filter(([, v]) => v !== undefined)
-    );
-    await ctx.db.patch(id, nonUndefined);
+    const { id, ...updates } = args;
+    await ctx.db.patch(id, updates);
+    return { success: true };
   },
 });
 
@@ -134,5 +95,6 @@ export const remove = mutation({
   args: { id: v.id("contentPieces") },
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
+    return { success: true };
   },
 });

@@ -15,6 +15,13 @@ export const get = query({
   },
 });
 
+export const getById = query({
+  args: { id: v.id("brandProfiles") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});
+
 export const getDefault = query({
   args: {},
   handler: async (ctx) => {

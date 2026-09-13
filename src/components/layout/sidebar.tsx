@@ -24,6 +24,8 @@ import {
   ChevronDown,
   Sparkles,
   Palette,
+  Briefcase,
+  Bot,
 } from "lucide-react"
 
 interface NavItem {
@@ -35,6 +37,8 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Panel", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Centro AI", href: "/ai-control", icon: Bot },
+  { label: "Proyectos", href: "/projects", icon: Briefcase },
   { label: "Contenido", href: "/content", icon: FileText },
   { label: "Crear", href: "/content/create", icon: PlusCircle },
   { label: "Calendario", href: "/calendar", icon: Calendar },
