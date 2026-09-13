@@ -135,7 +135,7 @@ export const collectPostMetrics = action({
   },
 });
 
-export const collectAllAnalytics = action({
+export const collectAllAnalytics: any = action({
   args: {
     date: v.string(),
   },

@@ -336,7 +336,7 @@ function handleError(
   ]).then(() => ({ success: false, error: errorMessage }));
 }
 
-export const publishToTikTok = action({
+export const publishToTikTok: any = action({
   args: {
     scheduledPostId: v.id("scheduledPosts"),
     socialAccountId: v.id("socialAccounts"),
