@@ -58,7 +58,7 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     publishedAt: v.optional(v.number()),
   }).index("by_status", ["status"])
-    .index("by_created", ["_creationTime"]),
+    .index("by_created", ["publishedAt"]),
 
   contentVariants: defineTable({
     contentId: v.id("content"),

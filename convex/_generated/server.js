@@ -1,3 +1,4 @@
+/* eslint-disable */
 /**
  * Generated utilities for implementing server-side Convex query and mutation functions.
  *
@@ -91,4 +92,10 @@ export const internalAction = internalActionGeneric;
  */
 export const httpAction = httpActionGeneric;
 
+/**
+ * Typesafe environment variables.
+ *
+ * This includes platform-provided env vars and any variables declared in
+ * `convex.config.ts`.
+ */
 export const env = process.env;

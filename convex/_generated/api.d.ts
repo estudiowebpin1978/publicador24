@@ -1,3 +1,4 @@
+/* eslint-disable */
 /**
  * Generated `api` utility.
  *
@@ -7,8 +8,98 @@
  * @module
  */
 
-import type { AnyApi, AnyComponents } from "convex/server";
+import type * as actions_aiGenerate from "../actions/aiGenerate.js";
+import type * as actions_analyzeContent from "../actions/analyzeContent.js";
+import type * as actions_collectAnalytics from "../actions/collectAnalytics.js";
+import type * as actions_generateContent from "../actions/generateContent.js";
+import type * as actions_generateHashtags from "../actions/generateHashtags.js";
+import type * as actions_processQueue from "../actions/processQueue.js";
+import type * as actions_publishContent from "../actions/publishContent.js";
+import type * as actions_scoreContent from "../actions/scoreContent.js";
+import type * as actions_socialPublish from "../actions/socialPublish.js";
+import type * as aiGenerations from "../aiGenerations.js";
+import type * as analytics from "../analytics.js";
+import type * as auditLogs from "../auditLogs.js";
+import type * as autopilot from "../autopilot.js";
+import type * as buffer from "../buffer.js";
+import type * as bufferActions from "../bufferActions.js";
+import type * as campaigns from "../campaigns.js";
+import type * as content from "../content.js";
+import type * as contentPlatformVariants from "../contentPlatformVariants.js";
+import type * as contentVariants from "../contentVariants.js";
+import type * as hashtags from "../hashtags.js";
+import type * as jobs from "../jobs.js";
+import type * as media from "../media.js";
+import type * as notifications from "../notifications.js";
+import type * as publishAttempts from "../publishAttempts.js";
+import type * as publishedPosts from "../publishedPosts.js";
+import type * as scheduledPosts from "../scheduledPosts.js";
+import type * as settings from "../settings.js";
+import type * as socialAccounts from "../socialAccounts.js";
+import type * as trends from "../trends.js";
 
-export declare const api: AnyApi;
-export declare const internal: AnyApi;
-export declare const components: AnyComponents;
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
+declare const fullApi: ApiFromModules<{
+  "actions/aiGenerate": typeof actions_aiGenerate;
+  "actions/analyzeContent": typeof actions_analyzeContent;
+  "actions/collectAnalytics": typeof actions_collectAnalytics;
+  "actions/generateContent": typeof actions_generateContent;
+  "actions/generateHashtags": typeof actions_generateHashtags;
+  "actions/processQueue": typeof actions_processQueue;
+  "actions/publishContent": typeof actions_publishContent;
+  "actions/scoreContent": typeof actions_scoreContent;
+  "actions/socialPublish": typeof actions_socialPublish;
+  aiGenerations: typeof aiGenerations;
+  analytics: typeof analytics;
+  auditLogs: typeof auditLogs;
+  autopilot: typeof autopilot;
+  buffer: typeof buffer;
+  bufferActions: typeof bufferActions;
+  campaigns: typeof campaigns;
+  content: typeof content;
+  contentPlatformVariants: typeof contentPlatformVariants;
+  contentVariants: typeof contentVariants;
+  hashtags: typeof hashtags;
+  jobs: typeof jobs;
+  media: typeof media;
+  notifications: typeof notifications;
+  publishAttempts: typeof publishAttempts;
+  publishedPosts: typeof publishedPosts;
+  scheduledPosts: typeof scheduledPosts;
+  settings: typeof settings;
+  socialAccounts: typeof socialAccounts;
+  trends: typeof trends;
+}>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
+
+export declare const components: {};
