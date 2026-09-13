@@ -15,7 +15,7 @@ async function callMockAnalysis(text: string) {
   const sentimentScore = 0.5 + (hasEmoji ? 0.15 : 0) + (hasQuestion ? -0.1 : 0) + (hasExclamation ? 0.1 : 0);
   const clampedSentiment = Math.min(1, Math.max(0, sentimentScore));
 
-  const entities = [];
+  const entities: string[] = [];
   const capitalizedWords = text.match(/\b[A-Z][a-z]+\b/g) || [];
   entities.push(...capitalizedWords.slice(0, 5));
 

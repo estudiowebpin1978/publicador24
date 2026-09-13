@@ -336,7 +336,7 @@ function handleError(
   ]).then(() => ({ success: false, error: errorMessage }));
 }
 
-export const publishToTikTok: any = action({
+export const publishToTikTok = action({
   args: {
     scheduledPostId: v.id("scheduledPosts"),
     socialAccountId: v.id("socialAccounts"),
@@ -455,7 +455,7 @@ export const publishByPlatform = action({
     });
     if (!content) throw new Error("Content not found");
 
-    let platformVariant = undefined;
+    let platformVariant: { caption?: string; hashtags?: string[] } | undefined = undefined;
     if (post.platformVariantId) {
       platformVariant = await ctx.runQuery(
         api.contentPlatformVariants.get,

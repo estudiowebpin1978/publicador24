@@ -135,13 +135,13 @@ export const collectPostMetrics = action({
   },
 });
 
-export const collectAllAnalytics: any = action({
+export const collectAllAnalytics = action({
   args: {
     date: v.string(),
   },
   handler: async (ctx, args) => {
     const accounts = await ctx.runQuery(api.socialAccounts.list, {});
-    const results = [];
+    const results: { accountId: any; platform: string; success: boolean; analytics?: any; error?: string }[] = [];
 
     for (const account of accounts) {
       if (account.status === "CONNECTED") {

@@ -13,7 +13,7 @@ async function publishSinglePost(ctx: ActionCtx, postId: Id<"scheduledPosts">) {
   const content = await ctx.runQuery(api.content.get, { id: post.contentId });
   if (!content) throw new Error("Content not found");
 
-  let platformVariant = undefined;
+  let platformVariant: { caption?: string; hashtags?: string[] } | undefined = undefined;
   if (post.platformVariantId) {
     platformVariant = await ctx.runQuery(
       api.contentPlatformVariants.get,
@@ -56,7 +56,7 @@ async function processPublishQueueLogic(ctx: ActionCtx, limit: number) {
     limit,
   });
 
-  const results = [];
+  const results: { postId: any; platform: string; success: boolean; platformPostId?: string; platformPostUrl?: string; error?: string }[] = [];
 
   for (const post of pendingPosts) {
     try {
@@ -121,7 +121,7 @@ async function processRetryQueueLogic(ctx: ActionCtx, limit: number) {
       !post.nextAttemptAt || post.nextAttemptAt <= now
   );
 
-  const results = [];
+  const results: { postId: any; platform: string; success: boolean; platformPostId?: string; platformPostUrl?: string; error?: string }[] = [];
 
   for (const post of readyToRetry) {
     try {
@@ -163,7 +163,7 @@ async function processRetryQueueLogic(ctx: ActionCtx, limit: number) {
 
 async function collectAllAnalyticsLogic(ctx: ActionCtx, date: string) {
   const accounts = await ctx.runQuery(api.socialAccounts.list, {});
-  const results = [];
+  const results: { accountId: any; platform: string; success: boolean; analytics?: any; error?: string }[] = [];
 
   for (const account of accounts) {
     if (account.status === "CONNECTED") {
@@ -256,7 +256,7 @@ export const processJobs = action({
   handler: async (ctx, args) => {
     const limit = args.limit ?? 10;
     const pendingJobs = await ctx.runQuery(api.jobs.getNextJob, { limit });
-    const results = [];
+    const results: { jobId: any; jobType: string; success: boolean; error?: string }[] = [];
 
     for (const job of pendingJobs) {
       try {
