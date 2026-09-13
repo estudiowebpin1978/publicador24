@@ -13,17 +13,19 @@ import {
   Bot,
   User,
   Loader2,
-  Zap,
   Image as ImageIcon,
   Hash,
   Target,
   CheckCircle2,
+  X,
+  Upload,
 } from "lucide-react";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  images?: string[];
   data?: {
     campaignId?: string;
     campaignName?: string;
@@ -46,30 +48,64 @@ export default function ChatPage() {
   const [messages, setMessages] = React.useState<Message[]>([]);
   const [input, setInput] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
+  const [selectedImages, setSelectedImages] = React.useState<string[]>([]);
+  const [isDragging, setIsDragging] = React.useState(false);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const processMessage = useAction(api.chatAI.processMessage);
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const handleImageUpload = (files: FileList | null) => {
+    if (!files) return;
+
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith("image/")) return;
+      if (file.size > 10 * 1024 * 1024) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const base64 = e.target?.result as string;
+        setSelectedImages((prev) => [...prev, base64]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleImageUpload(e.dataTransfer.files);
+  };
+
+  const removeImage = (index: number) => {
+    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSend = async (text?: string) => {
     const messageText = text || input.trim();
-    if (!messageText || isLoading) return;
+    if ((!messageText && selectedImages.length === 0) || isLoading) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      content: messageText,
+      content: messageText || "Imágenes de referencia",
+      images: selectedImages.length > 0 ? [...selectedImages] : undefined,
       timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setSelectedImages([]);
     setIsLoading(true);
 
     try {
-      const result = await processMessage({ message: messageText });
+      const result = await processMessage({
+        message: messageText,
+        referenceImages: selectedImages.length > 0 ? selectedImages : undefined,
+      });
 
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
@@ -151,6 +187,20 @@ export default function ChatPage() {
                   <div className="whitespace-pre-wrap text-sm leading-relaxed">
                     {message.content}
                   </div>
+
+                  {message.images && message.images.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {message.images.map((img, i) => (
+                        <div key={i} className="relative">
+                          <img
+                            src={img}
+                            alt={`Referencia ${i + 1}`}
+                            className="w-20 h-20 object-cover rounded-lg border border-white/20"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {message.data && (
                     <div className="mt-4 space-y-3">
@@ -235,6 +285,37 @@ export default function ChatPage() {
         )}
       </div>
 
+      {/* Image Preview */}
+      {selectedImages.length > 0 && (
+        <div className="border-t border-white/5 bg-[#0a0a14]/80 backdrop-blur-xl px-4 py-3">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center gap-2 mb-2">
+              <ImageIcon className="size-4 text-violet-400" />
+              <span className="text-xs text-slate-400">
+                {selectedImages.length} imagen{selectedImages.length > 1 ? "es" : ""} de referencia
+              </span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {selectedImages.map((img, i) => (
+                <div key={i} className="relative group">
+                  <img
+                    src={img}
+                    alt={`Ref ${i + 1}`}
+                    className="w-16 h-16 object-cover rounded-lg border border-white/20"
+                  />
+                  <button
+                    onClick={() => removeImage(i)}
+                    className="absolute -top-1 -right-1 size-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="size-3 text-white" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Input */}
       <div className="border-t border-white/5 bg-[#0a0a14]/80 backdrop-blur-xl p-4">
         <form
@@ -244,16 +325,56 @@ export default function ChatPage() {
           }}
           className="max-w-3xl mx-auto flex gap-3"
         >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Decime qué querés promocionar..."
-            disabled={isLoading}
-            className="flex-1 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => handleImageUpload(e.target.files)}
+            className="hidden"
           />
+
+          <div
+            className={`flex-1 relative ${isDragging ? "ring-2 ring-violet-500 rounded-xl" : ""}`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+          >
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Decime qué querés promocionar... (podés pegar imágenes)"
+              disabled={isLoading}
+              className="flex-1 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-500 pr-12"
+              onPaste={(e) => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                Array.from(items).forEach((item) => {
+                  if (item.type.startsWith("image/")) {
+                    const file = item.getAsFile();
+                    if (file) handleImageUpload([file] as unknown as FileList);
+                  }
+                });
+              }}
+            />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            onClick={() => fileInputRef.current?.click()}
+            className="h-12 px-3 border-white/10 bg-white/5 hover:bg-white/10"
+          >
+            <Upload className="size-5 text-slate-400" />
+          </Button>
+
           <Button
             type="submit"
-            disabled={!input.trim() || isLoading}
+            disabled={(!input.trim() && selectedImages.length === 0) || isLoading}
             size="lg"
             className="h-12 px-6"
           >
