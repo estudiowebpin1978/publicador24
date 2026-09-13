@@ -23,6 +23,7 @@ import {
   Key,
   ChevronDown,
   Sparkles,
+  Palette,
 } from "lucide-react"
 
 interface NavItem {
@@ -45,6 +46,7 @@ const navItems: NavItem[] = [
   { label: "Tendencias", href: "/trends", icon: TrendingUp },
   { label: "Aprobación", href: "/approval", icon: CheckCircle, badge: 3 },
   { label: "Configuración API", href: "/setup", icon: Key },
+  { label: "Brand Kit", href: "/brand-kit", icon: Palette },
   { label: "Configuración", href: "/settings", icon: Settings },
 ]
 
