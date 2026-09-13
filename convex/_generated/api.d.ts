@@ -10,6 +10,7 @@
 
 import type * as actions_aiGenerate from "../actions/aiGenerate.js";
 import type * as actions_analyzeContent from "../actions/analyzeContent.js";
+import type * as actions_campaignGenerator from "../actions/campaignGenerator.js";
 import type * as actions_collectAnalytics from "../actions/collectAnalytics.js";
 import type * as actions_generateContent from "../actions/generateContent.js";
 import type * as actions_generateHashtags from "../actions/generateHashtags.js";
@@ -21,10 +22,13 @@ import type * as aiGenerations from "../aiGenerations.js";
 import type * as analytics from "../analytics.js";
 import type * as auditLogs from "../auditLogs.js";
 import type * as autopilot from "../autopilot.js";
+import type * as brandProfiles from "../brandProfiles.js";
 import type * as buffer from "../buffer.js";
 import type * as bufferActions from "../bufferActions.js";
 import type * as campaigns from "../campaigns.js";
 import type * as content from "../content.js";
+import type * as contentPacks from "../contentPacks.js";
+import type * as contentPieces from "../contentPieces.js";
 import type * as contentPlatformVariants from "../contentPlatformVariants.js";
 import type * as contentVariants from "../contentVariants.js";
 import type * as hashtags from "../hashtags.js";
@@ -47,6 +51,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   "actions/aiGenerate": typeof actions_aiGenerate;
   "actions/analyzeContent": typeof actions_analyzeContent;
+  "actions/campaignGenerator": typeof actions_campaignGenerator;
   "actions/collectAnalytics": typeof actions_collectAnalytics;
   "actions/generateContent": typeof actions_generateContent;
   "actions/generateHashtags": typeof actions_generateHashtags;
@@ -58,10 +63,13 @@ declare const fullApi: ApiFromModules<{
   analytics: typeof analytics;
   auditLogs: typeof auditLogs;
   autopilot: typeof autopilot;
+  brandProfiles: typeof brandProfiles;
   buffer: typeof buffer;
   bufferActions: typeof bufferActions;
   campaigns: typeof campaigns;
   content: typeof content;
+  contentPacks: typeof contentPacks;
+  contentPieces: typeof contentPieces;
   contentPlatformVariants: typeof contentPlatformVariants;
   contentVariants: typeof contentVariants;
   hashtags: typeof hashtags;

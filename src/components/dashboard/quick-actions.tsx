@@ -10,14 +10,21 @@ import {
   BarChart3,
   Upload,
   Wand2,
+  Sparkles,
 } from "lucide-react"
 
 const actions = [
   {
+    label: "Crear Campaña con IA",
+    icon: Sparkles,
+    href: "/campaigns/new",
+    color: "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white",
+  },
+  {
     label: "Crear Contenido",
     icon: PlusCircle,
     href: "/content/create",
-    color: "bg-violet-600 hover:bg-violet-700 text-white",
+    color: "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700",
   },
   {
     label: "Programar Publicación",
@@ -28,7 +35,7 @@ const actions = [
   {
     label: "Generar con IA",
     icon: Wand2,
-    href: "/content/create/ai",
+    href: "/campaigns/new",
     color: "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700",
   },
   {

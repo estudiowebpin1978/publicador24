@@ -7,14 +7,15 @@ export const list = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const limit = args.limit ?? 50;
     if (args.status) {
-      const results = await ctx.db
+      return await ctx.db
         .query("campaigns")
         .withIndex("by_status", (q) => q.eq("status", args.status!))
-        .collect();
-      return results.slice(0, args.limit ?? 50);
+        .order("desc")
+        .take(limit);
     }
-    return await ctx.db.query("campaigns").collect();
+    return await ctx.db.query("campaigns").order("desc").take(limit);
   },
 });
 
@@ -29,21 +30,29 @@ export const create = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
+    idea: v.optional(v.string()),
     objective: v.optional(v.string()),
     targetAudience: v.optional(v.string()),
+    painPoints: v.optional(v.string()),
+    desires: v.optional(v.string()),
+    valueProposition: v.optional(v.string()),
+    funnelStage: v.optional(v.string()),
+    communicationAngle: v.optional(v.string()),
     platforms: v.array(v.string()),
+    style: v.optional(v.string()),
+    offer: v.optional(v.string()),
+    url: v.optional(v.string()),
     startDate: v.optional(v.string()),
     endDate: v.optional(v.string()),
     budget: v.optional(v.number()),
+    status: v.string(),
+    contentCount: v.number(),
+    publishedCount: v.number(),
+    metrics: v.optional(v.any()),
+    brandProfileId: v.optional(v.id("brandProfiles")),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("campaigns", {
-      ...args,
-      status: "DRAFT",
-      contentCount: 0,
-      publishedCount: 0,
-      metrics: undefined,
-    });
+    return await ctx.db.insert("campaigns", args);
   },
 });
 
@@ -54,20 +63,25 @@ export const update = mutation({
     description: v.optional(v.string()),
     objective: v.optional(v.string()),
     targetAudience: v.optional(v.string()),
-    platforms: v.optional(v.array(v.string())),
-    startDate: v.optional(v.string()),
-    endDate: v.optional(v.string()),
-    budget: v.optional(v.number()),
     status: v.optional(v.string()),
     metrics: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    const { id, ...updates } = args;
-    const filtered = Object.fromEntries(
-      Object.entries(updates).filter(([, val]) => val !== undefined)
+    const { id, ...fields } = args;
+    const nonUndefined = Object.fromEntries(
+      Object.entries(fields).filter(([, v]) => v !== undefined)
     );
-    await ctx.db.patch(id, filtered);
-    return id;
+    await ctx.db.patch(id, nonUndefined);
+  },
+});
+
+export const updateContentCount = mutation({
+  args: {
+    id: v.id("campaigns"),
+    contentCount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { contentCount: args.contentCount });
   },
 });
 
@@ -75,6 +89,5 @@ export const remove = mutation({
   args: { id: v.id("campaigns") },
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
-    return args.id;
   },
 });
