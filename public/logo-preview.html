@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+body { margin:0; background:#0a0a14; display:flex; align-items:center; justify-content:center; min-height:100vh; }
+.app-icon { width:120px; height:120px; border-radius:28px; background:linear-gradient(135deg, #7C3AED 0%, #9333EA 50%, #DB2777 100%); box-shadow:0 25px 60px rgba(124,58,237,0.4); display:flex; align-items:center; justify-content:center; animation:float 6s ease-in-out infinite; }
+.app-icon-inner { width:70px; height:70px; border:3px solid rgba(255,255,255,0.9); border-radius:18px; position:relative; }
+.app-icon-inner::before { content:''; position:absolute; width:12px; height:12px; background:#DB2777; border-radius:50%; top:-8px; left:50%; transform:translateX(-50%); }
+.app-icon-inner::after { content:''; position:absolute; width:3px; height:70px; background:white; left:50%; top:-5px; transform:translateX(-50%); opacity:0.8; }
+.app-text { color:white; font-family:system-ui, sans-serif; font-size:24px; font-weight:900; letter-spacing:6px; margin-top:20px; text-align:center; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-15px)} }
+</style>
+</head>
+<body>
+<div style="text-align:center;">
+  <div style="font-family:system-ui,sans-serif;font-size:72px;font-weight:900;background:linear-gradient(135deg,#7C3AED,#DB2777);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:-2px;">P24</div>
+  <div style="font-family:system-ui,sans-serif;font-size:14px;color:#9333EA;font-weight:500;letter-spacing:3px;margin-top:8px;">AUTÓNOMO · ARGENTINA</div>
+</div>
+</body>
+</html>

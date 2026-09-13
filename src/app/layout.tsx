@@ -15,8 +15,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Auto Publisher IA",
-  description: "Plataforma de gestión y publicación en redes sociales potenciada por IA",
+  title: "Publicador24 - Autopublicador Autónomo IA",
+  description: "Publicador autónomo con IA: generá campañas, contenido, imágenes y hashtags automáticamente. Zona horaria Argentina. Sin ser detectado como bot.",
+  icons: {
+    icon: "/logo-attractive.svg",
+    shortcut: "/logo-attractive.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
