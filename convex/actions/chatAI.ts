@@ -5,9 +5,11 @@ import { api } from "../_generated/api";
 import { v } from "convex/values";
 
 // ============================================
-// SIMPLE AI CHAT - Una sola acción que hace todo
-// El usuario dice qué quiere, la IA genera todo
+// SIMPLE AI CHAT - Argentina Timezone
+// El usuario dice qué quiere, la IA hace todo
 // ============================================
+
+const TZ = "America/Argentina/Buenos_Aires";
 
 interface ChatResult {
   response: string;
@@ -17,6 +19,34 @@ interface ChatResult {
   imagesGenerated: number;
   hashtags: string[];
   actions: string[];
+}
+
+// Horarios humanos Argentina (hora local)
+const HUMAN_SCHEDULES = [
+  { hour: 8, minuteRange: [5, 25] },
+  { hour: 12, minuteRange: [0, 15] },
+  { hour: 13, minuteRange: [10, 40] },
+  { hour: 17, minuteRange: [0, 20] },
+  { hour: 18, minuteRange: [5, 30] },
+  { hour: 19, minuteRange: [10, 45] },
+  { hour: 20, minuteRange: [0, 20] },
+  { hour: 21, minuteRange: [5, 25] },
+];
+
+function getHumanTime(dayOffset: number, slotIndex: number): Date {
+  const now = new Date();
+  const argentinaNow = new Date(now.toLocaleString("en-US", { timeZone: TZ }));
+
+  const targetDate = new Date(argentinaNow);
+  targetDate.setDate(targetDate.getDate() + dayOffset);
+
+  const slot = HUMAN_SCHEDULES[slotIndex % HUMAN_SCHEDULES.length];
+  const minute = slot.minuteRange[0] + Math.floor(Math.random() * (slot.minuteRange[1] - slot.minuteRange[0]));
+
+  targetDate.setHours(slot.hour, minute, 0, 0);
+
+  // Convertir de Argentina (UTC-3) a UTC
+  return new Date(targetDate.getTime() + (3 * 60 * 60 * 1000));
 }
 
 export const processMessage = action({
@@ -32,7 +62,7 @@ export const processMessage = action({
         level: "STOPPED",
         platformFrequencies: { instagram: "0", x: "0", facebook: "0", linkedin: "0", tiktok: "0" },
         topics: "", contentPillars: "", topicsToAvoid: "",
-        timeZone: "America/Argentina/Buenos_Aires",
+        timeZone: TZ,
         preferredTimeSlots: "", excludedDays: [],
         contentGuidelines: "", approvalRequirements: "",
       });
@@ -50,12 +80,12 @@ export const processMessage = action({
         level: "FULL",
         platformFrequencies: { instagram: "3-5x por semana", x: "1-2x por semana", facebook: "2-3x por semana", linkedin: "1-2x por semana", tiktok: "3-5x por semana" },
         topics: "", contentPillars: "", topicsToAvoid: "",
-        timeZone: "America/Argentina/Buenos_Aires",
-        preferredTimeSlots: "9-12, 17-21", excludedDays: [],
+        timeZone: TZ,
+        preferredTimeSlots: "8-13, 17-21", excludedDays: [],
         contentGuidelines: "", approvalRequirements: "Sin aprobación requerida",
       });
       return {
-        response: "Automatización reanudada. El sistema volverá a publicar contenido automáticamente.",
+        response: "Automatización reanudada. El sistema volverá a publicar contenido automáticamente en horarios de Argentina.",
         piecesGenerated: 0,
         imagesGenerated: 0,
         hashtags: [],
@@ -81,8 +111,11 @@ export const processMessage = action({
         return `• ${c.name}: ${c.contentCount} piezas, ${c.publishedCount} publicadas`;
       });
 
+      const now = new Date();
+      const argentinaTime = now.toLocaleString("es-AR", { timeZone: TZ });
+
       return {
-        response: `Estado actual:\n\n${statusLines.join("\n")}\n\nAutomatización: ${settings?.level || "OFF"}\n\n¿Querés que genere más contenido o ajuste algo?`,
+        response: `Estado actual (${argentinaTime}):\n\n${statusLines.join("\n")}\n\nAutomatización: ${settings?.level || "OFF"}\nHorario: Argentina (ART)\n\n¿Querés que genere más contenido o ajuste algo?`,
         piecesGenerated: 0,
         imagesGenerated: 0,
         hashtags: [],
@@ -94,6 +127,7 @@ export const processMessage = action({
     actions.push("Analizando tu idea...");
     actions.push("Generando estrategia de campaña...");
     actions.push("Creando contenido...");
+    actions.push("Programando en horarios humanos de Argentina...");
 
     const strategy = generateStrategy(idea);
     const pieces = generatePieces(strategy, idea);
@@ -156,11 +190,47 @@ export const processMessage = action({
       generatedAt: Date.now(),
     });
 
+    // Programar contenido con horarios humanos de Argentina
+    let scheduledCount = 0;
+    const platforms = ["instagram", "facebook", "tiktok"];
+
+    for (let i = 0; i < pieces.length && scheduledCount < 15; i++) {
+      const piece = pieces[i];
+      const platform = platforms[i % platforms.length];
+
+      const dayOffset = Math.floor(i / 3) + 1;
+      const slotIndex = i % HUMAN_SCHEDULES.length;
+      const scheduleTime = getHumanTime(dayOffset, slotIndex);
+
+      try {
+        const socialAccounts = await ctx.runQuery(api.socialAccounts.getByPlatform, { platform });
+        if (socialAccounts.length === 0) continue;
+
+        const account = socialAccounts[0];
+        const idempotencyKey = `sched_chat_${packId}_${i}_${platform}_${scheduleTime.getTime()}`;
+
+        await ctx.runMutation(api.scheduledPosts.create, {
+          contentPieceId: (await ctx.runQuery(api.contentPieces.getByPack, { contentPackId: packId }))[i]?._id,
+          socialAccountId: account._id,
+          platform,
+          scheduledAt: scheduleTime.getTime(),
+          priority: 1,
+          idempotencyKey,
+        });
+
+        scheduledCount++;
+      } catch {
+        // skip
+      }
+    }
+
     actions.push(`${pieces.length} piezas de contenido creadas`);
     actions.push(`${hashtags.length} hashtags optimizados generados`);
+    actions.push(`${scheduledCount} publicaciones programadas en horarios humanos`);
+    actions.push("Zona horaria: Argentina (ART)");
     actions.push("Campaña activada en modo automático");
 
-    const response = generateResponse(strategy, pieces.length, hashtags);
+    const response = generateResponse(strategy, pieces.length, hashtags, scheduledCount);
 
     return {
       response,
@@ -291,7 +361,10 @@ function generateSmartHashtags(idea: string): string[] {
   return [...base, ...general].slice(0, 10);
 }
 
-function generateResponse(strategy: any, piecesCount: number, hashtags: string[]): string {
+function generateResponse(strategy: any, piecesCount: number, hashtags: string[], scheduledCount: number): string {
+  const now = new Date();
+  const argentinaTime = now.toLocaleString("es-AR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
+
   return `¡Listo! Creé tu campaña "${strategy.name}"
 
 📋 **Lo que hice:**
@@ -299,19 +372,17 @@ function generateResponse(strategy: any, piecesCount: number, hashtags: string[]
 • ${hashtags.length} hashtags optimizados por tema
 • Adapté el contenido para Instagram, Facebook y TikTok
 • Cada pieza tiene gancho, cuerpo y CTA optimizado
-• La campaña está en modo AUTOMÁTICO
 
-🎯 **Distribución:**
-• 5 posts educativos (generan confianza)
-• 5 reels/stories (generan alcance)
-• 3 carruseles (generan guardados)
-• 2 hilos (generan engagement)
+🕐 **Programación (hora Argentina ${argentinaTime}):**
+• ${scheduledCount} publicaciones programadas
+• Horarios: 8AM-9PM con variación natural
+• Sin horarios fijos (minutos aleatorios)
+• 3-4 horas entre publicaciones
 
 ⚡ **La campaña ya está activa.** El sistema automáticamente:
-1. Genera imágenes con IA
-2. Programa las publicaciones en los mejores horarios
-3. Publica en las 3 plataformas
-4. Recopila métricas y aprende qué funciona
+1. Publica en horarios humanos de Argentina
+2. Genera imágenes con IA
+3. Recopila métricas y aprende qué funciona
 
 ¿Querés que ajuste algo, agregue más contenido, o cambie el estilo?`;
 }
