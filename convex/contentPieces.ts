@@ -91,6 +91,17 @@ export const update = mutation({
   },
 });
 
+export const updateStatus = mutation({
+  args: {
+    id: v.id("contentPieces"),
+    status: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { status: args.status });
+    return { success: true };
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("contentPieces") },
   handler: async (ctx, args) => {
