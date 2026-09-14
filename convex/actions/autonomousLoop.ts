@@ -66,32 +66,42 @@ export const runAutonomousLoop = action({
         const generated = pieces.filter((p) => p.status === "GENERATED");
         const scheduled = pieces.filter((p) => p.status === "SCHEDULED");
 
+        // Auto-refill if queue is low
         if (generated.length < queueMinimum) {
-          const needed = Math.min(queueMinimum - generated.length, 5);
-          const result = await ctx.runAction(api.autoRefill.checkAndRefill, {
-            campaignId: campaign._id,
-          });
-          contentGenerated += result.totalGenerated;
+          try {
+            const result = await ctx.runAction(api.autoRefill.checkAndRefill, {
+              campaignId: campaign._id,
+            });
+            contentGenerated += result.totalGenerated;
+          } catch (e) {
+            errors.push(`Refill ${campaign.name}: ${e instanceof Error ? e.message : "failed"}`);
+          }
         }
 
-        const unscheduled = generated.filter((p) =>
-          !scheduled.some((s) => s.contentId === p._id)
+        // Schedule unscheduled content
+        const unscheduled = generated.filter(
+          (p) => !scheduled.some((s) => s.contentId === p._id)
         );
 
         if (unscheduled.length > 0) {
           for (const piece of unscheduled.slice(0, 3)) {
-            const safetyResult = await ctx.runAction(api.safetyCheck.checkPublicationSafety, {
-              contentPieceId: piece._id,
-              platform: piece.platform,
-            });
-            safetyChecks++;
+            try {
+              const safetyResult = await ctx.runAction(api.safetyCheck.checkPublicationSafety, {
+                contentPieceId: piece._id,
+                platform: piece.platform,
+              });
+              safetyChecks++;
 
-            if (safetyResult.approved) {
-              contentScheduled++;
+              if (safetyResult.approved) {
+                contentScheduled++;
+              }
+            } catch (e) {
+              errors.push(`Safety check ${piece._id}: ${e instanceof Error ? e.message : "failed"}`);
             }
           }
         }
 
+        // Publish ready content
         const readyToPublish = scheduled.filter(
           (p) => p.status === "SCHEDULED" && (!p.scheduledAt || p.scheduledAt <= Date.now())
         );
@@ -112,11 +122,16 @@ export const runAutonomousLoop = action({
           }
         }
 
+        // Collect metrics
         const published = pieces.filter((p) => p.status === "PUBLISHED");
         if (published.length > 0) {
-          const today = new Date().toISOString().split("T")[0];
-          await ctx.runAction(api.collectAnalytics.collectAllAnalytics, { date: today });
-          metricsCollected++;
+          try {
+            const today = new Date().toISOString().split("T")[0];
+            await ctx.runAction(api.collectAnalytics.collectAllAnalytics, { date: today });
+            metricsCollected++;
+          } catch (e) {
+            errors.push(`Analytics: ${e instanceof Error ? e.message : "failed"}`);
+          }
         }
 
         const healthScore = calculateHealthScore(
