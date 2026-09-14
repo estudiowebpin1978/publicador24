@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Search, Bell, Menu, LogOut, Settings, User, CreditCard } from "lucide-react"
+import Link from "next/link"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useRouter } from "next/navigation"
 
@@ -112,8 +113,8 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
               <span className="text-xs text-slate-500">hace 1 hora</span>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-white/10" />
-            <DropdownMenuItem className="w-full justify-center text-sm text-slate-400 hover:bg-white/5 hover:text-white">
-              Ver todas las notificaciones
+            <DropdownMenuItem asChild className="w-full justify-center text-sm text-violet-400 hover:bg-white/5 hover:text-violet-300">
+              <Link href="/notifications">Ver todas las notificaciones</Link>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
