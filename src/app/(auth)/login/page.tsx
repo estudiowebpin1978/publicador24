@@ -7,22 +7,37 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sparkles } from "lucide-react"
+import { useMutation } from "@/hooks/use-convex"
+import { api } from "@/hooks/use-convex"
+import Link from "next/link"
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [error, setError] = React.useState("")
+  const [isLoading, setIsLoading] = React.useState(false)
   const router = useRouter()
+  const loginMutation = useMutation(api.auth.login)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setIsLoading(true)
 
-    if (email === "estudiowebpin@gmail.com" && password === "admin24") {
-      localStorage.setItem("autopublisher_user", JSON.stringify({ email }))
+    try {
+      const result = await loginMutation({ email, password })
+      localStorage.setItem("autopublisher_user", JSON.stringify({
+        userId: result.userId,
+        email: result.email,
+        name: result.name,
+        token: result.token,
+      }))
       router.push("/dashboard")
-    } else {
-      setError("Credenciales incorrectas")
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error al iniciar sesión"
+      setError(message)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -74,10 +89,16 @@ export default function LoginPage() {
                 />
               </div>
             </CardContent>
-            <CardFooter>
-              <Button type="submit" className="w-full">
-                Iniciar sesión
+            <CardFooter className="flex flex-col gap-3">
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? "Iniciando sesión..." : "Iniciar sesión"}
               </Button>
+              <p className="text-sm text-muted-foreground">
+                ¿No tenés cuenta?{" "}
+                <Link href="/register" className="text-primary hover:underline">
+                  Registrate
+                </Link>
+              </p>
             </CardFooter>
           </form>
         </Card>

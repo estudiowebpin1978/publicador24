@@ -14,6 +14,7 @@ interface StrategyMemory {
   impressions?: number;
   engagement?: number;
   publishedAt: number;
+  publishedPostId?: string;
 }
 
 interface ContentPlan {
@@ -87,6 +88,7 @@ export async function writeStrategyMemory(entry: {
   score: number;
   impressions?: number;
   engagement?: number;
+  publishedPostId?: string;
 }): Promise<void> {
   try {
     const { api } = await import('@convex/_generated/api');
@@ -101,6 +103,7 @@ export async function writeStrategyMemory(entry: {
       impressions: entry.impressions,
       engagement: entry.engagement,
       publishedAt: Date.now(),
+      publishedPostId: entry.publishedPostId,
     });
   } catch (error) {
     console.warn('Failed to write strategy memory:', error);
