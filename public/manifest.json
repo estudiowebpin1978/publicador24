@@ -1,0 +1,32 @@
+{
+  "name": "Publicador24 - Autopiloto IA",
+  "short_name": "Publicador24",
+  "description": "Plataforma autónoma de generación y publicación de contenido con IA para redes sociales.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#7c3aed",
+  "categories": ["business", "productivity", "social"],
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "web",
+      "url": "https://publicador24.netlify.app"
+    }
+  ],
+  "prefer_related_applications": false
+}
