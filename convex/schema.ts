@@ -400,6 +400,7 @@ export default defineSchema({
     impressions: v.optional(v.number()),
     engagement: v.optional(v.number()),
     publishedAt: v.number(),
+    publishedPostId: v.optional(v.string()),
   }).index("by_campaign", ["campaignId"])
     .index("by_campaign_platform", ["campaignId", "platform"]),
 
@@ -472,6 +473,14 @@ export default defineSchema({
     workspace: v.optional(v.any()),
     brandVoice: v.optional(v.any()),
   }),
+
+  users: defineTable({
+    email: v.string(),
+    passwordHash: v.string(),
+    salt: v.string(),
+    name: v.string(),
+    createdAt: v.number(),
+  }).index("by_email", ["email"]),
 
   businessProfiles: defineTable({
     projectId: v.optional(v.id("projects")),

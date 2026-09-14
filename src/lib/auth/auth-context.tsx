@@ -2,9 +2,16 @@
 
 import { createContext, useContext, useState, ReactNode } from "react"
 
+interface User {
+  userId: string
+  email: string
+  name: string
+  token: string
+}
+
 interface AuthContextType {
   isAuthenticated: boolean
-  user: { email: string } | null
+  user: User | null
   logout: () => void
 }
 
@@ -14,7 +21,7 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 })
 
-function getStoredUser(): { email: string } | null {
+function getStoredUser(): User | null {
   if (typeof window === "undefined") return null
   const stored = localStorage.getItem("autopublisher_user")
   if (!stored) return null
@@ -27,7 +34,7 @@ function getStoredUser(): { email: string } | null {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<{ email: string } | null>(() => getStoredUser())
+  const [user, setUser] = useState<User | null>(() => getStoredUser())
 
   const logout = () => {
     setUser(null)

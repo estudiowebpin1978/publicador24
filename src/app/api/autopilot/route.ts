@@ -3,6 +3,7 @@ import { getAIProvider } from "@/lib/ai/provider";
 import { wrapProviderWithCostTracking, getTodayCost } from "@/lib/ai/cost-tracker";
 import { readStrategyMemory, writeStrategyMemory } from "@/lib/ai/strategy-memory";
 import { checkPublicationSafety } from "@/lib/ai/publication-safety";
+import { runLearningLoop, collectMetrics, updateStrategyScores, generateInsights } from "@/lib/ai/learning-loop";
 import { ConvexHttpClient } from "convex/browser";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -337,7 +338,7 @@ Respondé con JSON:
                 result.contentPublished++;
                 result.details.push(`Published: ${piece.hook.substring(0, 40)}... → ${channel.displayName}`);
 
-                // Learn from this publication
+                // Learn from this publication (initial score, will be updated by learning loop)
                 await writeStrategyMemory({
                   campaignId: campaign._id,
                   topic: campaign.name,
@@ -345,7 +346,8 @@ Respondé con JSON:
                   contentType: piece.contentType,
                   platform: piece.platform,
                   funnelStage: piece.funnelStage,
-                  score: 50,
+                  score: 50, // Initial score, updated by learning loop after metrics collection
+                  publishedPostId: postResult.post.id,
                 });
                 result.learningUpdates++;
               }
@@ -355,14 +357,21 @@ Respondé con JSON:
           }
         }
 
-        // STEP 5: Collect real metrics from Buffer
-        for (const channel of channels) {
-          try {
-            await collectRealMetrics(channel.id, channel.service);
-            result.metricsCollected++;
-          } catch {
-            // Metrics collection is best-effort
+        // STEP 5: Run learning loop (metrics + scores + insights)
+        try {
+          const learningResult = await runLearningLoop(campaign._id);
+          result.metricsCollected += learningResult.metricsCollected;
+          result.learningUpdates += learningResult.scoresUpdated;
+
+          for (const adjustment of learningResult.strategyAdjustments) {
+            result.details.push(`Learning: ${adjustment}`);
           }
+
+          if (learningResult.insightsGenerated > 0) {
+            result.details.push(`Generated ${learningResult.insightsGenerated} new insights`);
+          }
+        } catch {
+          // Learning loop is best-effort
         }
 
         // Update campaign health

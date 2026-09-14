@@ -26,6 +26,13 @@ export const getByCampaignPlatform = query({
   },
 });
 
+export const list = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("strategyMemory").collect();
+  },
+});
+
 export const create = mutation({
   args: {
     campaignId: v.id("campaigns"),
@@ -38,9 +45,27 @@ export const create = mutation({
     impressions: v.optional(v.number()),
     engagement: v.optional(v.number()),
     publishedAt: v.number(),
+    publishedPostId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("strategyMemory", args);
+  },
+});
+
+export const updateScore = mutation({
+  args: {
+    id: v.id("strategyMemory"),
+    score: v.number(),
+    impressions: v.optional(v.number()),
+    engagement: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      score: args.score,
+      impressions: args.impressions,
+      engagement: args.engagement,
+    });
+    return { success: true };
   },
 });
 
