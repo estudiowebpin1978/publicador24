@@ -34,8 +34,6 @@ import {
   Image as ImageIcon,
 } from "lucide-react"
 import Link from "next/link"
-import { useAction, useQuery } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
 
 const STEPS = [
   { id: "idea", label: "Idea", icon: Lightbulb },
@@ -112,8 +110,6 @@ const CONTENT_TYPES = [
 
 export default function CampaignWizardPage() {
   const [state, setState] = React.useState<CampaignWizardState>(initialState)
-  const generateCampaign = useAction(api.campaignGenerator.generateCampaign)
-  const regeneratePiece = useAction(api.campaignGenerator.regenerateContentPiece)
 
   const setStep = (step: number) =>
     setState((prev) => ({ ...prev, currentStep: Math.max(0, Math.min(step, STEPS.length - 1)) }))
@@ -121,40 +117,35 @@ export default function CampaignWizardPage() {
   const handleGenerate = async () => {
     setState((prev) => ({ ...prev, isGenerating: true }))
     try {
-      const result = await generateCampaign({
-        idea: state.idea,
-        product: state.product || undefined,
-        objective: state.objective,
-        audience: state.audience || undefined,
-        platforms: state.platforms,
-        style: state.style,
-        offer: state.offer || undefined,
-        url: state.url || undefined,
-        referenceImages: state.referenceImages.length > 0 ? state.referenceImages : undefined,
-        contentCount: state.contentCount,
+      const response = await fetch("/api/campaign/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: state.product || state.idea,
+          website: state.url || undefined,
+          description: state.idea,
+          objective: state.objective,
+          platforms: state.platforms,
+          frequency: "diaria",
+        }),
       })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Error al generar")
+      }
+
       setState((prev) => ({
         ...prev,
-        generatedCampaign: result,
-        selectedPieces: result.pieces.map((p: any) => p.id),
+        generatedCampaign: result.campaign,
+        selectedPieces: (result.campaign?.contentPieces || []).map((p: Record<string, unknown>) => String(p._id || "")),
         currentStep: 6,
         isGenerating: false,
       }))
     } catch (error) {
       console.error("Failed to generate campaign:", error)
       setState((prev) => ({ ...prev, isGenerating: false }))
-      alert("Error al generar la campaña. Intentá de nuevo.")
-    }
-  }
-
-  const handleRegeneratePiece = async (pieceId: string) => {
-    try {
-      await regeneratePiece({
-        pieceId: pieceId,
-        direction: "más impactante",
-      })
-    } catch (error) {
-      console.error("Failed to regenerate:", error)
     }
   }
 

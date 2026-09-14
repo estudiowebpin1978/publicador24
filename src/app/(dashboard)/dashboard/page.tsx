@@ -1,12 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { useAction } from "convex/react";
-import { api } from "@convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Send,
   Sparkles,
@@ -14,11 +11,11 @@ import {
   User,
   Loader2,
   Image as ImageIcon,
-  Hash,
-  Target,
-  CheckCircle2,
   X,
   Upload,
+  Globe,
+  Target,
+  Zap,
 } from "lucide-react";
 
 interface Message {
@@ -26,22 +23,15 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   images?: string[];
-  data?: {
-    campaignId?: string;
-    campaignName?: string;
-    piecesGenerated?: number;
-    imagesGenerated?: number;
-    hashtags?: string[];
-    actions?: string[];
-  };
+  data?: Record<string, unknown>;
   timestamp: Date;
 }
 
 const SUGGESTIONS = [
-  "Quiero conseguir clientes para mi negocio de climatización de piscinas",
-  "Necesito contenido para mi marca de ropa deportiva",
-  "Creamos una campaña para promocionar nuestro curso de programación",
-  "Quiero vender más de nuestros productos de skincare natural",
+  { text: "Quiero conseguir clientes para mi negocio de climatización de piscinas", icon: Target },
+  { text: "Pegá tu sitio web y analizalo", icon: Globe },
+  { text: "Creame una campaña completa para mi marca de ropa deportiva", icon: Sparkles },
+  { text: "Necesito contenido para promocionar mi curso de programación", icon: Zap },
 ];
 
 export default function ChatPage() {
@@ -52,7 +42,6 @@ export default function ChatPage() {
   const [isDragging, setIsDragging] = React.useState(false);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const processMessage = useAction(api.chatAI.processMessage);
 
   React.useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -60,11 +49,9 @@ export default function ChatPage() {
 
   const handleImageUpload = (files: FileList | null) => {
     if (!files) return;
-
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith("image/")) return;
       if (file.size > 10 * 1024 * 1024) return;
-
       const reader = new FileReader();
       reader.onload = (e) => {
         const base64 = e.target?.result as string;
@@ -102,32 +89,36 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
-      const result = await processMessage({
-        message: messageText,
-        referenceImages: selectedImages.length > 0 ? selectedImages : undefined,
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: messageText,
+          history: messages.map((m) => ({ role: m.role, content: m.content })),
+          referenceImages: selectedImages.length > 0 ? selectedImages : undefined,
+        }),
       });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Error al procesar");
+      }
 
       const assistantMessage: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
         content: result.response,
-        data: {
-          campaignId: result.campaignId,
-          campaignName: result.campaignName,
-          piecesGenerated: result.piecesGenerated,
-          imagesGenerated: result.imagesGenerated,
-          hashtags: result.hashtags,
-          actions: result.actions,
-        },
+        data: result.data,
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (error) {
+    } catch {
       const errorMessage: Message = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: "Hubo un error al procesar tu mensaje. Intentá de nuevo.",
+        content: "Hubo un error al procesar tu mensaje. Verificá que la API de IA esté configurada en .env.local y volver a intentar.",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -156,10 +147,11 @@ export default function ChatPage() {
               {SUGGESTIONS.map((suggestion, i) => (
                 <button
                   key={i}
-                  onClick={() => handleSend(suggestion)}
-                  className="text-left p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-violet-500/30 transition-all text-sm text-slate-300 hover:text-white"
+                  onClick={() => handleSend(suggestion.text)}
+                  className="flex items-center gap-3 text-left p-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-violet-500/30 transition-all text-sm text-slate-300 hover:text-white"
                 >
-                  {suggestion}
+                  <suggestion.icon className="size-5 text-violet-400 flex-shrink-0" />
+                  <span>{suggestion.text}</span>
                 </button>
               ))}
             </div>
