@@ -317,26 +317,15 @@ export default function SettingsPage() {
               <div className="rounded-xl border p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Plan Pro</p>
-                    <p className="text-sm text-muted-foreground">$29/mes</p>
+                    <p className="font-medium">Publicador24</p>
+                    <p className="text-sm text-muted-foreground">App gratuita — sin facturación</p>
                   </div>
-                  <Badge>Activo</Badge>
+                  <Badge variant="secondary">Free</Badge>
                 </div>
                 <Separator className="my-4" />
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Próxima fecha de facturación</p>
-                    <p className="font-medium">1 Feb 2024</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Método de pago</p>
-                    <p className="font-medium">•••• 4242</p>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3">
-                <Button variant="outline">Gestionar Suscripción</Button>
-                <Button variant="outline">Actualizar Pago</Button>
+                <p className="text-sm text-muted-foreground">
+                  Esta aplicación es de uso personal. No hay sistema de facturación configurado.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -345,49 +334,49 @@ export default function SettingsPage() {
         <TabsContent value="api" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Claves API</CardTitle>
-              <CardDescription>Gestioná tus claves de acceso API</CardDescription>
+              <CardTitle>Integraciones Configuradas</CardTitle>
+              <CardDescription>Estado de las claves API configuradas en el servidor</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-xl border p-4">
+            <CardContent className="space-y-3">
+              <div className="rounded-xl border p-4">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Clave de Producción</p>
-                    <p className="text-sm text-muted-foreground font-mono">
-                      {showApiKey ? "sk_live_abc123def456ghi789" : "sk_live_••••••••••••••••"}
-                    </p>
+                    <p className="font-medium">AI Provider (OpenRouter)</p>
+                    <p className="text-sm text-muted-foreground font-mono">Configurado en .env.local</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                    >
-                      {showApiKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                    </Button>
-                    <Button variant="ghost" size="icon-sm">
-                      <Copy className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between rounded-xl border p-4">
-                  <div>
-                    <p className="font-medium">Clave de Desarrollo</p>
-                    <p className="text-sm text-muted-foreground font-mono">
-                      sk_test_••••••••••••••••
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon-sm">
-                      <Eye className="size-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon-sm">
-                      <Copy className="size-4" />
-                    </Button>
-                  </div>
+                  <Badge variant="default" className="bg-green-500">Activo</Badge>
                 </div>
               </div>
-              <Button variant="outline">Generar Nueva Clave</Button>
+              <div className="rounded-xl border p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Buffer API</p>
+                    <p className="text-sm text-muted-foreground font-mono">Configurado en .env.local</p>
+                  </div>
+                  <Badge variant="default" className="bg-green-500">Activo</Badge>
+                </div>
+              </div>
+              <div className="rounded-xl border p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Pollinations (Imágenes)</p>
+                    <p className="text-sm text-muted-foreground font-mono">Configurado en .env.local</p>
+                  </div>
+                  <Badge variant="default" className="bg-green-500">Activo</Badge>
+                </div>
+              </div>
+              <div className="rounded-xl border p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Convex (Base de datos)</p>
+                    <p className="text-sm text-muted-foreground font-mono">Configurado en .env.local</p>
+                  </div>
+                  <Badge variant="default" className="bg-green-500">Activo</Badge>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Las claves API se gestionan en el archivo .env.local del servidor, no desde esta interfaz.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
