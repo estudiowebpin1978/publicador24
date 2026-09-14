@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAIProvider } from "@/lib/ai/provider";
+import { generateTextWithFallback } from "@/lib/ai/multi-provider";
+import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { wrapProviderWithCostTracking, getTodayCost } from "@/lib/ai/cost-tracker";
 import { readStrategyMemory, writeStrategyMemory } from "@/lib/ai/strategy-memory";
 import { checkPublicationSafety } from "@/lib/ai/publication-safety";
@@ -157,8 +158,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result);
     }
 
-    const ai = wrapProviderWithCostTracking(getAIProvider(), "openrouter");
-
     for (const campaign of campaigns) {
       try {
         if (campaign.autopilotLevel === "MANUAL") continue;
@@ -192,8 +191,8 @@ export async function POST(request: NextRequest) {
                 ? `\nPRIORIZAR estos formatos (alto rendimiento): ${boostFormats.slice(0, 3).join(', ')}`
                 : "";
 
-              const genResult = await ai.generateText({
-                prompt: `Generá contenido para ${campaign.name} en ${platform}.${memoryContext}${formatContext}
+              const genResult = await generateTextWithFallback(
+                `Generá contenido para ${campaign.name} en ${platform}.${memoryContext}${formatContext}
 
 OBJETIVO: ${campaign.objective || "conseguir clientes"}
 PÚBLICO: ${campaign.targetAudience || "general"}
@@ -211,9 +210,8 @@ Respondé con JSON:
   "hashtags": ["#tag1"],
   "cta": "..."
 }`,
-                system_prompt: "Sos un experto en copywriting. Creá contenido que GENERE DEMANDA. Respondé con JSON válido.",
-                max_tokens: 1500,
-              });
+                "Sos un experto en copywriting. Creá contenido que GENERE DEMANDA. Respondé con JSON válido."
+              );
 
               let content: { hook: string; caption: string; hashtags: string[]; cta: string };
               try {
@@ -293,8 +291,11 @@ Respondé con JSON:
             // Generate image for the post (required for Instagram/TikTok)
             let imageUrl: string | undefined;
             try {
-              const encodedPrompt = encodeURIComponent(`${piece.hook}, professional social media content, high quality`);
-              imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1080&height=1080&seed=${Date.now()}&nologo=true`;
+              const imageResult = await generateImageWithFallback(
+                `${piece.hook}, professional social media content, high quality`,
+                "1:1"
+              );
+              imageUrl = imageResult.url;
             } catch {
               // Image generation is best-effort
             }
@@ -354,8 +355,11 @@ Respondé con JSON:
               // Generate image for the post
               let imageUrl: string | undefined;
               try {
-                const encodedPrompt = encodeURIComponent(`${piece.hook}, professional social media content, high quality`);
-                imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1080&height=1080&seed=${Date.now()}&nologo=true`;
+                const imageResult = await generateImageWithFallback(
+                  `${piece.hook}, professional social media content, high quality`,
+                  "1:1"
+                );
+                imageUrl = imageResult.url;
               } catch {
                 // Image generation is best-effort
               }

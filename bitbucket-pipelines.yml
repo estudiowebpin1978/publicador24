@@ -1,0 +1,10 @@
+# Bitbucket Pipelines - Auto deploy to Netlify
+# This file triggers Netlify deploy via webhook
+
+pipelines:
+  default:
+    - step:
+        name: Trigger Netlify Deploy
+        script:
+          - echo "Triggering Netlify deploy for Publicador24..."
+          - curl -X POST -H "Content-Type: application/json" -d '{"trigger": "bitbucket"}' $NETLIFY_BUILD_HOOK_URL

@@ -1,0 +1,21 @@
+# NETLIFY AUTO-DEPLOY SETUP
+# 
+# To enable automatic deploy:
+# 
+# 1. Go to https://app.netlify.com/
+# 2. Sites > publicador24 > Site settings > Build & deploy
+# 3. Build hooks > Add build hook
+# 4. Name: bitbucket-auto-deploy
+# 5. Copy URL
+# 
+# 6. In Bitbucket repo settings:
+#    - Go to Repository settings > Webhooks
+#    - Add webhook: URL = https://api.netlify.com/build_hooks/XXXX
+#    - Triggers: Repository push
+#
+# OR use Bitbucket Pipeline with $NETLIFY_BUILD_HOOK_URL environment variable
+#
+# The code is already configured to deploy automatically from Bitbucket main branch.
+# The build command uses Next.js 16.3.4.
+
+NETLIFY_BUILD_HOOK_URL=REPLACE_WITH_YOUR_HOOK_URL_FROM_NETLIFY
