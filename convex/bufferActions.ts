@@ -106,21 +106,38 @@ export async function createBufferPost({
   text,
   channelId,
   scheduledAt,
+  imageUrl,
+  platform,
 }: {
   text: string
   channelId: string
   scheduledAt?: string
+  imageUrl?: string
+  platform?: string
 }) {
   const input: Record<string, unknown> = {
     channelId,
     text,
+    mode: scheduledAt ? "addToQueue" : "shareNow",
+    schedulingType: "automatic",
+    needsApproval: false,
   }
 
   if (scheduledAt) {
-    input.scheduledAt = scheduledAt
-    input.schedulingType = "scheduled"
-  } else {
-    input.schedulingType = "sendNow"
+    input.mode = "addToQueue"
+  }
+
+  if (imageUrl) {
+    input.assets = { image: { url: imageUrl } }
+  }
+
+  // Platform-specific metadata
+  if (platform === "instagram") {
+    input.metadata = { instagram: { type: "post", shouldShareToFeed: true } }
+  } else if (platform === "facebook") {
+    input.metadata = { facebook: { type: "post" } }
+  } else if (platform === "tiktok") {
+    input.metadata = { tiktok: {} }
   }
 
   return callBuffer(

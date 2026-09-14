@@ -61,13 +61,26 @@ async function getBufferChannels() {
   return channelsData.channels.filter((ch: { isDisconnected: boolean; isLocked: boolean }) => !ch.isDisconnected && !ch.isLocked);
 }
 
-async function publishToBuffer(text: string, channelId: string, scheduledAt?: string) {
-  const input: Record<string, unknown> = { channelId, text };
-  if (scheduledAt) {
-    input.scheduledAt = scheduledAt;
-    input.schedulingType = "scheduled";
-  } else {
-    input.schedulingType = "sendNow";
+async function publishToBuffer(text: string, channelId: string, scheduledAt?: string, imageUrl?: string, platform?: string) {
+  const input: Record<string, unknown> = {
+    channelId,
+    text,
+    mode: scheduledAt ? "addToQueue" : "shareNow",
+    schedulingType: "automatic",
+    needsApproval: false,
+  };
+
+  if (imageUrl) {
+    input.assets = { image: { url: imageUrl } };
+  }
+
+  // Platform-specific metadata
+  if (platform === "instagram") {
+    input.metadata = { instagram: { type: "post", shouldShareToFeed: true } };
+  } else if (platform === "facebook") {
+    input.metadata = { facebook: { type: "post" } };
+  } else if (platform === "tiktok") {
+    input.metadata = { tiktok: {} };
   }
 
   const result = await callBuffer(
@@ -277,7 +290,16 @@ Respondé con JSON:
 
             const text = `${piece.hook}\n\n${piece.body}\n\n${piece.hashtags?.map((h: string) => `#${h}`).join(" ") || ""}`;
 
-            const postResult = await publishToBuffer(text, channel.id);
+            // Generate image for the post (required for Instagram/TikTok)
+            let imageUrl: string | undefined;
+            try {
+              const encodedPrompt = encodeURIComponent(`${piece.hook}, professional social media content, high quality`);
+              imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1080&height=1080&seed=${Date.now()}&nologo=true`;
+            } catch {
+              // Image generation is best-effort
+            }
+
+            const postResult = await publishToBuffer(text, channel.id, undefined, imageUrl, piece.platform);
             if (postResult?.post?.id) {
               // Mark piece as published directly (Buffer handles scheduling)
               await convex.mutation(api.contentPieces.updateStatus, {
@@ -328,7 +350,17 @@ Respondé con JSON:
               if (!channel) continue;
 
               const text = `${piece.hook}\n\n${piece.body}\n\n${piece.hashtags?.map((h: string) => `#${h}`).join(" ") || ""}`;
-              const pubResult = await publishToBuffer(text, channel.id);
+
+              // Generate image for the post
+              let imageUrl: string | undefined;
+              try {
+                const encodedPrompt = encodeURIComponent(`${piece.hook}, professional social media content, high quality`);
+                imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1080&height=1080&seed=${Date.now()}&nologo=true`;
+              } catch {
+                // Image generation is best-effort
+              }
+
+              const pubResult = await publishToBuffer(text, channel.id, undefined, imageUrl, piece.platform);
 
               if (pubResult?.post?.id) {
                 await convex.mutation(api.contentPieces.updateStatus, {
