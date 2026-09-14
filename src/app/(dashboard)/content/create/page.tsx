@@ -287,63 +287,217 @@ export default function CreateContentPage() {
     }
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     setIsGenerating(true)
-    setTimeout(() => {
+    try {
+      const topic = state.input.productName || state.input.text || "Social Media Strategy"
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Generá contenido para redes sociales sobre: ${topic}. Respondé con JSON válido: { "hooks": [{ "id": "h1", "text": "...", "type": "Curiosity|Question|Contrarian|Benefit|Story", "score": 85 }], "titles": [{ "id": "t1", "text": "...", "score": 90, "breakdown": { "clarity": 90, "curiosity": 85, "relevance": 90, "length": 85, "platformFit": 90 } }], "captions": [{ "id": "c1", "text": "...", "score": 88, "wordCount": 50, "hashtags": ["#tag1"], "cta": "..." }] }`,
+          mode: "generate",
+        }),
+      })
+      const result = await response.json()
+      const text = result.response || result.text || ""
+      let parsed: any = null
+      try {
+        const match = text.match(/```json\s*([\s\S]*?)```/)
+        parsed = JSON.parse(match ? match[1] : text)
+      } catch {
+        parsed = null
+      }
+      if (parsed?.hooks) {
+        setState((prev) => ({
+          ...prev,
+          hooks: parsed.hooks.map((h: any, i: number) => ({ id: h.id || `h${i+1}`, text: h.text, type: h.type || "Curiosity", score: h.score || 80 })),
+          titles: (parsed.titles || []).map((t: any, i: number) => ({ id: t.id || `t${i+1}`, text: t.text, score: t.score || 80, breakdown: t.breakdown || { clarity: 80, curiosity: 80, relevance: 80, length: 80, platformFit: 80 } })),
+          captions: (parsed.captions || []).map((c: any, i: number) => ({ id: c.id || `c${i+1}`, text: c.text, score: c.score || 80, wordCount: c.text?.split(" ").length || 50, hashtags: c.hashtags || [], cta: c.cta || "" })),
+          currentStep: 2,
+        }))
+      } else {
+        const mock = generateMockData(state.input)
+        setState((prev) => ({ ...prev, hooks: mock.hooks, titles: mock.titles, captions: mock.captions, currentStep: 2 }))
+      }
+    } catch {
       const mock = generateMockData(state.input)
-      setState((prev) => ({
-        ...prev,
-        hooks: mock.hooks,
-        titles: mock.titles,
-        captions: mock.captions,
-        currentStep: 2,
-      }))
+      setState((prev) => ({ ...prev, hooks: mock.hooks, titles: mock.titles, captions: mock.captions, currentStep: 2 }))
+    } finally {
       setIsGenerating(false)
-    }, 2000)
+    }
   }
 
-  const handleGenerateAdaptations = () => {
+  const handleGenerateAdaptations = async () => {
     setIsGenerating(true)
-    setTimeout(() => {
+    try {
+      const topic = state.input.productName || state.input.text || "Social Media"
+      const selectedHook = state.hooks.find(h => h.id === state.selectedHookId)?.text || ""
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Adaptá este contenido para cada plataforma. Hook: "${selectedHook}". Respondé con JSON: { "adaptations": [{ "platform": "instagram", "hook": "...", "caption": "...", "hashtags": ["#tag"], "cta": "...", "charLimit": 2200 }, { "platform": "x", "hook": "...", "caption": "...", "hashtags": ["#tag"], "cta": "...", "charLimit": 280 }, { "platform": "facebook", "hook": "...", "caption": "...", "hashtags": ["#tag"], "cta": "...", "charLimit": 63206 }] }`,
+          mode: "generate",
+        }),
+      })
+      const result = await response.json()
+      const text = result.response || result.text || ""
+      let parsed: any = null
+      try {
+        const match = text.match(/```json\s*([\s\S]*?)```/)
+        parsed = JSON.parse(match ? match[1] : text)
+      } catch { parsed = null }
+      if (parsed?.adaptations) {
+        setState((prev) => ({
+          ...prev,
+          adaptations: parsed.adaptations.map((a: any) => ({
+            platform: a.platform,
+            hook: a.hook || selectedHook,
+            caption: a.caption || "",
+            hashtags: a.hashtags || [],
+            cta: a.cta || "",
+            charLimit: a.charLimit || 2200,
+          })),
+          currentStep: 3,
+        }))
+      } else {
+        const mock = generateMockData(state.input)
+        setState((prev) => ({ ...prev, adaptations: mock.adaptations, currentStep: 3 }))
+      }
+    } catch {
       const mock = generateMockData(state.input)
-      setState((prev) => ({
-        ...prev,
-        adaptations: mock.adaptations,
-        currentStep: 3,
-      }))
+      setState((prev) => ({ ...prev, adaptations: mock.adaptations, currentStep: 3 }))
+    } finally {
       setIsGenerating(false)
-    }, 1500)
+    }
   }
 
-  const handleGenerateScore = () => {
+  const handleGenerateScore = async () => {
     setIsGenerating(true)
-    setTimeout(() => {
+    try {
+      const selectedHook = state.hooks.find(h => h.id === state.selectedHookId)?.text || ""
+      const selectedCaption = state.captions.find(c => c.id === state.selectedCaptionId)?.text || ""
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Evaluá este contenido. Hook: "${selectedHook}". Caption: "${selectedCaption}". Respondé con JSON: { "score": { "overall": 85, "hookStrength": 80, "captionQuality": 85, "ctaEffectiveness": 90, "hashtagRelevance": 80, "platformFit": 85 }, "feedback": ["feedback1", "feedback2"], "suggestions": ["suggestion1"] }`,
+          mode: "generate",
+        }),
+      })
+      const result = await response.json()
+      const text = result.response || result.text || ""
+      let parsed: any = null
+      try {
+        const match = text.match(/```json\s*([\s\S]*?)```/)
+        parsed = JSON.parse(match ? match[1] : text)
+      } catch { parsed = null }
+      if (parsed?.score) {
+        setState((prev) => ({
+          ...prev,
+          score: {
+            overall: parsed.score.overall || 80,
+            hookStrength: parsed.score.hookStrength || 80,
+            captionQuality: parsed.score.captionQuality || 80,
+            ctaEffectiveness: parsed.score.ctaEffectiveness || 80,
+            hashtagRelevance: parsed.score.hashtagRelevance || 80,
+            platformFit: parsed.score.platformFit || 80,
+            feedback: parsed.feedback || [],
+            suggestions: parsed.suggestions || [],
+          },
+          currentStep: 4,
+        }))
+      } else {
+        const mock = generateMockData(state.input)
+        setState((prev) => ({ ...prev, score: mock.score, currentStep: 4 }))
+      }
+    } catch {
       const mock = generateMockData(state.input)
-      setState((prev) => ({
-        ...prev,
-        score: mock.score,
-        currentStep: 4,
-      }))
+      setState((prev) => ({ ...prev, score: mock.score, currentStep: 4 }))
+    } finally {
       setIsGenerating(false)
-    }, 1000)
+    }
   }
 
-  const handleGenerateSchedule = () => {
-    const mock = generateMockData(state.input)
-    setState((prev) => ({
-      ...prev,
-      recommendations: mock.recommendations,
-      currentStep: 5,
-    }))
+  const handleGenerateSchedule = async () => {
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Recomendá horarios para publicar en redes sociales. Respondé con JSON: { "recommendations": [{ "platform": "instagram", "day": "Lunes", "time": "12:00", "reason": "Peak engagement" }, { "platform": "x", "day": "Martes", "time": "09:00", "reason": "Morning audience" }] }`,
+          mode: "generate",
+        }),
+      })
+      const result = await response.json()
+      const text = result.response || result.text || ""
+      let parsed: any = null
+      try {
+        const match = text.match(/```json\s*([\s\S]*?)```/)
+        parsed = JSON.parse(match ? match[1] : text)
+      } catch { parsed = null }
+      if (parsed?.recommendations) {
+        setState((prev) => ({
+          ...prev,
+          recommendations: parsed.recommendations.map((r: any) => ({
+            platform: r.platform,
+            day: r.day,
+            time: r.time,
+            reason: r.reason,
+            confidence: r.confidence || 0.8,
+          })),
+          currentStep: 5,
+        }))
+      } else {
+        const mock = generateMockData(state.input)
+        setState((prev) => ({ ...prev, recommendations: mock.recommendations, currentStep: 5 }))
+      }
+    } catch {
+      const mock = generateMockData(state.input)
+      setState((prev) => ({ ...prev, recommendations: mock.recommendations, currentStep: 5 }))
+    }
   }
 
-  const handleGenerateReview = () => {
-    const mock = generateMockData(state.input)
-    setState((prev) => ({
-      ...prev,
-      previews: mock.previews,
-      currentStep: 6,
-    }))
+  const handleGenerateReview = async () => {
+    try {
+      const selectedHook = state.hooks.find(h => h.id === state.selectedHookId)?.text || ""
+      const selectedCaption = state.captions.find(c => c.id === state.selectedCaptionId)?.text || ""
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Generá vistas previas de este contenido para cada plataforma. Hook: "${selectedHook}". Caption: "${selectedCaption}". Respondé con JSON: { "previews": [{ "platform": "instagram", "text": "...", "charCount": 100, "hashtagCount": 5, "fits": true }] }`,
+          mode: "generate",
+        }),
+      })
+      const result = await response.json()
+      const text = result.response || result.text || ""
+      let parsed: any = null
+      try {
+        const match = text.match(/```json\s*([\s\S]*?)```/)
+        parsed = JSON.parse(match ? match[1] : text)
+      } catch { parsed = null }
+      if (parsed?.previews) {
+        setState((prev) => ({
+          ...prev,
+          previews: parsed.previews.map((p: any) => ({
+            platform: p.platform,
+            text: p.text || "",
+            charCount: p.charCount || 0,
+            hashtagCount: p.hashtagCount || 0,
+            fits: p.fits !== false,
+          })),
+          currentStep: 6,
+        }))
+      } else {
+        const mock = generateMockData(state.input)
+        setState((prev) => ({ ...prev, previews: mock.previews, currentStep: 6 }))
+      }
+    } catch {
+      const mock = generateMockData(state.input)
+      setState((prev) => ({ ...prev, previews: mock.previews, currentStep: 6 }))
+    }
   }
 
   const handleApprove = () =>
