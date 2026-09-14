@@ -1,16 +1,16 @@
 // Convex Action: llamar a Buffer API GraphQL
-// Usa fetch nativo — no instala SDK de GraphQL
+// Uses Buffer's new GraphQL API at https://api.buffer.com
 
 export async function callBuffer(query: string, variables?: Record<string, unknown>) {
   const apiKey = process.env.BUFFER_API_KEY
   if (!apiKey || apiKey === "tu-key-aqui" || apiKey === "your-buffer-api-key") {
     throw new Error(
       "BUFFER NOT CONFIGURED: BUFFER_API_KEY is a placeholder. " +
-      "Get a real key from https://buffer.com/developers/api and set it in .env.local"
+      "Get a real key from https://buffer.com/settings/api and set it in .env.local"
     )
   }
 
-  const res = await fetch("https://api.buffer.com/1/graphql", {
+  const res = await fetch("https://api.buffer.com", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -26,17 +26,25 @@ export async function callBuffer(query: string, variables?: Record<string, unkno
   }
 
   const data = await res.json()
-  if (data.errors) throw new Error(`Buffer GraphQL error: ${data.errors[0].message}`)
+  if (data.errors) {
+    const firstError = data.errors[0]
+    const code = firstError?.extensions?.code
+    if (code === "UNAUTHORIZED") throw new Error("Buffer UNAUTHORIZED — API key inválida")
+    if (code === "RATE_LIMIT_EXCEEDED") throw new Error("Buffer RATE_LIMIT_EXCEEDED — Esperá y reintentá")
+    throw new Error(`Buffer GraphQL error: ${firstError?.message || JSON.stringify(data.errors)}`)
+  }
   return data.data
 }
 
 export async function getBufferAccount() {
   return callBuffer(`
     query GetAccount {
-      me {
+      account {
         id
-        name
         email
+        name
+        avatar
+        timezone
       }
     }
   `)
@@ -53,59 +61,101 @@ export async function getBufferOrganizations() {
   `)
 }
 
-export async function getBufferChannels() {
-  return callBuffer(`
-    query GetChannels {
-      channels {
+export async function getBufferChannels(organizationId: string) {
+  return callBuffer(
+    `
+    query GetChannels($input: ChannelsInput!) {
+      channels(input: $input) {
         id
         service
         displayName
-        status
-        avatarUrl
+        name
+        avatar
+        type
+        isDisconnected
+        isLocked
+        isQueuePaused
       }
     }
-  `)
+  `,
+    { input: { organizationId } }
+  )
 }
 
-export async function getBufferPosts() {
-  return callBuffer(`
-    query GetPosts {
-      posts {
-        id
-        text
-        status
-        channelId
-        createdAt
+export async function getBufferPosts(channelId: string) {
+  return callBuffer(
+    `
+    query GetPosts($input: PostsInput!) {
+      posts(input: $input) {
+        edges {
+          node {
+            id
+            text
+            status
+            createdAt
+          }
+        }
       }
     }
-  `)
+  `,
+    { input: { channelIds: [channelId] } }
+  )
 }
 
 export async function createBufferPost({
   text,
   channelId,
-  schedulingType = "public",
+  scheduledAt,
 }: {
   text: string
   channelId: string
-  schedulingType?: string
+  scheduledAt?: string
 }) {
+  const input: Record<string, unknown> = {
+    channelId,
+    text,
+  }
+
+  if (scheduledAt) {
+    input.scheduledAt = scheduledAt
+    input.schedulingType = "scheduled"
+  } else {
+    input.schedulingType = "sendNow"
+  }
+
   return callBuffer(
     `
-    mutation CreatePost($input: PostCreateInput!) {
+    mutation CreatePost($input: CreatePostInput!) {
       createPost(input: $input) {
-        id
-        text
-        status
+        ... on PostActionSuccess {
+          post {
+            id
+            text
+            status
+          }
+        }
+        ... on MutationError {
+          message
+        }
       }
     }
   `,
-    {
-      input: {
-        text,
-        channelIds: [channelId],
-        schedulingType,
-      },
+    { input }
+  )
+}
+
+export async function getDailyPostingLimits(channelId: string, date: string) {
+  return callBuffer(
+    `
+    query GetDailyLimits($input: DailyPostingLimitsInput!) {
+      dailyPostingLimits(input: $input) {
+        channelId
+        limit
+        scheduled
+        isAtLimit
+      }
     }
+  `,
+    { input: { channelIds: [channelId], date } }
   )
 }
