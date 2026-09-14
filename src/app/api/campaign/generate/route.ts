@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIProvider } from "@/lib/ai/provider";
+import { ConvexHttpClient } from "convex/browser";
+
+const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 interface CampaignInput {
   businessName: string;
@@ -197,6 +200,41 @@ export async function POST(request: NextRequest) {
     const strategy = await generateFullStrategy(input, businessAnalysis, ai);
     const contentPieces = await generateContentPieces(strategy, input, ai);
 
+    // Persist business profile + audience to Convex
+    let businessProfileId = null;
+    let audienceIds: string[] = [];
+    try {
+      const { api } = await import("@convex/_generated/api");
+      const websiteAnalysis = businessAnalysis.websiteAnalysis as Record<string, unknown> | null;
+      businessProfileId = await convex.mutation(api.businessProfiles.getOrCreate, {
+        name: input.businessName,
+        website: input.website,
+        businessType: (websiteAnalysis?.businessType as string) || undefined,
+        offerings: (websiteAnalysis?.offerings as string[]) || undefined,
+        targetAudience: (websiteAnalysis?.targetAudience as string) || input.description,
+        contactChannels: (websiteAnalysis?.contactChannels as string[]) || undefined,
+        keyPages: (websiteAnalysis?.keyPages as string[]) || undefined,
+        brandTone: (websiteAnalysis?.brandTone as string) || undefined,
+      });
+
+      const audiences = businessAnalysis.audiences as Record<string, unknown>;
+      if (audiences?.primary) {
+        const primaryId = await convex.mutation(api.audienceProfiles.create, {
+          campaignId: "temp" as unknown as string,
+          segmentType: "primary",
+          description: (audiences.primary as Record<string, unknown>).description as string || "",
+          demographics: (audiences.primary as Record<string, unknown>).demographics as string || undefined,
+          painPoints: (audiences.primary as Record<string, unknown>).painPoints as string[] || undefined,
+          desires: (audiences.primary as Record<string, unknown>).desires as string[] || undefined,
+          whereToReach: (audiences.primary as Record<string, unknown>).whereToReach as string[] || undefined,
+          confidence: ((audiences.primary as Record<string, unknown>).confidence as number) || 50,
+        });
+        audienceIds.push(primaryId as string);
+      }
+    } catch (e) {
+      console.warn("Convex persistence skipped:", e);
+    }
+
     return NextResponse.json({
       success: true,
       campaign: {
@@ -205,6 +243,8 @@ export async function POST(request: NextRequest) {
         analysis: businessAnalysis,
         strategy,
         contentPieces,
+        businessProfileId,
+        audienceIds,
         status: "generated",
         createdAt: new Date().toISOString(),
       },
