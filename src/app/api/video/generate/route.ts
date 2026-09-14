@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateVideoAssets } from "@/lib/ai/video-generator";
+import { assembleVideo } from "@/lib/ai/video-assembler";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +14,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await generateVideoAssets({
+    // Generate scene assets
+    const assets = await generateVideoAssets({
       content,
       hook: hook || "Mirá esto que no sabías",
       cta: cta || "Consultanos ahora",
@@ -22,20 +24,35 @@ export async function POST(request: NextRequest) {
       voice: voice || "es-AR-Standard-A",
     });
 
+    // Assemble into real .mp4
+    const isVertical = platform === "tiktok" || platform === "instagram";
+    const videoUrl = await assembleVideo({
+      scenes: assets.scenes.map((s) => ({
+        imageUrl: s.image.url,
+        text: s.text,
+        duration: s.duration,
+      })),
+      audioUrl: assets.narration?.audioUrl || undefined,
+      outputWidth: isVertical ? 720 : 1280,
+      outputHeight: isVertical ? 1280 : 720,
+      fps: 30,
+    });
+
     return NextResponse.json({
       success: true,
       video: {
-        title: result.title,
-        scenes: result.scenes.map((s) => ({
+        url: videoUrl,
+        title: assets.title,
+        scenes: assets.scenes.map((s) => ({
           id: s.id,
           text: s.text,
           imageUrl: s.image.url,
           duration: s.duration,
           transition: s.transition,
         })),
-        totalDuration: result.totalDuration,
-        narrationUrl: result.narration?.audioUrl || null,
-        format: "9:16",
+        totalDuration: assets.totalDuration,
+        narrationUrl: assets.narration?.audioUrl || null,
+        format: isVertical ? "9:16" : "16:9",
         platform,
       },
     });
