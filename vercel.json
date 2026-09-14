@@ -1,0 +1,22 @@
+﻿{
+  \"version\": 2,
+  \"buildCommand\": \"npm run build\",
+  \"devCommand\": \"npm run dev\",
+  \"installCommand\": \"npm install\",
+  \"outputDirectory\": \".next\",
+  \"framework\": \"nextjs\",
+  \"env\": {
+    \"NEXT_PUBLIC_CONVEX_URL\": \"https://fine-owl-595.convex.cloud\",
+    \"CONVEX_DEPLOY_KEY\": \"prod:fine-owl-595:dynamic-badger-375\",
+    \"OPENROUTER_API_KEY\": \"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\",
+    \"GROQ_API_KEY\": \"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\",
+    \"POLLINATIONS_API_KEY\": \"sk_q3w4sHjxQcabYY89iwCz31tWVAEVY88m\",
+    \"FREETTS_API_KEY\": \"ft_live_xmYGa610BCE8huq0nWxjp7AFOPbSTTgA\",
+    \"BUFFER_API_KEY\": \"Sny3tYp_QY_NvnvTcdpgfSIm05qmmhmVvutKi5VsMMt\",
+    \"AI_PROVIDER\": \"openrouter\",
+    \"AI_MODEL\": \"google/gemini-3.8-flash\",
+    \"APP_URL\": \"https://publicador24.netlify.app\",
+    \"FFMPEG_PATH\": \"C:\\\\Users\\\\usuario\\\\AppData\\\\Local\\\\Microsoft\\\\WinGet\\\\Packages\\\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\ffmpeg-9.0.1-full_build\\\\bin\\\\ffmpeg.exe\",
+    \"FFMPEG_BIN_DIR\": \"C:\\\\Users\\\\usuario\\\\AppData\\\\Local\\\\Microsoft\\\\WinGet\\\\Packages\\\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\ffmpeg-9.0.1-full_build\\\\bin\"
+  }
+}
