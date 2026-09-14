@@ -119,16 +119,17 @@ export default function AnalyticsPage() {
     )
   }
 
-  const totals = summary.totals
-  const engagementData = dailyAnalytics.map((day: any) => ({
-    name: new Date(day.date).toLocaleDateString("en-US", { weekday: "short" }),
+  const totals = summary?.totals || { followersGained: 0, impressions: 0, reach: 0, engagement: 0, postsCount: 0, followers: 0 }
+
+  const engagementData = dailyAnalytics.map((day: { date: string; engagement: number }) => ({
+    name: new Date(day.date).toLocaleDateString("es-AR", { weekday: "short" }),
     likes: Math.floor(day.engagement * 0.5),
     comments: Math.floor(day.engagement * 0.3),
     shares: Math.floor(day.engagement * 0.2),
   }))
 
-  const followerData = dailyAnalytics.map((day: any) => ({
-    name: new Date(day.date).toLocaleDateString("en-US", { weekday: "short" }),
+  const followerData = dailyAnalytics.map((day: { date: string; followers: number }) => ({
+    name: new Date(day.date).toLocaleDateString("es-AR", { weekday: "short" }),
     followers: day.followers,
   }))
 
@@ -187,7 +188,7 @@ export default function AnalyticsPage() {
               <SelectTrigger className="w-[180px]"><SelectValue placeholder="Seleccionar cuenta" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="">Todas las Cuentas</SelectItem>
-                {accounts.map((acc: any) => (
+                {accounts.map((acc: { _id: string; displayName?: string; username: string; platform: string }) => (
                   <SelectItem key={acc._id} value={acc._id}>
                     {acc.displayName || acc.username} (@{acc.platform})
                   </SelectItem>

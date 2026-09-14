@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
 
     // Persist business profile + audience to Convex
     let businessProfileId = null;
-    let audienceIds: string[] = [];
+    const audienceIds: string[] = [];
     try {
       const { api } = await import("@convex/_generated/api");
       const websiteAnalysis = businessAnalysis.websiteAnalysis as Record<string, unknown> | null;
