@@ -1,27 +1,22 @@
 "use client"
 
 import { ConvexProvider, ConvexReactClient } from "convex/react"
-import { ReactNode, useState, useEffect } from "react"
+import { ReactNode, useMemo } from "react"
+
+function getConvexClient(): ConvexReactClient | null {
+  const url = process.env.NEXT_PUBLIC_CONVEX_URL
+  if (url && !url.includes("placeholder")) {
+    try {
+      return new ConvexReactClient(url)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
 
 export default function ConvexClientProvider({ children }: { children: ReactNode }) {
-  const [convex, setConvex] = useState<ConvexReactClient | null>(null)
-  const [checked, setChecked] = useState(false)
-
-  useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_CONVEX_URL
-    if (url && !url.includes("placeholder")) {
-      try {
-        setConvex(new ConvexReactClient(url))
-      } catch {
-        setConvex(null)
-      }
-    }
-    setChecked(true)
-  }, [])
-
-  if (!checked) {
-    return <>{children}</>
-  }
+  const convex = useMemo(() => getConvexClient(), [])
 
   if (!convex) {
     return <>{children}</>

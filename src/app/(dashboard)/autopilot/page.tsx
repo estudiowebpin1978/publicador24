@@ -16,76 +16,96 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Zap, Shield, Settings, Clock, Target, AlertTriangle } from "lucide-react"
-import { useMutation } from "@/hooks/use-convex"
+import { useQuery, useMutation } from "@/hooks/use-convex"
 import { api } from "@/hooks/use-convex"
 
-const autopilotLevels = [
-  {
-    id: "manual",
-    name: "Manual",
-    description: "Vos creás y publicás todo el contenido manualmente",
-    icon: Settings,
-    color: "text-gray-500",
-  },
-  {
-    id: "assisted",
-    name: "Assisted",
-    description: "La IA sugiere contenido, vos revisás y publicás",
-    icon: Shield,
-    color: "text-blue-500",
-  },
-  {
-    id: "auto",
-    name: "Auto",
-    description: "La IA crea y programa contenido automáticamente",
-    icon: Zap,
-    color: "text-violet-500",
-  },
-  {
-    id: "safe-auto",
-    name: "Safe Auto",
-    description: "Modo automático con filtros de seguridad y aprobación",
-    icon: AlertTriangle,
-    color: "text-amber-500",
-  },
-]
+const DEFAULT_SETTINGS = {
+  level: "assisted",
+  platformFrequencies: { instagram: "daily", x: "daily", facebook: "daily", linkedin: "daily", tiktok: "daily" },
+  topics: "Marketing, Technology, AI",
+  contentPillars: "Industry insights\nTips and tutorials\nProduct updates\nCompany news",
+  topicsToAvoid: "Politics",
+  timeZone: "America/Argentina/Buenos_Aires",
+  preferredTimeSlots: "optimal",
+  excludedDays: [] as string[],
+  contentGuidelines: "Siempre incluí un llamado a la acción\nUsá hashtags de marca\nMantené un tono profesional\nIncluí emojis relevantes",
+  approvalRequirements: "review",
+}
 
 export default function AutopilotPage() {
-  const [selectedLevel, setSelectedLevel] = React.useState("assisted")
-  const [platformFrequencies, setPlatformFrequencies] = React.useState<Record<string, string>>({
-    instagram: "daily",
-    x: "daily",
-    facebook: "daily",
-    linkedin: "daily",
-    tiktok: "daily",
-  })
-  const [topics, setTopics] = React.useState("Marketing, Technology, AI")
-  const [contentPillars, setContentPillars] = React.useState("Industry insights\nTips and tutorials\nProduct updates\nCompany news")
-  const [topicsToAvoid, setTopicsToAvoid] = React.useState("Politics")
-  const [timeZone, setTimeZone] = React.useState("est")
-  const [preferredTimeSlots, setPreferredTimeSlots] = React.useState("optimal")
-  const [excludedDays, setExcludedDays] = React.useState<string[]>([])
-  const [contentGuidelines, setContentGuidelines] = React.useState("Siempre incluí un llamado a la acción\nUsá hashtags de marca\nMantené un tono profesional\nIncluí emojis relevantes")
-  const [approvalRequirements, setApprovalRequirements] = React.useState("review")
+  const existingSettings = useQuery(api.autopilot.getSettings)
+  const [selectedLevel, setSelectedLevel] = React.useState(DEFAULT_SETTINGS.level)
+  const [platformFrequencies, setPlatformFrequencies] = React.useState<Record<string, string>>(DEFAULT_SETTINGS.platformFrequencies)
+  const [topics, setTopics] = React.useState(DEFAULT_SETTINGS.topics)
+  const [contentPillars, setContentPillars] = React.useState(DEFAULT_SETTINGS.contentPillars)
+  const [topicsToAvoid, setTopicsToAvoid] = React.useState(DEFAULT_SETTINGS.topicsToAvoid)
+  const [timeZone, setTimeZone] = React.useState(DEFAULT_SETTINGS.timeZone)
+  const [preferredTimeSlots, setPreferredTimeSlots] = React.useState(DEFAULT_SETTINGS.preferredTimeSlots)
+  const [excludedDays, setExcludedDays] = React.useState<string[]>(DEFAULT_SETTINGS.excludedDays)
+  const [contentGuidelines, setContentGuidelines] = React.useState(DEFAULT_SETTINGS.contentGuidelines)
+  const [approvalRequirements, setApprovalRequirements] = React.useState(DEFAULT_SETTINGS.approvalRequirements)
+  const [saved, setSaved] = React.useState(false)
+  const initRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (existingSettings && !initRef.current) {
+      initRef.current = true
+      setSelectedLevel(existingSettings.level || DEFAULT_SETTINGS.level)
+      setPlatformFrequencies(existingSettings.platformFrequencies || DEFAULT_SETTINGS.platformFrequencies)
+      setTopics(existingSettings.topics || DEFAULT_SETTINGS.topics)
+      setContentPillars(existingSettings.contentPillars || DEFAULT_SETTINGS.contentPillars)
+      setTopicsToAvoid(existingSettings.topicsToAvoid || DEFAULT_SETTINGS.topicsToAvoid)
+      setTimeZone(existingSettings.timeZone || DEFAULT_SETTINGS.timeZone)
+      setPreferredTimeSlots(existingSettings.preferredTimeSlots || DEFAULT_SETTINGS.preferredTimeSlots)
+      setExcludedDays(existingSettings.excludedDays || DEFAULT_SETTINGS.excludedDays)
+      setContentGuidelines(existingSettings.contentGuidelines || DEFAULT_SETTINGS.contentGuidelines)
+      setApprovalRequirements(existingSettings.approvalRequirements || DEFAULT_SETTINGS.approvalRequirements)
+    }
+  }, [existingSettings])
 
   const saveSettings = useMutation(api.autopilot.saveSettings)
 
   const handleSave = async () => {
-    const settings = {
-      level: selectedLevel,
-      platformFrequencies,
-      topics,
-      contentPillars,
-      topicsToAvoid,
-      timeZone,
-      preferredTimeSlots,
-      excludedDays,
-      contentGuidelines,
-      approvalRequirements,
+    try {
+      const settings = {
+        level: selectedLevel,
+        platformFrequencies,
+        topics,
+        contentPillars,
+        topicsToAvoid,
+        timeZone,
+        preferredTimeSlots,
+        excludedDays,
+        contentGuidelines,
+        approvalRequirements,
+      }
+      await saveSettings(settings)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      // error handled silently
     }
-    await saveSettings(settings)
-    alert("¡Configuración de Piloto Automático guardada!")
   }
+
+  const handleReset = () => {
+    setSelectedLevel(DEFAULT_SETTINGS.level)
+    setPlatformFrequencies(DEFAULT_SETTINGS.platformFrequencies)
+    setTopics(DEFAULT_SETTINGS.topics)
+    setContentPillars(DEFAULT_SETTINGS.contentPillars)
+    setTopicsToAvoid(DEFAULT_SETTINGS.topicsToAvoid)
+    setTimeZone(DEFAULT_SETTINGS.timeZone)
+    setPreferredTimeSlots(DEFAULT_SETTINGS.preferredTimeSlots)
+    setExcludedDays(DEFAULT_SETTINGS.excludedDays)
+    setContentGuidelines(DEFAULT_SETTINGS.contentGuidelines)
+    setApprovalRequirements(DEFAULT_SETTINGS.approvalRequirements)
+  }
+
+  const autopilotLevels = [
+    { id: "manual", name: "Manual", description: "Vos creás y publicás todo el contenido manualmente", icon: Settings, color: "text-gray-500" },
+    { id: "assisted", name: "Assisted", description: "La IA sugiere contenido, vos revisás y publicás", icon: Shield, color: "text-blue-500" },
+    { id: "auto", name: "Auto", description: "La IA crea y programa contenido automáticamente", icon: Zap, color: "text-violet-500" },
+    { id: "safe-auto", name: "Safe Auto", description: "Modo automático con filtros de seguridad y aprobación", icon: AlertTriangle, color: "text-amber-500" },
+  ]
 
   const toggleExcludedDay = (day: string) => {
     setExcludedDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day])
@@ -296,8 +316,8 @@ export default function AutopilotPage() {
       </Card>
 
       <div className="flex justify-end gap-3">
-        <Button variant="outline">Restablecer Valores</Button>
-        <Button onClick={handleSave}>Guardar Configuración de Piloto Automático</Button>
+        <Button variant="outline" onClick={handleReset}>Restablecer Valores</Button>
+        <Button onClick={handleSave}>{saved ? "Guardado!" : "Guardar Configuración de Piloto Automático"}</Button>
       </div>
     </div>
   )

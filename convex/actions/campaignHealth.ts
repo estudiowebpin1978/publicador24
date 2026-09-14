@@ -224,7 +224,7 @@ export const getAutomationStatus = action({
   args: {},
   handler: async (ctx) => {
     const settings = await ctx.runQuery(api.autopilot.getSettings);
-    const costStatus = await ctx.runAction(api.costControl.checkCostLimits, {});
+    const costStatus = await ctx.runAction(api.campaignHealth.checkCostLimits, {});
 
     return {
       isRunning: settings?.level !== "STOPPED",

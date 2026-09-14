@@ -1,14 +1,16 @@
 "use client";
 
 import React from "react";
-import { useQuery } from "convex/react";
-import { api } from "@convex/_generated/api";
-import { Bell, CheckCircle2, AlertCircle, Info, Trash2 } from "lucide-react";
+import { useQuery, useMutation } from "@/hooks/use-convex";
+import { api } from "@/hooks/use-convex";
+import { Bell, CheckCircle2, AlertCircle, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export default function NotificationsPage() {
   const notifications = useQuery(api.notifications.list, { limit: 20 }) || [];
+  const markAllRead = useMutation(api.notifications.markAllRead);
+  const markRead = useMutation(api.notifications.markRead);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
@@ -20,6 +22,16 @@ export default function NotificationsPage() {
           <h1 className="text-2xl font-bold text-white">Notificaciones</h1>
           <p className="text-sm text-slate-400">Últimas actualizaciones de tu autopublicador</p>
         </div>
+        {notifications.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto border-white/10 text-slate-400 hover:text-white"
+            onClick={() => markAllRead()}
+          >
+            Marcar todo como leído
+          </Button>
+        )}
       </div>
 
       {notifications.length === 0 ? (
@@ -33,7 +45,12 @@ export default function NotificationsPage() {
           {notifications.map((n: any) => (
             <div
               key={n._id}
-              className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] hover:border-violet-500/20 transition-all"
+              onClick={() => !n.read && markRead({ id: n._id })}
+              className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                n.read
+                  ? "bg-white/[0.01] border-white/[0.03] opacity-60"
+                  : "bg-white/[0.03] border-white/[0.06] hover:border-violet-500/20"
+              }`}
             >
               <div className="flex items-start gap-3">
                 <div className={`size-8 rounded-lg flex items-center justify-center flex-shrink-0 ${

@@ -99,21 +99,23 @@ export const runAutonomousLoop = action({
         if (readyToPublish.length > 0 && campaign.autopilotLevel === "AUTONOMOUS") {
           for (const piece of readyToPublish.slice(0, 2)) {
             try {
-              await ctx.runAction(api.socialPublish.publishToBuffer, {
-                contentPieceId: piece.contentId,
-                platform: piece.platform,
-              });
-              contentPublished++;
+              if (piece._id) {
+                await ctx.runAction(api.socialPublish.publishByPlatform, {
+                  scheduledPostId: piece._id,
+                });
+                contentPublished++;
+              }
             } catch (error) {
               const msg = error instanceof Error ? error.message : "Publish failed";
-              errors.push(`Publish ${piece.contentId}: ${msg}`);
+              errors.push(`Publish ${piece._id}: ${msg}`);
             }
           }
         }
 
         const published = pieces.filter((p) => p.status === "PUBLISHED");
         if (published.length > 0) {
-          await ctx.runAction(api.collectAnalytics.collectAllAnalytics, {});
+          const today = new Date().toISOString().split("T")[0];
+          await ctx.runAction(api.collectAnalytics.collectAllAnalytics, { date: today });
           metricsCollected++;
         }
 

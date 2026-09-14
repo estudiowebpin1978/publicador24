@@ -27,46 +27,107 @@ import {
   EyeOff,
   Copy,
 } from "lucide-react"
-import { useMutation } from "@/hooks/use-convex"
+import { useQuery, useMutation } from "@/hooks/use-convex"
 import { api } from "@/hooks/use-convex"
 
 export default function SettingsPage() {
   const [showApiKey, setShowApiKey] = React.useState(false)
+
+  const existingProfile = useQuery(api.settings.getProfile)
+  const existingWorkspace = useQuery(api.settings.getWorkspace)
+  const existingBrandVoice = useQuery(api.settings.getBrandVoice)
+
   const [profileData, setProfileData] = React.useState({
-    firstName: "John",
-    lastName: "Doe",
-    email: "john@example.com",
-    timezone: "utc-5",
+    firstName: "",
+    lastName: "",
+    email: "",
+    timezone: "America/Argentina/Buenos_Aires",
   })
   const [workspaceData, setWorkspaceData] = React.useState({
-    name: "Mi Marca",
-    url: "mybrand.autopublisher.ai",
+    name: "",
+    url: "",
     language: "es",
   })
   const [brandData, setBrandData] = React.useState({
     tone: "professional",
-    values: "Innovación, Calidad, Sostenibilidad",
-    personality: "Profesional pero cercana. Hablamos con confianza y empatía.",
-    writingStyle: "Usá voz activa. Mantené frases cortas. Evitá jerga.",
+    values: "",
+    personality: "",
+    writingStyle: "",
   })
+
+  const profileInitRef = React.useRef(false)
+  const workspaceInitRef = React.useRef(false)
+  const brandInitRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (existingProfile && !profileInitRef.current) {
+      profileInitRef.current = true
+      setProfileData({
+        firstName: existingProfile.firstName || "",
+        lastName: existingProfile.lastName || "",
+        email: existingProfile.email || "",
+        timezone: existingProfile.timezone || "America/Argentina/Buenos_Aires",
+      })
+    }
+  }, [existingProfile])
+
+  React.useEffect(() => {
+    if (existingWorkspace && !workspaceInitRef.current) {
+      workspaceInitRef.current = true
+      setWorkspaceData({
+        name: existingWorkspace.name || "",
+        url: existingWorkspace.url || "",
+        language: existingWorkspace.language || "es",
+      })
+    }
+  }, [existingWorkspace])
+
+  React.useEffect(() => {
+    if (existingBrandVoice && !brandInitRef.current) {
+      brandInitRef.current = true
+      setBrandData({
+        tone: existingBrandVoice.tone || "professional",
+        values: existingBrandVoice.values || "",
+        personality: existingBrandVoice.personality || "",
+        writingStyle: existingBrandVoice.writingStyle || "",
+      })
+    }
+  }, [existingBrandVoice])
 
   const saveProfile = useMutation(api.settings.saveProfile)
   const saveWorkspace = useMutation(api.settings.saveWorkspace)
   const saveBrandVoice = useMutation(api.settings.saveBrandVoice)
 
+  const [saved, setSaved] = React.useState<string | null>(null)
+
   const handleSaveProfile = async () => {
-    await saveProfile(profileData)
-    alert("¡Perfil guardado!")
+    try {
+      await saveProfile(profileData)
+      setSaved("profile")
+      setTimeout(() => setSaved(null), 2000)
+    } catch {
+      setSaved(null)
+    }
   }
 
   const handleSaveWorkspace = async () => {
-    await saveWorkspace(workspaceData)
-    alert("¡Espacio de trabajo guardado!")
+    try {
+      await saveWorkspace(workspaceData)
+      setSaved("workspace")
+      setTimeout(() => setSaved(null), 2000)
+    } catch {
+      setSaved(null)
+    }
   }
 
   const handleSaveBrand = async () => {
-    await saveBrandVoice(brandData)
-    alert("¡Voz de marca guardada!")
+    try {
+      await saveBrandVoice(brandData)
+      setSaved("brand")
+      setTimeout(() => setSaved(null), 2000)
+    } catch {
+      setSaved(null)
+    }
   }
 
   return (
@@ -131,10 +192,12 @@ export default function SettingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="utc-5">UTC-5 (Hora del Este)</SelectItem>
-                    <SelectItem value="utc-6">UTC-6 (Hora del Centro)</SelectItem>
-                    <SelectItem value="utc-7">UTC-7 (Hora de la Montaña)</SelectItem>
-                    <SelectItem value="utc-8">UTC-8 (Hora del Pacífico)</SelectItem>
+                    <SelectItem value="America/Argentina/Buenos_Aires">UTC-3 (Argentina)</SelectItem>
+                    <SelectItem value="America/Mexico_City">UTC-6 (México)</SelectItem>
+                    <SelectItem value="America/Bogota">UTC-5 (Colombia)</SelectItem>
+                    <SelectItem value="America/Santiago">UTC-4 (Chile)</SelectItem>
+                    <SelectItem value="America/Lima">UTC-5 (Perú)</SelectItem>
+                    <SelectItem value="UTC">UTC</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

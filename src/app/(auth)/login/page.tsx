@@ -20,7 +20,7 @@ export default function LoginPage() {
 
     if (email === "estudiowebpin@gmail.com" && password === "admin24") {
       localStorage.setItem("autopublisher_user", JSON.stringify({ email }))
-      window.location.href = "/dashboard"
+      router.push("/dashboard")
     } else {
       setError("Credenciales incorrectas")
     }

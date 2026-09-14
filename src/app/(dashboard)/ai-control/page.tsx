@@ -15,8 +15,6 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
-  TrendingUp,
-  Clock,
   Target,
   BarChart3,
 } from "lucide-react";
@@ -29,19 +27,34 @@ export default function AIControlCenterPage() {
   const runLoop = useAction(api.autonomousLoop.runAutonomousLoop);
   const setKillSwitch = useAction(api.campaignHealth.setGlobalKillSwitch);
   const getGlobalHealth = useAction(api.campaignHealth.getGlobalHealth);
-  const checkCosts = useAction(api.costControl.checkCostLimits);
+  const checkCosts = useAction(api.campaignHealth.checkCostLimits);
 
   const [health, setHealth] = React.useState<any>(null);
   const [costs, setCosts] = React.useState<any>(null);
-  const [globalStatus, setGlobalStatus] = React.useState<any>(null);
 
   const autopilotSettings = useQuery(api.autopilot.getSettings);
 
   React.useEffect(() => {
-    loadData();
-  }, []);
+    let cancelled = false;
+    const fetch = async () => {
+      try {
+        const [healthData, costData] = await Promise.all([
+          getGlobalHealth(),
+          checkCosts(),
+        ]);
+        if (!cancelled) {
+          setHealth(healthData);
+          setCosts(costData);
+        }
+      } catch (error) {
+        console.error("Failed to load data:", error);
+      }
+    };
+    fetch();
+    return () => { cancelled = true; };
+  }, [getGlobalHealth, checkCosts]);
 
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     try {
       const [healthData, costData] = await Promise.all([
         getGlobalHealth(),
@@ -52,7 +65,7 @@ export default function AIControlCenterPage() {
     } catch (error) {
       console.error("Failed to load data:", error);
     }
-  };
+  }, [getGlobalHealth, checkCosts]);
 
   const handleRunLoop = async () => {
     setIsRunning(true);

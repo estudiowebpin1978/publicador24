@@ -112,6 +112,23 @@ export const update = mutation({
   },
 });
 
+export const updateContentCount = mutation({
+  args: {
+    id: v.id("campaigns"),
+    contentCount: v.number(),
+    publishedCount: v.optional(v.number()),
+    scheduledCount: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      contentCount: args.contentCount,
+      ...(args.publishedCount !== undefined && { publishedCount: args.publishedCount }),
+      ...(args.scheduledCount !== undefined && { scheduledCount: args.scheduledCount }),
+    });
+    return { success: true };
+  },
+});
+
 export const remove = mutation({
   args: { id: v.id("campaigns") },
   handler: async (ctx, args) => {
