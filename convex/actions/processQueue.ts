@@ -5,6 +5,7 @@ import { api } from "../_generated/api";
 import { v } from "convex/values";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
+import { createBufferPost, getBufferChannels, callBuffer } from "../bufferActions";
 
 async function publishSinglePost(ctx: ActionCtx, postId: Id<"scheduledPosts">) {
   const post = await ctx.runQuery(api.scheduledPosts.get, { id: postId });
@@ -13,7 +14,6 @@ async function publishSinglePost(ctx: ActionCtx, postId: Id<"scheduledPosts">) {
   let content: any = null;
   if (post.contentPieceId) {
     content = await ctx.runQuery(api.contentPieces.getById, { id: post.contentPieceId });
-    // Adapt contentPiece data to content format
     content = {
       title: content?.title || content?.hook,
       description: content?.body || content?.hook,
@@ -36,10 +36,40 @@ async function publishSinglePost(ctx: ActionCtx, postId: Id<"scheduledPosts">) {
   const hashtags = platformVariant?.hashtags ?? [];
   const fullCaption = `${caption}\n\n${hashtags.map((h: string) => `#${h}`).join(" ")}`;
 
-  await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 1000));
+  // Resolve Buffer channel for this platform
+  let bufferChannelId: string | null = null;
+  try {
+    const orgData = await callBuffer(`query { organizations { id } }`);
+    const orgId = orgData?.organizations?.[0]?.id;
+    if (orgId) {
+      const channelsData = await getBufferChannels(orgId);
+      const channels = channelsData?.channels || [];
+      const matching = channels.find((ch: any) =>
+        ch.service?.toLowerCase() === post.platform?.toLowerCase() && !ch.isDisconnected
+      );
+      if (matching) bufferChannelId = matching.id;
+    }
+  } catch {
+    // Buffer not configured or error - fall back to simulated publish
+  }
 
-  const platformPostId = `mock_${post.platform}_${Date.now()}`;
-  const platformPostUrl = `https://${post.platform}.com/post/${platformPostId}`;
+  let platformPostId: string;
+  let platformPostUrl: string;
+
+  if (bufferChannelId) {
+    // Real Buffer publish
+    const result = await createBufferPost({
+      text: fullCaption,
+      channelId: bufferChannelId,
+    });
+    const postResult = result?.createPost?.post;
+    platformPostId = postResult?.id || `buffer_${post.platform}_${Date.now()}`;
+    platformPostUrl = `https://buffer.com/posts/${platformPostId}`;
+  } else {
+    // Simulated publish (Buffer not configured for this platform)
+    platformPostId = `sim_${post.platform}_${Date.now()}`;
+    platformPostUrl = `https://${post.platform}.com/post/${platformPostId}`;
+  }
 
   await ctx.runMutation(api.scheduledPosts.markPublished, {
     id: postId,
