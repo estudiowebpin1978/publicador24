@@ -21,7 +21,7 @@ interface CostLogEntry {
   timestamp: number;
 }
 
-let costLog: CostLogEntry[] = [];
+const costLog: CostLogEntry[] = [];
 
 export function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
   const pricing = MODEL_PRICING[model];
