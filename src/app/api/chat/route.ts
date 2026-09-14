@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIProvider } from "@/lib/ai/provider";
+import { wrapProviderWithCostTracking, getTodayCost } from "@/lib/ai/cost-tracker";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -213,7 +214,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Mensaje requerido" }, { status: 400 });
     }
 
-    const ai = getAIProvider();
+    const baseAI = getAIProvider();
+    const ai = wrapProviderWithCostTracking(baseAI, 'openrouter');
 
     const isUrl = /https?:\/\/[^\s]+/.test(message);
     const isCampaignRequest = /campaña|campaign|quiero conseguir|necesito contenido|promocionar/i.test(message);
@@ -263,13 +265,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       response,
       data,
+      costSummary: getTodayCost(),
       timestamp: Date.now(),
     });
   } catch (error) {
     console.error("Chat API error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const isAIError = message.includes("NOT CONFIGURED") || message.includes("API_KEY");
     return NextResponse.json(
-      { error: "Error al procesar el mensaje", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      {
+        error: isAIError ? "AI PROVIDER NOT CONFIGURED" : "Error al procesar el mensaje",
+        details: message,
+        hint: isAIError ? "Set OPENROUTER_API_KEY or GROQ_API_KEY in .env.local" : undefined,
+      },
+      { status: isAIError ? 503 : 500 }
     );
   }
 }

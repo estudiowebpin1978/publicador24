@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIProvider } from "@/lib/ai/provider";
+import { wrapProviderWithCostTracking, getTodayCost } from "@/lib/ai/cost-tracker";
+import { readStrategyMemory, writeStrategyMemory } from "@/lib/ai/strategy-memory";
+import { checkPublicationSafety } from "@/lib/ai/publication-safety";
 import { ConvexHttpClient } from "convex/browser";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
@@ -74,8 +77,13 @@ Respondé con JSON:
 async function generateFullStrategy(
   input: CampaignInput,
   businessAnalysis: { websiteAnalysis: unknown; audiences: unknown },
+  memoryHook: string[],
   ai: ReturnType<typeof getAIProvider>
 ) {
+  const memoryContext = memoryHook.length > 0
+    ? `\nMEMORIA DE CAMPAÑA (hooks previos que funcionaron): ${memoryHook.slice(0, 5).join('; ')}\nEvitá repetir estos hooks. Generá ángulos nuevos.`
+    : '';
+
   const result = await ai.generateText({
     prompt: `Creá una estrategia COMPLETA de marketing para:
 
@@ -86,7 +94,7 @@ OBJETIVO: ${input.objective}
 PLATAFORMAS: ${input.platforms.join(", ")}
 ${input.budget ? `PRESUPUESTO: ${input.budget}` : ""}
 FRECUENCIA: ${input.frequency || "diaria"}
-AUDIENCIA PRINCIPAL: ${(businessAnalysis.audiences as Record<string, unknown>)?.primary ? JSON.stringify((businessAnalysis.audiences as Record<string, unknown>).primary) : "No definida"}
+AUDIENCIA PRINCIPAL: ${(businessAnalysis.audiences as Record<string, unknown>)?.primary ? JSON.stringify((businessAnalysis.audiences as Record<string, unknown>).primary) : "No definida"}${memoryContext}
 
 Respondé con JSON:
 {
@@ -119,12 +127,16 @@ Respondé con JSON:
 async function generateContentPieces(
   strategy: Record<string, unknown>,
   input: CampaignInput,
+  campaignId: string | null,
+  existingFingerprints: string[],
   ai: ReturnType<typeof getAIProvider>
 ) {
   const calendar = (strategy.contentCalendar || []) as Array<Record<string, unknown>>;
   const pieces = [];
+  const safetyResults: Array<{ pieceIndex: number; approved: boolean; reason?: string }> = [];
 
-  for (const slot of calendar.slice(0, 14)) {
+  for (let i = 0; i < Math.min(calendar.length, 14); i++) {
+    const slot = calendar[i];
     const result = await ai.generateText({
       prompt: `Generá contenido para esta publicación:
 
@@ -159,22 +171,60 @@ Respondé con JSON:
       max_tokens: 2000,
     });
 
+    let generatedContent: Record<string, unknown>;
     try {
       const match = result.text.match(/```json\s*([\s\S]*?)```/);
-      const content = JSON.parse(match ? match[1] : result.text);
-      pieces.push({
-        ...slot,
-        generatedContent: content,
-      });
+      generatedContent = JSON.parse(match ? match[1] : result.text);
     } catch {
-      pieces.push({
-        ...slot,
-        generatedContent: { hook: slot.hook, caption: slot.copy, hashtags: [], cta: slot.cta },
+      generatedContent = { hook: slot.hook, caption: slot.copy, hashtags: [], cta: slot.cta };
+    }
+
+    // Publication safety check
+    const hook = String(generatedContent.hook || '');
+    const caption = String(generatedContent.caption || '');
+    const platform = String(slot.platform || 'instagram');
+
+    const safetyResult = await checkPublicationSafety(
+      `temp-${i}`,
+      hook,
+      caption,
+      platform,
+      existingFingerprints
+    );
+
+    safetyResults.push({
+      pieceIndex: i,
+      approved: safetyResult.approved,
+      reason: safetyResult.reason,
+    });
+
+    // Write strategy memory for approved content
+    if (safetyResult.approved && campaignId) {
+      await writeStrategyMemory({
+        campaignId,
+        topic: input.businessName,
+        hook,
+        contentType: String(slot.type || 'post'),
+        platform,
+        funnelStage: String(slot.funnelStage || 'awareness'),
+        score: safetyResult.safetyScore,
       });
     }
+
+    pieces.push({
+      ...slot,
+      generatedContent,
+      safetyCheck: {
+        approved: safetyResult.approved,
+        score: safetyResult.safetyScore,
+        reason: safetyResult.reason,
+      },
+    });
+
+    existingFingerprints.push(`${platform}:${hook.split(' ').slice(0, 5).join(':')}`);
   }
 
-  return pieces;
+  return { pieces, safetyResults };
 }
 
 export async function POST(request: NextRequest) {
@@ -194,11 +244,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Al menos una plataforma requerida" }, { status: 400 });
     }
 
-    const ai = getAIProvider();
+    const baseAI = getAIProvider();
+    const ai = wrapProviderWithCostTracking(baseAI, 'openrouter');
+
+    // Read strategy memory before generating
+    let campaignId: string | null = null;
+    let existingFingerprints: string[] = [];
+    try {
+      const { api } = await import("@convex/_generated/api");
+      const existingCampaigns = await convex.query(api.campaigns.list, { status: "ACTIVE" });
+      if (existingCampaigns.length > 0) {
+        campaignId = existingCampaigns[0]._id;
+        const memory = await readStrategyMemory(campaignId);
+        existingFingerprints = memory.hooks;
+      }
+    } catch { /* first campaign */ }
 
     const businessAnalysis = await analyzeBusiness(input, ai);
-    const strategy = await generateFullStrategy(input, businessAnalysis, ai);
-    const contentPieces = await generateContentPieces(strategy, input, ai);
+    const strategy = await generateFullStrategy(input, businessAnalysis, existingFingerprints, ai);
+    const { pieces: contentPieces, safetyResults } = await generateContentPieces(strategy, input, campaignId, existingFingerprints, ai);
 
     // Persist business profile + audience to Convex
     let businessProfileId = null;
@@ -235,6 +299,10 @@ export async function POST(request: NextRequest) {
       console.warn("Convex persistence skipped:", e);
     }
 
+    const costSummary = getTodayCost();
+    const approvedCount = safetyResults.filter(r => r.approved).length;
+    const blockedCount = safetyResults.filter(r => !r.approved).length;
+
     return NextResponse.json({
       success: true,
       campaign: {
@@ -246,14 +314,27 @@ export async function POST(request: NextRequest) {
         businessProfileId,
         audienceIds,
         status: "generated",
+        safetySummary: {
+          total: contentPieces.length,
+          approved: approvedCount,
+          blocked: blockedCount,
+          details: safetyResults,
+        },
+        costSummary,
         createdAt: new Date().toISOString(),
       },
     });
   } catch (error) {
     console.error("Campaign generation error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const isAIError = message.includes("NOT CONFIGURED") || message.includes("API_KEY");
     return NextResponse.json(
-      { error: "Error al generar campaña", details: error instanceof Error ? error.message : "Unknown" },
-      { status: 500 }
+      {
+        error: isAIError ? "AI PROVIDER NOT CONFIGURED" : "Error al generar campaña",
+        details: message,
+        hint: isAIError ? "Set OPENROUTER_API_KEY or GROQ_API_KEY in .env.local" : undefined,
+      },
+      { status: isAIError ? 503 : 500 }
     );
   }
 }
