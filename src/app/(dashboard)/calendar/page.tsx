@@ -10,6 +10,8 @@ import { api } from "@convex/_generated/api"
 
 export default function CalendarPage() {
   const scheduledPosts = useQuery(api.scheduledPosts.listUpcoming)
+  const contentPieces = useQuery(api.contentPieces.list)
+  const contents = useQuery(api.content.list)
 
   if (scheduledPosts === undefined) {
     return (
@@ -30,14 +32,27 @@ export default function CalendarPage() {
     )
   }
 
-  const events = scheduledPosts.map((post: any) => ({
-    id: post._id,
-    title: post.contentId || "Scheduled Post",
-    date: new Date(post.scheduledAt),
-    platform: post.platform,
-    status: post.status === "PUBLISHED" ? "published" : post.status === "QUEUED" ? "scheduled" : "draft",
-    time: new Date(post.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-  }))
+  const pieceMap = new Map((contentPieces || []).map((p: any) => [p._id, p]))
+  const contentMap = new Map((contents || []).map((c: any) => [c._id, c]))
+
+  const events = scheduledPosts.map((post: any) => {
+    let title = "Publicación programada"
+    if (post.contentPieceId) {
+      const piece = pieceMap.get(post.contentPieceId)
+      if (piece) title = piece.title || piece.hook || title
+    } else if (post.contentId) {
+      const content = contentMap.get(post.contentId)
+      if (content) title = content.title || title
+    }
+    return {
+      id: post._id,
+      title,
+      date: new Date(post.scheduledAt),
+      platform: post.platform,
+      status: post.status === "PUBLISHED" ? "published" : post.status === "QUEUED" ? "scheduled" : "draft",
+      time: new Date(post.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }
+  })
 
   const upcomingCount = events.filter((e: any) => new Date(e.date) >= new Date() && e.status === "scheduled").length
   const draftCount = events.filter((e: any) => e.status === "draft").length
