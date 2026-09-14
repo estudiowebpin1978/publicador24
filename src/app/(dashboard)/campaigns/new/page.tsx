@@ -16,7 +16,6 @@ import {
   Sparkles,
   Send,
   CheckCircle2,
-  Copy,
   RefreshCw,
   Eye,
   Zap,
@@ -32,18 +31,20 @@ import {
   MessageSquare,
   Shield,
   Image as ImageIcon,
+  Clock,
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useMutation } from "@/hooks/use-convex"
+import { api } from "@/hooks/use-convex"
 
 const STEPS = [
   { id: "idea", label: "Idea", icon: Lightbulb },
   { id: "objective", label: "Objetivo", icon: Target },
   { id: "audience", label: "Público", icon: Users },
   { id: "style", label: "Estilo", icon: Palette },
-  { id: "references", label: "Imágenes", icon: ImageIcon },
   { id: "generate", label: "Generar", icon: Sparkles },
   { id: "review", label: "Revisar", icon: Eye },
-  { id: "adapt", label: "Plataformas", icon: Megaphone },
   { id: "schedule", label: "Programar", icon: Calendar },
   { id: "publish", label: "Publicar", icon: Send },
 ] as const
@@ -58,11 +59,16 @@ interface CampaignWizardState {
   style: string
   offer: string
   url: string
-  referenceImages: string[]
   contentCount: number
   generatedCampaign: any | null
   selectedPieces: string[]
   isGenerating: boolean
+  isPersisting: boolean
+  campaignId: string | null
+  isScheduling: boolean
+  scheduledCount: number
+  isPublishing: boolean
+  publishedCount: number
 }
 
 const initialState: CampaignWizardState = {
@@ -75,11 +81,16 @@ const initialState: CampaignWizardState = {
   style: "profesional",
   offer: "",
   url: "",
-  referenceImages: [],
   contentCount: 30,
   generatedCampaign: null,
   selectedPieces: [],
   isGenerating: false,
+  isPersisting: false,
+  campaignId: null,
+  isScheduling: false,
+  scheduledCount: 0,
+  isPublishing: false,
+  publishedCount: 0,
 }
 
 const PLATFORMS = [
@@ -109,6 +120,13 @@ const CONTENT_TYPES = [
 ]
 
 export default function CampaignWizardPage() {
+  const router = useRouter()
+  const createCampaign = useMutation(api.campaigns.create)
+  const updateCampaign = useMutation(api.campaigns.update)
+  const createContentPack = useMutation(api.contentPacks.create)
+  const createContentPiece = useMutation(api.contentPieces.create)
+  const updatePieceStatus = useMutation(api.contentPieces.updateStatus)
+
   const [state, setState] = React.useState<CampaignWizardState>(initialState)
 
   const setStep = (step: number) =>
@@ -136,16 +154,117 @@ export default function CampaignWizardPage() {
         throw new Error(result.error || "Error al generar")
       }
 
+      const campaign = result.campaign
+      const pieces = campaign?.contentPieces || []
+
       setState((prev) => ({
         ...prev,
-        generatedCampaign: result.campaign,
-        selectedPieces: (result.campaign?.contentPieces || []).map((p: Record<string, unknown>) => String(p._id || "")),
-        currentStep: 6,
+        generatedCampaign: campaign,
+        selectedPieces: pieces.map((p: any, i: number) => String(p.generatedContent?.hook || `piece-${i}`)),
+        currentStep: 5,
         isGenerating: false,
       }))
     } catch (error) {
       console.error("Failed to generate campaign:", error)
       setState((prev) => ({ ...prev, isGenerating: false }))
+    }
+  }
+
+  const handlePersistAndSchedule = async () => {
+    setState((prev) => ({ ...prev, isPersisting: true }))
+    try {
+      const campaign = await createCampaign({
+        name: state.generatedCampaign?.strategy?.campaignName || state.product || state.idea,
+        description: state.idea,
+        objective: state.objective,
+        platforms: state.platforms,
+        status: "ACTIVE",
+        projectId: undefined,
+      })
+
+      const packId = await createContentPack({
+        campaignId: campaign,
+        name: `${state.product || state.idea} - Pack Inicial`,
+        description: "Contenido generado por IA",
+      })
+
+      const pieces = state.generatedCampaign?.contentPieces || []
+      let persistedCount = 0
+
+      for (let i = 0; i < pieces.length; i++) {
+        const piece = pieces[i]
+        const gen = piece.generatedContent || {}
+        if (!state.selectedPieces.includes(String(gen.hook || `piece-${i}`))) continue
+
+        await createContentPiece({
+          contentPackId: packId,
+          campaignId: campaign,
+          title: gen.hook || piece.hook || `Pieza ${i + 1}`,
+          hook: gen.hook || piece.hook || "",
+          body: gen.caption || piece.copy || "",
+          cta: gen.cta || piece.cta || "",
+          contentType: piece.funnelStage === "conversion" ? "conversion" : piece.funnelStage === "interest" ? "capture" : "educational",
+          funnelStage: piece.funnelStage || "awareness",
+          platform: piece.platform || "instagram",
+          hashtags: gen.hashtags || piece.hashtags || [],
+          keywords: [],
+          score: piece.safetyCheck?.score || 80,
+          status: "GENERATED",
+        })
+        persistedCount++
+      }
+
+      setState((prev) => ({
+        ...prev,
+        campaignId: campaign,
+        isPersisting: false,
+        currentStep: 6,
+      }))
+    } catch (error) {
+      console.error("Failed to persist campaign:", error)
+      setState((prev) => ({ ...prev, isPersisting: false }))
+    }
+  }
+
+  const handleAutoSchedule = async () => {
+    if (!state.campaignId) return
+    setState((prev) => ({ ...prev, isScheduling: true }))
+    try {
+      const response = await fetch("/api/autopilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "schedule", campaignId: state.campaignId }),
+      })
+      const result = await response.json()
+      setState((prev) => ({
+        ...prev,
+        isScheduling: false,
+        scheduledCount: result.scheduled || 0,
+        currentStep: 7,
+      }))
+    } catch (error) {
+      console.error("Failed to schedule:", error)
+      setState((prev) => ({ ...prev, isScheduling: false }))
+    }
+  }
+
+  const handlePublish = async () => {
+    setState((prev) => ({ ...prev, isPublishing: true }))
+    try {
+      const response = await fetch("/api/autopilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "publish" }),
+      })
+      const result = await response.json()
+      setState((prev) => ({
+        ...prev,
+        isPublishing: false,
+        publishedCount: result.published || 0,
+      }))
+    } catch (error) {
+      console.error("Failed to publish:", error)
+      setState((prev) => ({ ...prev, isPublishing: false }))
     }
   }
 
@@ -160,10 +279,11 @@ export default function CampaignWizardPage() {
 
   const toggleAllPieces = () => {
     if (!state.generatedCampaign) return
-    const allSelected = state.selectedPieces.length === state.generatedCampaign.pieces.length
+    const allPieces = (state.generatedCampaign.contentPieces || []).map((p: any, i: number) => String(p.generatedContent?.hook || `piece-${i}`))
+    const allSelected = state.selectedPieces.length === allPieces.length
     setState((prev) => ({
       ...prev,
-      selectedPieces: allSelected ? [] : prev.generatedCampaign.pieces.map((p: any) => p.id),
+      selectedPieces: allSelected ? [] : allPieces,
     }))
   }
 
@@ -173,23 +293,21 @@ export default function CampaignWizardPage() {
       case 1: return state.objective.length > 5
       case 2: return true
       case 3: return state.platforms.length > 0
-      case 4: return true
-      case 5: return true
-      case 6: return state.selectedPieces.length > 0
-      case 7: return true
-      case 8: return true
       default: return false
     }
   }
 
   const getPiecesByType = (type: string) => {
     if (!state.generatedCampaign) return []
-    return state.generatedCampaign.pieces.filter((p: any) => p.contentType === type)
-  }
-
-  const getPiecesByPlatform = (platform: string) => {
-    if (!state.generatedCampaign) return []
-    return state.generatedCampaign.pieces.filter((p: any) => p.platform === platform)
+    return (state.generatedCampaign.contentPieces || []).filter((p: any) => {
+      const stage = p.funnelStage || ""
+      if (type === "educational") return stage === "awareness"
+      if (type === "capture") return stage === "interest"
+      if (type === "objection") return stage === "consideration"
+      if (type === "conversion") return stage === "conversion"
+      if (type === "authority") return stage === "retention"
+      return false
+    })
   }
 
   return (
@@ -437,7 +555,7 @@ export default function CampaignWizardPage() {
                     className="w-24"
                   />
                   <span className="text-sm text-muted-foreground">
-                    Recomendado: 30 piezas (10 educativas + 8 captación + 5 objeciones + 4 autoridad + 3 conversión)
+                    Recomendado: 14 piezas para una primera campaña
                   </span>
                 </div>
               </CardContent>
@@ -465,9 +583,6 @@ export default function CampaignWizardPage() {
                 <div><strong>Estilo:</strong> {STYLES.find(s => s.id === state.style)?.name}</div>
                 <div><strong>Plataformas:</strong> {state.platforms.map(p => PLATFORMS.find(pl => pl.id === p)?.name).join(", ")}</div>
                 <div><strong>Piezas:</strong> {state.contentCount}</div>
-                {state.referenceImages.length > 0 && (
-                  <div><strong>Imágenes de referencia:</strong> {state.referenceImages.length} imagen(es)</div>
-                )}
                 {state.offer && <div><strong>Oferta:</strong> {state.offer}</div>}
               </div>
 
@@ -478,7 +593,7 @@ export default function CampaignWizardPage() {
                 </div>
                 <ul className="text-sm space-y-1 ml-6">
                   <li>• Estrategia completa de campaña</li>
-                  <li>• {state.contentCount} piezas de contenido únicas</li>
+                  <li>• {Math.min(state.contentCount, 14)} piezas de contenido únicas</li>
                   <li>• Adaptación por plataforma</li>
                   <li>• Prompts de imagen para cada pieza</li>
                   <li>• Hashtags y CTAs optimizados</li>
@@ -494,27 +609,26 @@ export default function CampaignWizardPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <CheckCircle2 className="size-5 text-green-500" />
-                  Campaña generada: {state.generatedCampaign.strategy.campaignName}
+                  Campaña generada: {state.generatedCampaign.strategy?.campaignName || state.product || state.idea}
                 </CardTitle>
                 <CardDescription>
-                  Se generaron {state.generatedCampaign.totalGenerated} piezas de contenido.
+                  Se generaron {(state.generatedCampaign.contentPieces || []).length} piezas de contenido.
                   Seleccioná las que querés programar.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="rounded-lg bg-muted p-4 space-y-2">
-                  <div><strong>Objetivo:</strong> {state.generatedCampaign.strategy.objective}</div>
-                  <div><strong>Público:</strong> {state.generatedCampaign.strategy.targetAudience}</div>
-                  <div><strong>Propuesta de valor:</strong> {state.generatedCampaign.strategy.valueProposition}</div>
-                  <div><strong>Ángulo:</strong> {state.generatedCampaign.strategy.communicationAngle}</div>
+                  <div><strong>Objetivo:</strong> {state.generatedCampaign.strategy?.objective}</div>
+                  <div><strong>Público:</strong> {state.generatedCampaign.strategy?.targetAudience}</div>
+                  <div><strong>Propuesta de valor:</strong> {state.generatedCampaign.strategy?.valueProposition}</div>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">
-                    {state.selectedPieces.length} de {state.generatedCampaign.pieces.length} seleccionadas
+                    {state.selectedPieces.length} de {(state.generatedCampaign.contentPieces || []).length} seleccionadas
                   </span>
                   <Button variant="outline" size="sm" onClick={toggleAllPieces}>
-                    {state.selectedPieces.length === state.generatedCampaign.pieces.length
+                    {state.selectedPieces.length === (state.generatedCampaign.contentPieces || []).length
                       ? "Deseleccionar todas"
                       : "Seleccionar todas"}
                   </Button>
@@ -534,59 +648,51 @@ export default function CampaignWizardPage() {
                           <span className="text-sm text-muted-foreground">— {ct.description}</span>
                         </div>
                         <div className="grid gap-3 md:grid-cols-2">
-                          {pieces.map((piece: any) => (
-                            <div
-                              key={piece.id}
-                              className={cn(
-                                "rounded-lg border-2 p-4 transition-all cursor-pointer",
-                                state.selectedPieces.includes(piece.id)
-                                  ? "border-primary bg-primary/5"
-                                  : "border-muted hover:border-primary/50"
-                              )}
-                              onClick={() => togglePieceSelection(piece.id)}
-                            >
-                              <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <Checkbox
-                                    checked={state.selectedPieces.includes(piece.id)}
-                                    onCheckedChange={() => togglePieceSelection(piece.id)}
-                                  />
-                                  <Badge variant="outline" className="text-xs">
-                                    {piece.platform}
-                                  </Badge>
-                                </div>
-                                <div className="flex items-center gap-1">
+                          {pieces.map((piece: any, idx: number) => {
+                            const gen = piece.generatedContent || {}
+                            const pieceId = String(gen.hook || piece.hook || `piece-${idx}`)
+                            return (
+                              <div
+                                key={pieceId}
+                                className={cn(
+                                  "rounded-lg border-2 p-4 transition-all cursor-pointer",
+                                  state.selectedPieces.includes(pieceId)
+                                    ? "border-primary bg-primary/5"
+                                    : "border-muted hover:border-primary/50"
+                                )}
+                                onClick={() => togglePieceSelection(pieceId)}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <Checkbox
+                                      checked={state.selectedPieces.includes(pieceId)}
+                                      onCheckedChange={() => togglePieceSelection(pieceId)}
+                                    />
+                                    <Badge variant="outline" className="text-xs">
+                                      {piece.platform}
+                                    </Badge>
+                                  </div>
                                   <Badge variant="secondary" className="text-xs">
-                                    Score: {piece.score}
+                                    Score: {piece.safetyCheck?.score || piece.score || 80}
                                   </Badge>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleRegeneratePiece(piece.id)
-                                    }}
-                                  >
-                                    <RefreshCw className="size-3" />
-                                  </Button>
+                                </div>
+                                <div className="font-medium text-sm mb-1">{gen.hook || piece.hook}</div>
+                                <div className="text-xs text-muted-foreground line-clamp-2">
+                                  {gen.caption || piece.copy || piece.body}
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                  {(gen.hashtags || piece.hashtags || []).slice(0, 3).map((tag: string) => (
+                                    <Badge key={tag} variant="outline" className="text-xs">
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </div>
+                                <div className="mt-2 text-xs text-primary font-medium">
+                                  CTA: {gen.cta || piece.cta}
                                 </div>
                               </div>
-                              <div className="font-medium text-sm mb-1">{piece.hook}</div>
-                              <div className="text-xs text-muted-foreground line-clamp-2">
-                                {piece.body}
-                              </div>
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {piece.hashtags.slice(0, 3).map((tag: string) => (
-                                  <Badge key={tag} variant="outline" className="text-xs">
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                              <div className="mt-2 text-xs text-primary font-medium">
-                                CTA: {piece.cta}
-                              </div>
-                            </div>
-                          ))}
+                            )
+                          })}
                         </div>
                       </div>
                     )
@@ -597,44 +703,7 @@ export default function CampaignWizardPage() {
           </div>
         )}
 
-        {state.currentStep === 6 && state.generatedCampaign && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Megaphone className="size-5 text-blue-500" />
-                Adaptación por plataforma
-              </CardTitle>
-              <CardDescription>
-                Cada pieza se adapta automáticamente al formato de cada plataforma.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {state.platforms.map((platform) => {
-                const platformInfo = PLATFORMS.find((p) => p.id === platform)
-                const pieces = getPiecesByPlatform(platform)
-                return (
-                  <div key={platform} className="rounded-lg border p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-2xl">{platformInfo?.icon}</span>
-                      <span className="font-medium">{platformInfo?.name}</span>
-                      <Badge variant="secondary">{pieces.length} piezas</Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {platform === "x" && "Captions cortos (máx. 280 caracteres), hashtags limitados"}
-                      {platform === "instagram" && "Visual + hook + caption + hashtags (máx. 2200 caracteres)"}
-                      {platform === "facebook" && "Más contexto,CTA claro, communauté engagement"}
-                      {platform === "tiktok" && "Hook rápido, lenguaje natural, texto en pantalla"}
-                      {platform === "youtube" && "Título optimizado, descripción detallada,CTA en suscripción"}
-                      {platform === "linkedin" && "Tono profesional, insights de industria, storytelling"}
-                    </div>
-                  </div>
-                )
-              })}
-            </CardContent>
-          </Card>
-        )}
-
-        {state.currentStep === 7 && (
+        {state.currentStep === 6 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -655,11 +724,33 @@ export default function CampaignWizardPage() {
                   La IA recomienda los mejores horarios para cada plataforma basándose en datos de engagement.
                 </p>
               </div>
+
+              {state.scheduledCount > 0 && (
+                <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4">
+                  <div className="flex items-center gap-2 text-green-600 font-medium">
+                    <CheckCircle2 className="size-4" />
+                    {state.scheduledCount} piezas programadas exitosamente
+                  </div>
+                </div>
+              )}
+
+              {state.campaignId && (
+                <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
+                  <div className="flex items-center gap-2 text-primary font-medium mb-2">
+                    <Clock className="size-4" />
+                    Programación automática:
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Los horarios se optimizan automáticamente para cada plataforma.
+                    Se usan los mejores horarios de engagement según datos históricos.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
 
-        {state.currentStep === 9 && (
+        {state.currentStep === 7 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -674,22 +765,47 @@ export default function CampaignWizardPage() {
               <div className="rounded-lg bg-primary/5 border border-primary/20 p-4">
                 <div className="font-medium mb-2">Resumen de la campaña:</div>
                 <ul className="text-sm space-y-1">
-                  <li>• Campaña: {state.generatedCampaign?.strategy.campaignName}</li>
+                  <li>• Campaña: {state.generatedCampaign?.strategy?.campaignName || state.product || state.idea}</li>
                   <li>• Piezas seleccionadas: {state.selectedPieces.length}</li>
                   <li>• Plataformas: {state.platforms.map(p => PLATFORMS.find(pl => pl.id === p)?.name).join(", ")}</li>
+                  {state.scheduledCount > 0 && <li>• Programadas: {state.scheduledCount}</li>}
+                  {state.publishedCount > 0 && <li>• Publicadas: {state.publishedCount}</li>}
                 </ul>
               </div>
 
-              <div className="flex gap-3">
-                <Button className="flex-1" size="lg">
-                  <Send className="size-4 mr-2" />
-                  Publicar ahora
-                </Button>
-                <Button variant="outline" className="flex-1" size="lg">
-                  <Calendar className="size-4 mr-2" />
-                  Programar para después
-                </Button>
-              </div>
+              {state.publishedCount > 0 ? (
+                <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-4">
+                  <div className="flex items-center gap-2 text-green-600 font-medium">
+                    <CheckCircle2 className="size-4" />
+                    ¡Campaña publicada! {state.publishedCount} piezas publicadas en Buffer.
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Tu contenido está siendo publicado en las plataformas configuradas.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <Button
+                    className="flex-1"
+                    size="lg"
+                    onClick={handlePublish}
+                    disabled={state.isPublishing}
+                  >
+                    {state.isPublishing ? (
+                      <RefreshCw className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="size-4 mr-2" />
+                    )}
+                    Publicar ahora
+                  </Button>
+                  <Link href="/ai-control" className="flex-1">
+                    <Button variant="outline" className="w-full" size="lg">
+                      <Calendar className="size-4 mr-2" />
+                      Activar Autopilot
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -708,99 +824,14 @@ export default function CampaignWizardPage() {
         </Button>
 
         <div className="flex gap-2">
-        {state.currentStep === 4 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ImageIcon className="size-5 text-pink-500" />
-                Imágenes de referencia
-              </CardTitle>
-              <CardDescription>
-                Subí imágenes que representen el estilo visual que querés para tu campaña.
-                La IA las usará como inspiración para generar imágenes consistentes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-lg border-2 border-dashed border-white/10 p-8 text-center hover:border-violet-500/30 transition-colors">
-                <ImageIcon className="mx-auto size-12 text-slate-500 mb-4" />
-                <p className="text-sm text-slate-400 mb-2">
-                  Arrastrá imágenes aquí o hacé click para seleccionar
-                </p>
-                <p className="text-xs text-slate-500 mb-4">
-                  Formatos: JPG, PNG, WebP. Máximo 5MB por imagen.
-                </p>
-                <input
-                  type="file"
-                  id="reference-images"
-                  multiple
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const files = Array.from(e.target.files || [])
-                    files.forEach(file => {
-                      const reader = new FileReader()
-                      reader.onload = (ev) => {
-                        const result = ev.target?.result as string
-                        if (result) {
-                          setState(prev => ({
-                            ...prev,
-                            referenceImages: [...prev.referenceImages, result]
-                          }))
-                        }
-                      }
-                      reader.readAsDataURL(file)
-                    })
-                  }}
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => document.getElementById('reference-images')?.click()}
-                  className="border-white/10 bg-white/5 hover:bg-white/10"
-                >
-                  <ImageIcon className="size-4 mr-2" />
-                  Seleccionar imágenes
-                </Button>
-              </div>
+          {state.currentStep < 4 && (
+            <Button onClick={() => setStep(state.currentStep + 1)} disabled={!canGoNext()}>
+              Siguiente
+              <ArrowRight className="size-4" />
+            </Button>
+          )}
 
-              {state.referenceImages.length > 0 && (
-                <div className="space-y-2">
-                  <Label>Imágenes seleccionadas ({state.referenceImages.length})</Label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                    {state.referenceImages.map((img, idx) => (
-                      <div key={idx} className="relative group rounded-lg overflow-hidden border border-white/10">
-                        <img
-                          src={img}
-                          alt={`Referencia ${idx + 1}`}
-                          className="aspect-square w-full object-cover"
-                        />
-                        <button
-                          onClick={() => {
-                            setState(prev => ({
-                              ...prev,
-                              referenceImages: prev.referenceImages.filter((_, i) => i !== idx)
-                            }))
-                          }}
-                          className="absolute top-2 right-2 size-6 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="rounded-lg bg-white/5 p-4">
-                <p className="text-sm text-slate-400">
-                  <strong className="text-white">Tip:</strong> Subí imágenes de tu marca, productos,
-                  o ejemplos de contenido que te guste. La IA generará imágenes con un estilo visual similar.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {state.currentStep === 5 && (
+          {state.currentStep === 4 && (
             <Button onClick={handleGenerate} disabled={state.isGenerating} size="lg">
               {state.isGenerating ? (
                 <>
@@ -816,31 +847,35 @@ export default function CampaignWizardPage() {
             </Button>
           )}
 
-          {state.currentStep < 5 && (
-            <Button onClick={() => setStep(state.currentStep + 1)} disabled={!canGoNext()}>
-              Siguiente
-              <ArrowRight className="size-4" />
+          {state.currentStep === 5 && (
+            <Button onClick={handlePersistAndSchedule} disabled={state.isPersisting || state.selectedPieces.length === 0}>
+              {state.isPersisting ? (
+                <>
+                  <RefreshCw className="size-4 mr-2 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  Guardar y programar
+                  <ArrowRight className="size-4" />
+                </>
+              )}
             </Button>
           )}
 
           {state.currentStep === 6 && (
-            <Button onClick={() => setStep(7)} disabled={state.selectedPieces.length === 0}>
-              Adaptar para plataformas
-              <ArrowRight className="size-4" />
-            </Button>
-          )}
-
-          {state.currentStep === 7 && (
-            <Button onClick={() => setStep(8)}>
-              Programar
-              <ArrowRight className="size-4" />
-            </Button>
-          )}
-
-        {state.currentStep === 8 && (
-            <Button onClick={() => setStep(9)}>
-              Revisar y publicar
-              <ArrowRight className="size-4" />
+            <Button onClick={handleAutoSchedule} disabled={state.isScheduling || !state.campaignId}>
+              {state.isScheduling ? (
+                <>
+                  <RefreshCw className="size-4 mr-2 animate-spin" />
+                  Programando...
+                </>
+              ) : (
+                <>
+                  Programar publicaciones
+                  <ArrowRight className="size-4" />
+                </>
+              )}
             </Button>
           )}
         </div>

@@ -253,8 +253,9 @@ function getHumanTimeSlot(platform: string, dayOffset: number, now: Date): Date 
 
 function isSlotOccupied(slotMs: number, scheduled: any[]): boolean {
   return scheduled.some((post) => {
-    if (!post.metadata?.scheduledAt) return false;
-    const postTime = new Date(post.metadata.scheduledAt).getTime();
+    const scheduledAt = post.scheduledAt || post.metadata?.scheduledAt;
+    if (!scheduledAt) return false;
+    const postTime = typeof scheduledAt === "number" ? scheduledAt : new Date(scheduledAt).getTime();
     const diff = Math.abs(slotMs - postTime);
     return diff < MIN_HOURS_BETWEEN_POSTS * 60 * 60 * 1000;
   });
@@ -294,8 +295,9 @@ function calculateSlotScore(
 
   // No más de 3 posts por día
   const postsOnDay = scheduled.filter((p) => {
-    if (!p.metadata?.scheduledAt) return false;
-    const postDate = new Date(p.metadata.scheduledAt);
+    const scheduledAt = p.scheduledAt || p.metadata?.scheduledAt;
+    if (!scheduledAt) return false;
+    const postDate = typeof scheduledAt === "number" ? new Date(scheduledAt) : new Date(scheduledAt);
     return (
       postDate.getFullYear() === slotTime.getFullYear() &&
       postDate.getMonth() === slotTime.getMonth() &&

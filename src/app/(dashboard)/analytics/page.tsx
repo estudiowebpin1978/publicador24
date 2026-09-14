@@ -63,7 +63,9 @@ export default function AnalyticsPage() {
   }
 
   const endDate = new Date().toISOString().split("T")[0]
-  const startDate = new Date(Date.now() - parseInt(dateRange) * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+  const daysMap: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "year": 365 }
+  const days = daysMap[dateRange] || 7
+  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
   const today = new Date().toISOString().split("T")[0]
 
   const accounts = useQuery(api.socialAccounts.list)
@@ -133,28 +135,38 @@ export default function AnalyticsPage() {
     followers: day.followers,
   }))
 
-  const platformData = [
-    { name: "Instagram", value: 45, color: "#E1306C" },
-    { name: "X", value: 25, color: "#1DA1F2" },
-    { name: "Facebook", value: 20, color: "#4267B2" },
-    { name: "TikTok", value: 10, color: "#000000" },
-  ]
+  const platformData = accounts && accounts.length > 0
+    ? (() => {
+        const counts: Record<string, number> = {}
+        accounts.forEach((acc: { platform: string }) => {
+          counts[acc.platform] = (counts[acc.platform] || 0) + 1
+        })
+        const total = Object.values(counts).reduce((a, b) => a + b, 0) || 1
+        const colors: Record<string, string> = { instagram: "#E1306C", x: "#1DA1F2", facebook: "#4267B2", tiktok: "#000000", youtube: "#FF0000", linkedin: "#0A66C2" }
+        return Object.entries(counts).map(([name, count]) => ({
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          value: Math.round((count / total) * 100),
+          color: colors[name] || "#888888",
+        }))
+      })()
+    : [
+        { name: "Instagram", value: 0, color: "#E1306C" },
+        { name: "X", value: 0, color: "#1DA1F2" },
+        { name: "Facebook", value: 0, color: "#4267B2" },
+      ]
 
-  const topPosts = [
-    { id: "1", title: "10 Tips for Marketing", platform: "instagram", engagement: formatNumber(totals.engagement), change: 12 },
-    { id: "2", title: "Behind the Scenes", platform: "tiktok", engagement: formatNumber(Math.floor(totals.engagement * 0.75)), change: 25 },
-    { id: "3", title: "Industry Insights", platform: "x", engagement: formatNumber(Math.floor(totals.engagement * 0.4)), change: 8 },
-    { id: "4", title: "Product Launch", platform: "facebook", engagement: formatNumber(Math.floor(totals.engagement * 0.3)), change: -5 },
-  ]
+  const topPosts = totals.engagement > 0
+    ? [
+        { id: "1", title: "Contenido con mayor engagement", platform: "instagram", engagement: formatNumber(totals.engagement), change: 0 },
+      ]
+    : []
 
-  const bestTimes = [
-    { hour: "6AM", engagement: 120 },
-    { hour: "9AM", engagement: 340 },
-    { hour: "12PM", engagement: 280 },
-    { hour: "3PM", engagement: 190 },
-    { hour: "6PM", engagement: 420 },
-    { hour: "9PM", engagement: 350 },
-  ]
+  const bestTimes = dailyAnalytics.length > 0
+    ? dailyAnalytics.slice(0, 6).map((day: { date: string; engagement: number }) => ({
+        hour: new Date(day.date).toLocaleDateString("es-AR", { weekday: "short" }),
+        engagement: day.engagement,
+      }))
+    : []
 
   return (
     <div className="space-y-6">
