@@ -18,6 +18,8 @@ import { Search, Bell, Menu, LogOut, Settings, User, CreditCard } from "lucide-r
 import Link from "next/link"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useRouter } from "next/navigation"
+import { useQuery } from "convex/react"
+import { api } from "@/hooks/use-convex"
 
 interface HeaderProps {
   onMenuToggle?: () => void
@@ -26,7 +28,7 @@ interface HeaderProps {
 
 export function Header({ onMenuToggle, className }: HeaderProps) {
   const [searchValue, setSearchValue] = React.useState("")
-  const notificationCount = 5
+  const notifications = useQuery(api.notifications.listUnread, { limit: 20 }) || []
   const { user, logout } = useAuth()
   const router = useRouter()
 
@@ -76,9 +78,9 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
             }
           >
             <Bell className="size-4" />
-            {notificationCount > 0 && (
+            {notifications.length > 0 && (
               <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-violet-500 text-[10px] font-bold text-white">
-                {notificationCount > 9 ? "9+" : notificationCount}
+                {notifications.length > 9 ? "9+" : notifications.length}
               </span>
             )}
             <span className="sr-only">Notificaciones</span>
@@ -87,31 +89,25 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
             <DropdownMenuLabel className="flex items-center justify-between text-white">
               <span>Notificaciones</span>
               <Badge variant="secondary" className="text-xs bg-violet-500/20 text-violet-400 border-0">
-                {notificationCount} nuevas
+                {notifications.length} nuevas
               </Badge>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-white/10" />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 p-3 text-white hover:bg-white/5">
-              <div className="flex items-center gap-2">
-                <div className="size-2 rounded-full bg-emerald-500" />
-                <span className="font-medium">Publicación publicada con éxito</span>
-              </div>
-              <span className="text-xs text-slate-500">hace 2 minutos</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 p-3 text-white hover:bg-white/5">
-              <div className="flex items-center gap-2">
-                <div className="size-2 rounded-full bg-amber-500" />
-                <span className="font-medium">Aprobación requerida</span>
-              </div>
-              <span className="text-xs text-slate-500">hace 15 minutos</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 p-3 text-white hover:bg-white/5">
-              <div className="flex items-center gap-2">
-                <div className="size-2 rounded-full bg-red-500" />
-                <span className="font-medium">Error al publicar</span>
-              </div>
-              <span className="text-xs text-slate-500">hace 1 hora</span>
-            </DropdownMenuItem>
+            {notifications.length === 0 ? (
+              <DropdownMenuItem className="p-3 text-center text-slate-500 hover:bg-white/5">
+                Sin notificaciones nuevas
+              </DropdownMenuItem>
+            ) : (
+              notifications.slice(0, 5).map((n) => (
+                <DropdownMenuItem key={n._id} className="flex flex-col items-start gap-1 p-3 text-white hover:bg-white/5">
+                  <div className="flex items-center gap-2">
+                    <div className={`size-2 rounded-full ${n.type === "success" ? "bg-emerald-500" : n.type === "warning" ? "bg-amber-500" : n.type === "error" ? "bg-red-500" : "bg-violet-500"}`} />
+                    <span className="font-medium">{n.title}</span>
+                  </div>
+                  <span className="text-xs text-slate-500">{n.message}</span>
+                </DropdownMenuItem>
+              ))
+            )}
             <DropdownMenuSeparator className="bg-white/10" />
             <DropdownMenuItem asChild className="w-full justify-center text-sm text-violet-400 hover:bg-white/5 hover:text-violet-300">
               <Link href="/notifications">Ver todas las notificaciones</Link>
@@ -134,8 +130,8 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
           <DropdownMenuContent align="end" className="w-56 bg-[#1a1a2e] border-white/10">
             <DropdownMenuLabel className="text-white">
               <div className="flex flex-col">
-                <span className="font-medium">estudiowebpin</span>
-                <span className="text-xs text-slate-500">{user?.email || ".usuario@email.com"}</span>
+                <span className="font-medium">{user?.email?.split("@")[0] || "usuario"}</span>
+                <span className="text-xs text-slate-500">{user?.email || ""}</span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-white/10" />

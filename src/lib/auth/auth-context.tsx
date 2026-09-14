@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { createContext, useContext, useState, ReactNode } from "react"
 
 interface AuthContextType {
   isAuthenticated: boolean
@@ -14,30 +14,25 @@ const AuthContext = createContext<AuthContextType>({
   logout: () => {},
 })
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<{ email: string } | null>(null)
-  const [loading, setLoading] = useState(true)
+function getStoredUser(): { email: string } | null {
+  if (typeof window === "undefined") return null
+  const stored = localStorage.getItem("autopublisher_user")
+  if (!stored) return null
+  try {
+    return JSON.parse(stored)
+  } catch {
+    localStorage.removeItem("autopublisher_user")
+    return null
+  }
+}
 
-  useEffect(() => {
-    const stored = localStorage.getItem("autopublisher_user")
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored))
-      } catch {
-        localStorage.removeItem("autopublisher_user")
-      }
-    }
-    setLoading(false)
-  }, [])
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<{ email: string } | null>(() => getStoredUser())
 
   const logout = () => {
     setUser(null)
     localStorage.removeItem("autopublisher_user")
     window.location.href = "/login"
-  }
-
-  if (loading) {
-    return <div className="flex h-screen items-center justify-center"><p>Cargando...</p></div>
   }
 
   return (

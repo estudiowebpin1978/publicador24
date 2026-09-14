@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -39,9 +38,11 @@ export default function BrandKitPage() {
   const [defaultCtas, setDefaultCtas] = React.useState<string[]>([])
   const [newCta, setNewCta] = React.useState("")
   const [saved, setSaved] = React.useState(false)
+  const initializedRef = React.useRef(false)
 
   React.useEffect(() => {
-    if (brandProfile) {
+    if (brandProfile && !initializedRef.current) {
+      initializedRef.current = true
       setName(brandProfile.name || "")
       setDescription(brandProfile.description || "")
       setTone(brandProfile.tone || "")

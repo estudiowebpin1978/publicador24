@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { useAuth } from "@/lib/auth/auth-context"
 import {
   Sparkles,
   Target,
@@ -13,7 +14,6 @@ import {
   Settings,
   Zap,
   Bell,
-  ChevronDown,
 } from "lucide-react"
 
 interface NavItem {
@@ -37,7 +37,8 @@ interface SidebarProps {
 
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
-  const [workspaceOpen, setWorkspaceOpen] = React.useState(false)
+  const { user } = useAuth()
+  const userEmail = user?.email || "usuario@publicador24.com"
 
   return (
     <div className={cn(
@@ -92,10 +93,10 @@ export function Sidebar({ className }: SidebarProps) {
         <div className="flex items-center gap-3 px-3 py-2">
           <Avatar size="sm">
             <AvatarImage src="/avatars/user.jpg" alt="Usuario" />
-            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white text-xs font-bold">JD</AvatarFallback>
+            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white text-xs font-bold">{userEmail.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-white">estudiowebpin</span>
+            <span className="text-sm font-medium text-white">{userEmail.split("@")[0]}</span>
             <span className="text-xs text-slate-500">Plan Pro</span>
           </div>
         </div>
