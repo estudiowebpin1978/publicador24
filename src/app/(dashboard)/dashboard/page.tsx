@@ -16,6 +16,8 @@ import {
   Globe,
   Target,
   Zap,
+  Hash,
+  CheckCircle2,
 } from "lucide-react";
 
 interface Message {

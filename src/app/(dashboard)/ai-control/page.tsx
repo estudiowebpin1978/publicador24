@@ -48,7 +48,9 @@ export default function AIControlCenterPage() {
   }, [getGlobalHealth, checkCosts]);
 
   React.useEffect(() => {
-    loadData();
+    let cancelled = false;
+    loadData().then(() => {});
+    return () => { cancelled = true; };
   }, [loadData]);
 
   const handleRunLoop = async () => {

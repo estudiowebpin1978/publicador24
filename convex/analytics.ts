@@ -41,17 +41,22 @@ export const getPostAnalytics = query({
 
 export const getSummary = query({
   args: {
-    socialAccountId: v.id("socialAccounts"),
+    socialAccountId: v.optional(v.id("socialAccounts")),
     startDate: v.string(),
     endDate: v.string(),
   },
   handler: async (ctx, args) => {
-    const daily = await ctx.db
-      .query("analyticsDaily")
-      .withIndex("by_account_date", (q) =>
-        q.eq("socialAccountId", args.socialAccountId)
-      )
-      .collect();
+    let query = ctx.db.query("analyticsDaily");
+
+    if (args.socialAccountId) {
+      query = query.withIndex("by_account_date", (q) =>
+        q.eq("socialAccountId", args.socialAccountId!)
+      );
+    } else {
+      query = query.withIndex("by_date");
+    }
+
+    const daily = await query.collect();
 
     const range = daily.filter(
       (a) => a.date >= args.startDate && a.date <= args.endDate
@@ -80,10 +85,12 @@ export const getSummary = query({
           range.length
         : 0;
 
+    const followers = range.length > 0 ? range[range.length - 1].followers : 0;
+
     return {
       period: { startDate: args.startDate, endDate: args.endDate },
       days: range.length,
-      totals,
+      totals: { ...totals, followers },
       avgEngagementRate,
     };
   },
