@@ -67,7 +67,7 @@ export default function AnalyticsPage() {
   const today = new Date().toISOString().split("T")[0]
 
   const accounts = useQuery(api.socialAccounts.list)
-  const summary = useQuery(api.analytics.getSummary, { socialAccountId: socialAccountId || "", startDate, endDate })
+  const summary = useQuery(api.analytics.getSummary, { socialAccountId: socialAccountId || undefined, startDate, endDate })
   const dailyAnalytics = useQuery(api.analytics.getDailyByDate, { date: today })
 
   if (summary === undefined || dailyAnalytics === undefined) {

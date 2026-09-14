@@ -12,6 +12,7 @@ import {
   BarChart3,
   Settings,
   Zap,
+  Bell,
   ChevronDown,
 } from "lucide-react"
 
@@ -26,6 +27,7 @@ const navItems: NavItem[] = [
   { label: "Campañas", href: "/campaigns", icon: Target },
   { label: "Analíticas", href: "/analytics", icon: BarChart3 },
   { label: "Autopilot", href: "/autopilot", icon: Zap },
+  { label: "Notificaciones", href: "/notifications", icon: Bell },
   { label: "Configuración", href: "/settings", icon: Settings },
 ]
 
