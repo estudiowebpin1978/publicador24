@@ -3,7 +3,12 @@
 
 export async function callBuffer(query: string, variables?: Record<string, unknown>) {
   const apiKey = process.env.BUFFER_API_KEY
-  if (!apiKey) throw new Error("BUFFER_API_KEY no configurado")
+  if (!apiKey || apiKey === "tu-key-aqui" || apiKey === "your-buffer-api-key") {
+    throw new Error(
+      "BUFFER NOT CONFIGURED: BUFFER_API_KEY is a placeholder. " +
+      "Get a real key from https://buffer.com/developers/api and set it in .env.local"
+    )
+  }
 
   const res = await fetch("https://api.buffer.com/1/graphql", {
     method: "POST",
