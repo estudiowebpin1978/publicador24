@@ -64,7 +64,7 @@ async function chatCompletion(messages: ChatMessage[]): Promise<ChatResponse> {
           'HTTP-Referer': process.env.APP_URL || 'https://publicador24.netlify.app',
           'X-Title': 'Auto Publisher IA',
         },
-        body: JSON.stringify({ model, messages, temperature: 0.7 }),
+        body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 2000 }),
       });
 
       if (!response.ok) {
