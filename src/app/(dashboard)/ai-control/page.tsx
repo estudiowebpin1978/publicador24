@@ -13,8 +13,6 @@ import {
   RefreshCw,
   Zap,
   AlertTriangle,
-  CheckCircle,
-  XCircle,
   Target,
   BarChart3,
 } from "lucide-react";
@@ -26,24 +24,34 @@ export default function AIControlCenterPage() {
   const setKillSwitch = useAction(api.campaignHealth.setGlobalKillSwitch);
 
   const [health, setHealth] = React.useState<Record<string, unknown> | null>(null);
-  const [costs, setCosts] = React.useState<Record<string, unknown> | null>(null);
 
   const autopilotSettings = useQuery(api.autopilot.getSettings);
 
-  const loadData = React.useCallback(async () => {
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        if (!cancelled) {
+          setHealth(data);
+        }
+      } catch (error) {
+        console.error("Failed to load data:", error);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const refreshHealth = async () => {
     try {
       const res = await fetch("/api/health");
       const data = await res.json();
       setHealth(data);
-      setCosts(data.integrations?.costTracking || {});
     } catch (error) {
-      console.error("Failed to load data:", error);
+      console.error("Failed to refresh health:", error);
     }
-  }, []);
-
-  React.useEffect(() => {
-    loadData();
-  }, [loadData]);
+  };
 
   const handleRunLoop = async () => {
     setIsRunning(true);
@@ -51,7 +59,7 @@ export default function AIControlCenterPage() {
       const res = await fetch("/api/autopilot", { method: "POST" });
       const result = await res.json();
       setLoopResult(result);
-      await loadData();
+      await refreshHealth();
     } catch (error) {
       console.error("Loop failed:", error);
     } finally {
@@ -65,7 +73,7 @@ export default function AIControlCenterPage() {
       const res = await fetch("/api/autopilot", { method: "POST" });
       const result = await res.json();
       setLoopResult(result);
-      await loadData();
+      await refreshHealth();
     } catch (error) {
       console.error("Orchestrator failed:", error);
     } finally {
