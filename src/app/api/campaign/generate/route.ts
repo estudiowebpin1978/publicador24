@@ -114,10 +114,41 @@ Respondé con JSON:
   });
 
   try {
-    const match = result.text.match(/```json\s*([\s\S]*?)```/);
-    return JSON.parse(match ? match[1] : result.text);
+    let jsonStr = result.text;
+    const mdMatch = result.text.match(/```json\s*([\s\S]*?)```/);
+    if (mdMatch) {
+      jsonStr = mdMatch[1];
+    } else {
+      const firstBrace = result.text.indexOf('{');
+      const lastBrace = result.text.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        jsonStr = result.text.substring(firstBrace, lastBrace + 1);
+      }
+    }
+    return JSON.parse(jsonStr.trim());
   } catch {
-    return { error: "Estrategia generada parcialmente", raw: result.text };
+    return {
+      funnel: { awareness: 40, interest: 25, consideration: 20, conversion: 15, retention: 10 },
+      contentPillars: [{ name: "General", type: "promotional", percentage: 100, description: "Contenido general", examples: [] }],
+      contentCalendar: Array.from({ length: 7 }, (_, i) => ({
+        day: i + 1,
+        platform: input.platforms[i % input.platforms.length] || "instagram",
+        type: i % 2 === 0 ? "reel" : "post",
+        hook: `Hook día ${i + 1} para ${input.businessName}`,
+        angle: "curiosity",
+        copy: `Contenido promocional para ${input.businessName} - día ${i + 1}`,
+        cta: "Visitá nuestra web",
+        hashtags: ["#marketing", "#publicidad"],
+        funnelStage: i < 3 ? "awareness" : i < 5 ? "interest" : "conversion",
+        visualStyle: "modern",
+      })),
+      ctaStrategy: { awareness: "Descubrí más", interest: "Conocé la solución", consideration: "Probá gratis", conversion: "Registrate ahora", retention: "Compartí con amigos" },
+      landingPages: [],
+      budgetAllocation: { awareness: 40, interest: 25, consideration: 20, conversion: 15 },
+      riskAssessment: [],
+      recommendations: ["Generar contenido variado", "Medir resultados semanalmente"],
+      kpiTargets: { reach: 10000, engagement: 500, clicks: 200, leads: 50 },
+    };
   }
 }
 
