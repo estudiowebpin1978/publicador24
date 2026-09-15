@@ -25,8 +25,8 @@ function getProviders(): AIProviderConfig[] {
       name: "groq",
       baseUrl: "https://api.groq.com/openai/v1",
       apiKey: process.env.GROQ_API_KEY,
-      model: process.env.GROQ_MODEL || "llama-3.3-70b-versatile",
-      maxTokens: 2000,
+      model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
+      maxTokens: 800,
     });
   }
 
@@ -36,8 +36,8 @@ function getProviders(): AIProviderConfig[] {
       name: "openrouter",
       baseUrl: "https://openrouter.ai/api/v1",
       apiKey: process.env.OPENROUTER_API_KEY,
-      model: process.env.OPENROUTER_MODEL || "google/gemini-3.8-flash",
-      maxTokens: 2000,
+      model: process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash",
+      maxTokens: 800,
     });
   }
 
