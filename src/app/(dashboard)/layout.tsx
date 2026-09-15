@@ -6,10 +6,10 @@ import { AppLayout } from "@/components/layout/app-layout"
 import { ErrorBoundary } from "@/components/error-boundary"
 
 function getStoredUser(): { email: string } | null {
-  if (typeof window === "undefined") return null
-  const stored = localStorage.getItem("autopublisher_user")
-  if (!stored) return null
   try {
+    if (typeof window === "undefined" || !window.localStorage) return null
+    const stored = window.localStorage.getItem("autopublisher_user")
+    if (!stored) return null
     const user = JSON.parse(stored)
     return user && user.email ? user : null
   } catch {
