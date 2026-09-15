@@ -2,6 +2,7 @@ import type { AIProvider } from './types';
 import { MockAIProvider } from './mock-provider';
 import { OpenRouterProvider } from './openrouter-provider';
 import { GroqProvider } from './groq-provider';
+import { HuggingFaceProvider } from './huggingface-provider';
 
 let cachedProvider: AIProvider | null = null;
 
@@ -30,6 +31,18 @@ export function getAIProvider(): AIProvider {
         cachedProvider = new GroqProvider();
         return cachedProvider;
       }
+      break;
+    case 'huggingface':
+      if (process.env.HF_API_KEY) {
+        cachedProvider = new HuggingFaceProvider();
+        return cachedProvider;
+      }
+      if (isProd) {
+        throw new Error(
+          'AI PROVIDER NOT CONFIGURED: HF_API_KEY is missing. '
+        );
+      }
+      break;
       if (isProd) {
         throw new Error(
           'AI PROVIDER NOT CONFIGURED: GROQ_API_KEY is missing. ' +
@@ -56,3 +69,4 @@ export function getAIProvider(): AIProvider {
 export function resetAIProvider(): void {
   cachedProvider = null;
 }
+
