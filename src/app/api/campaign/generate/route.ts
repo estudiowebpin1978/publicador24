@@ -200,3 +200,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Error al generar campaña", details: errorMessage }, { status: 500 });
   }
 }
+
+
