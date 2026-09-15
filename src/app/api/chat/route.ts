@@ -12,35 +12,56 @@ interface ChatRequest {
   history?: ChatMessage[];
 }
 
-const SYSTEM_PROMPT = `Sos Publicador24, un motor autónomo de marketing digital con inteligencia artificial.
-
-Tu función principal es ayudar a crear campañas de marketing que generen demanda real.
+const SYSTEM_PROMPT = `Sos Publicador24, asistente de marketing para Quiniela IA. Tu objetivo: crear campañas que generen demanda real para quiniela-ia-two.vercel.app.
 
 CAPACIDADES:
-1. Analizar negocios y sitios web
-2. Descubrir audiencias automáticamente
-3. Crear estrategias de marketing completas
-4. Generar contenido variado para todas las plataformas
+- Analizar negocios
+- Descubrir audiencias
+- Crear estrategias de marketing
+- Generar contenido para TikTok e Instagram
+- Programar publicaciones automáticas
 
-FORMATO DE RESPUESTA:
-- Usá español rioplatense (voseo)
-- Sé conciso y directo
-- Cuando generes contenido, incluí hooks, captions, hashtags y CTAs
-- Siempre pensá en el objetivo de GENERAR DEMANDA, no solo contenido
+FORMATO:
+- Español rioplatense (voseo)
+- Conciso, directo
+- Siempre pensar en GENERAR DEMANDA, no solo likes
+- Si el usuario da datos del negocio, generá campaña inmediatamente`;
 
-IMPORTANTE:
-- No inventes información que no tengas confirmada
-- Si falta información clave, preguntala antes de asumir`;
+function extractCampaignData(message: string): { name?: string; description?: string; audience?: string; objective?: string; platforms?: string[]; website?: string } {
+  const data: { name?: string; description?: string; audience?: string; objective?: string; platforms?: string[]; website?: string } = {};
 
-function templateResponse(message: string): string {
-  const lower = message.toLowerCase();
-  if (/campaña|campaign|quiero conseguir|necesito contenido|promocionar/i.test(lower)) {
-    return `¡Dale! Para armar una buena campaña necesito:\n\n1. **Nombre del negocio** - ¿Cómo se llama?\n2. **¿Qué vendés o hacés?** - Descripción breve\n3. **¿A quién le vendés?** - Tu público ideal\n4. **Objetivo** - ¿Querés más seguidores, ventas, leads?\n5. **Plataformas** - Instagram, TikTok, ambas?\n\nPasame esos datos y te armo la estrategia completa con contenido listo para publicar.`;
+  const nameMatch = message.match(/(?:nombre|negocio|business)[\s:]*([A-Z][a-zA-Z\s]+)/i);
+  if (nameMatch) data.name = nameMatch[1].trim();
+
+  const descMatch = message.match(/(?:qué vend[eé]s|vend[eé]s?|hac[eé]s?|descripción)[\s:]*([^.]{10,200})/i);
+  if (descMatch) data.description = descMatch[1].trim();
+
+  const audienceMatch = message.match(/(?:a quién le vend[eé]s|público|audiencia)[\s:]*([^.]{10,200})/i);
+  if (audienceMatch) data.audience = audienceMatch[1].trim();
+
+  const objectiveMatch = message.match(/(?:objetivo|quiero conseguir|lograr)[\s:]*([^.]{10,200})/i);
+  if (objectiveMatch) data.objective = objectiveMatch[1].trim();
+
+  const platformsMatch = message.match(/(?:instagram|tiktok|plataformas)[\s:,]*([^.]{5,100})/i);
+  if (platformsMatch) {
+    const platformsStr = platformsMatch[1].toLowerCase();
+    data.platforms = [];
+    if (platformsStr.includes("tiktok") || platformsStr.includes("tik tok")) data.platforms.push("tiktok");
+    if (platformsStr.includes("instagram") || platformsStr.includes("ig")) data.platforms.push("instagram");
+    if (data.platforms.length === 0) data.platforms = ["tiktok", "instagram"];
+  } else {
+    data.platforms = ["tiktok", "instagram"];
   }
-  if (/hola|hello|hey|buenas/i.test(lower)) {
-    return `¡Hola! Soy Publicador24, tu asistente de marketing con IA. ¿En qué te puedo ayudar? Puedo:\n\n- Crear campañas de contenido\n- Analizar tu negocio y audiencia\n- Generar posts para Instagram y TikTok\n- Programar publicaciones automáticas\n\n¿Por dónde arrancamos?`;
-  }
-  return `Recibí tu mensaje: "${message}"\n\nPara ayudarte mejor, contame sobre tu negocio o decime qué necesitás. Puedo crear campañas, analizar sitios web, o generar contenido para tus redes.`;
+
+  const urlMatch = message.match(/(https?:\/\/[^\s]+)/i);
+  if (urlMatch) data.website = urlMatch[1];
+
+  if (message.toLowerCase().includes("quiniela ia")) data.name = data.name || "Quiniela IA";
+  if (!data.description) data.description = message.substring(0, 200);
+  if (!data.audience) data.audience = "Personas de Argentina interesadas en Quiniela, estadísticas y números";
+  if (!data.objective) data.objective = "Lograr alcance viral, miles de seguidores y usuarios en la web";
+
+  return data;
 }
 
 export async function POST(request: NextRequest) {
@@ -52,28 +73,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Mensaje requerido" }, { status: 400 });
     }
 
+    const campaignData = extractCampaignData(message);
+    const hasCampaignData = campaignData.name || campaignData.description || (message.length > 100);
+
     let response = "";
     let usedAI = false;
 
     try {
       const baseProvider = getAIProvider();
-      const provider = wrapProviderWithCostTracking(baseProvider, "openrouter");
+      const provider = wrapProviderWithCostTracking(baseProvider, "groq");
 
-      const result = await provider.generateText({
-        prompt: message,
-        system_prompt: SYSTEM_PROMPT,
-        max_tokens: 800,
-      });
+      if (hasCampaignData && (campaignData.name || message.toLowerCase().includes("quiniela"))) {
+        const aiPrompt = `El usuario quiere promocionar: ${campaignData.name || 'Quiniela IA'} - ${campaignData.description || 'plataforma de análisis con IA para quiniela'}. Objetivo: ${campaignData.objective || 'alcance viral y usuarios'}. Plataformas: ${campaignData.platforms?.join(", ") || 'TikTok, Instagram'}. Generá una respuesta breve que confirme que se va a crear una campaña con contenido natural y realista, mencioná que se usará el sitio https://quiniela-ia-two.vercel.app. Sé entusiasta.`;
 
-      response = result.text;
-      usedAI = true;
+        const result = await provider.generateText({
+          prompt: aiPrompt,
+          system_prompt: SYSTEM_PROMPT,
+          max_tokens: 600,
+        });
+        response = result.text;
+        usedAI = true;
+      } else {
+        const result = await provider.generateText({
+          prompt: message,
+          system_prompt: SYSTEM_PROMPT,
+          max_tokens: 800,
+        });
+        response = result.text;
+        usedAI = true;
+      }
     } catch {
-      response = templateResponse(message);
+      response = `Recibí los datos para **${campaignData.name || 'Quiniela IA'}**:\n\n- **Negocio:** ${campaignData.description || 'Plataforma web con IA para análisis de Quiniela'}\n- **Audiencia:** ${campaignData.audience || 'Personas en Argentina interesadas en Quiniela'}\n- **Objetivo:** ${campaignData.objective || 'Alcance viral, seguidores, usuarios web'}\n- **Plataformas:** ${(campaignData.platforms || ['TikTok', 'Instagram']).join(', ')}\n- **Web:** https://quiniela-ia-two.vercel.app/\n\nVoy a crear una campaña con contenido natural y realista (reels, posts, imágenes auténticas) para captar más gente. Las publicaciones irán directo a Buffer (Instagram + TikTok) automáticamente.`;
     }
 
     return NextResponse.json({
       response,
-      data: { aiUsed: usedAI },
+      data: { aiUsed: usedAI, campaignDetected: hasCampaignData, ...campaignData },
       costSummary: getTodayCost(),
       timestamp: Date.now(),
     });
