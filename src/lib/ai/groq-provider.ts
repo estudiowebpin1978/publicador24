@@ -62,7 +62,7 @@ async function chatCompletion(messages: ChatMessage[]): Promise<ChatResponse> {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({ model, messages, temperature: 0.7 }),
+        body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 1500 }),
       });
 
       if (!response.ok) {
