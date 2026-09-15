@@ -1,7 +1,3 @@
-import { ConvexHttpClient } from 'convex/browser';
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
 interface SafetyCheckResult {
   approved: boolean;
   safetyScore: number;
@@ -44,7 +40,11 @@ function checkSpamRisk(text: string): { score: number; pass: boolean; reason?: s
 function checkDuplicateContent(hook: string, caption: string, existingFingerprints: string[]): { pass: boolean; reason?: string } {
   const fingerprint = computeFingerprint(hook, caption, 'generic');
   const isDuplicate = existingFingerprints.some(fp => {
-    const similarity = calculateSimilarity(fingerprint, fp);
+    const aWords = new Set(fingerprint.split(':'));
+    const bWords = new Set(fp.split(':'));
+    const intersection = [...aWords].filter(w => bWords.has(w)).length;
+    const union = new Set([...aWords, ...bWords]).size;
+    const similarity = union > 0 ? intersection / union : 0;
     return similarity > 0.85;
   });
   return {
@@ -53,16 +53,8 @@ function checkDuplicateContent(hook: string, caption: string, existingFingerprin
   };
 }
 
-function calculateSimilarity(a: string, b: string): number {
-  const aWords = new Set(a.split(':'));
-  const bWords = new Set(b.split(':'));
-  const intersection = [...aWords].filter(w => bWords.has(w)).length;
-  const union = new Set([...aWords, ...bWords]).size;
-  return union > 0 ? intersection / union : 0;
-}
-
 export async function checkPublicationSafety(
-  contentPieceId: string,
+  _contentPieceId: string,
   hook: string,
   caption: string,
   platform: string,
@@ -97,26 +89,10 @@ export async function checkPublicationSafety(
   const allPassed = Object.values(checks).every(c => c.pass);
   const safetyScore = allPassed ? 90 : Math.max(0, 100 - (spamCheck.score || 0));
 
-  const result: SafetyCheckResult = {
+  return {
     approved: allPassed,
     safetyScore,
     checks,
     reason: allPassed ? undefined : Object.values(checks).filter(c => !c.pass).map(c => c.reason).filter(Boolean).join('; '),
   };
-
-  try {
-    const { api } = await import('@convex/_generated/api');
-    await convex.mutation(api.publicationSafety.create, {
-      contentPieceId: contentPieceId as string & { __tableName: 'contentPieces' },
-      platform,
-      safetyScore,
-      checks,
-      approved: allPassed,
-      reason: result.reason,
-    });
-  } catch (error) {
-    console.warn('Failed to record safety check:', error);
-  }
-
-  return result;
 }

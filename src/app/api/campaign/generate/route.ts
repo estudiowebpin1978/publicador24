@@ -3,9 +3,6 @@ import { getAIProvider } from "@/lib/ai/provider";
 import { wrapProviderWithCostTracking, getTodayCost } from "@/lib/ai/cost-tracker";
 import { readStrategyMemory, writeStrategyMemory } from "@/lib/ai/strategy-memory";
 import { checkPublicationSafety } from "@/lib/ai/publication-safety";
-import { ConvexHttpClient } from "convex/browser";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 interface CampaignInput {
   businessName: string;
@@ -31,10 +28,10 @@ REGLAS:
 8. Usá español rioplatense (voseo)
 9. Respondé SIEMPRE con JSON válido, sin texto adicional`;
 
-async function analyzeBusiness(input: CampaignInput, ai: ReturnType<typeof getAIProvider>) {
+async function analyzeBusiness(input: CampaignInput, provider: ReturnType<typeof getAIProvider>) {
   let websiteAnalysis = null;
   if (input.website) {
-    const result = await ai.generateText({
+    const result = await provider.generateText({
       prompt: `Analizá el sitio web ${input.website} y extraé: tipo de negocio, servicios/productos, público, CTAs, contacto. Respondé con JSON: { "businessType": "...", "offerings": [...], "targetAudience": "...", "contactChannels": [...], "keyPages": [...], "brandTone": "..." }`,
       system_prompt: "Sos un experto en análisis web. Respondé con JSON válido.",
       max_tokens: 1500,
@@ -45,7 +42,7 @@ async function analyzeBusiness(input: CampaignInput, ai: ReturnType<typeof getAI
     } catch { /* fallback */ }
   }
 
-  const audienceResult = await ai.generateText({
+  const audienceResult = await provider.generateText({
     prompt: `Con esta información de negocio, descubrí las audiencias:
 NEGOCIO: ${input.businessName}
 DESCRIPCIÓN: ${input.description}
@@ -78,13 +75,13 @@ async function generateFullStrategy(
   input: CampaignInput,
   businessAnalysis: { websiteAnalysis: unknown; audiences: unknown },
   memoryHook: string[],
-  ai: ReturnType<typeof getAIProvider>
+  provider: ReturnType<typeof getAIProvider>
 ) {
   const memoryContext = memoryHook.length > 0
     ? `\nMEMORIA DE CAMPAÑA (hooks previos que funcionaron): ${memoryHook.slice(0, 5).join('; ')}\nEvitá repetir estos hooks. Generá ángulos nuevos.`
     : '';
 
-  const result = await ai.generateText({
+  const result = await provider.generateText({
     prompt: `Creá una estrategia COMPLETA de marketing para:
 
 NEGOCIO: ${input.businessName}
@@ -127,9 +124,8 @@ Respondé con JSON:
 async function generateContentPieces(
   strategy: Record<string, unknown>,
   input: CampaignInput,
-  campaignId: string | null,
   existingFingerprints: string[],
-  ai: ReturnType<typeof getAIProvider>
+  provider: ReturnType<typeof getAIProvider>
 ) {
   const calendar = (strategy.contentCalendar || []) as Array<Record<string, unknown>>;
   const pieces = [];
@@ -137,7 +133,7 @@ async function generateContentPieces(
 
   for (let i = 0; i < Math.min(calendar.length, 14); i++) {
     const slot = calendar[i];
-    const result = await ai.generateText({
+    const result = await provider.generateText({
       prompt: `Generá contenido para esta publicación:
 
 PLATAFORMA: ${slot.platform}
@@ -179,7 +175,6 @@ Respondé con JSON:
       generatedContent = { hook: slot.hook, caption: slot.copy, hashtags: [], cta: slot.cta };
     }
 
-    // Publication safety check
     const hook = String(generatedContent.hook || '');
     const caption = String(generatedContent.caption || '');
     const platform = String(slot.platform || 'instagram');
@@ -198,10 +193,9 @@ Respondé con JSON:
       reason: safetyResult.reason,
     });
 
-    // Write strategy memory for approved content
-    if (safetyResult.approved && campaignId) {
+    if (safetyResult.approved) {
       await writeStrategyMemory({
-        campaignId,
+        campaignId: "local",
         topic: input.businessName,
         hook,
         contentType: String(slot.type || 'post'),
@@ -244,60 +238,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Al menos una plataforma requerida" }, { status: 400 });
     }
 
-    const baseAI = getAIProvider();
-    const ai = wrapProviderWithCostTracking(baseAI, 'openrouter');
+    const baseProvider = getAIProvider();
+    const provider = wrapProviderWithCostTracking(baseProvider, "openrouter");
 
-    // Read strategy memory before generating
-    let campaignId: string | null = null;
     let existingFingerprints: string[] = [];
     try {
-      const { api } = await import("@convex/_generated/api");
-      const existingCampaigns = await convex.query(api.campaigns.list, { status: "ACTIVE" });
-      if (existingCampaigns.length > 0) {
-        campaignId = existingCampaigns[0]._id;
-        const memory = await readStrategyMemory(campaignId);
-        existingFingerprints = memory.hooks;
-      }
+      const memory = await readStrategyMemory("local");
+      existingFingerprints = memory.hooks;
     } catch { /* first campaign */ }
 
-    const businessAnalysis = await analyzeBusiness(input, ai);
-    const strategy = await generateFullStrategy(input, businessAnalysis, existingFingerprints, ai);
-    const { pieces: contentPieces, safetyResults } = await generateContentPieces(strategy, input, campaignId, existingFingerprints, ai);
-
-    // Persist business profile + audience to Convex
-    let businessProfileId = null;
-    const audienceIds: string[] = [];
-    try {
-      const { api } = await import("@convex/_generated/api");
-      const websiteAnalysis = businessAnalysis.websiteAnalysis as Record<string, unknown> | null;
-      businessProfileId = await convex.mutation(api.businessProfiles.getOrCreate, {
-        name: input.businessName,
-        website: input.website,
-        businessType: (websiteAnalysis?.businessType as string) || undefined,
-        offerings: (websiteAnalysis?.offerings as string[]) || undefined,
-        targetAudience: (websiteAnalysis?.targetAudience as string) || input.description,
-        contactChannels: (websiteAnalysis?.contactChannels as string[]) || undefined,
-        keyPages: (websiteAnalysis?.keyPages as string[]) || undefined,
-        brandTone: (websiteAnalysis?.brandTone as string) || undefined,
-      });
-
-      const audiences = businessAnalysis.audiences as Record<string, unknown>;
-      if (audiences?.primary) {
-        const primaryId = await convex.mutation(api.audienceProfiles.create, {
-          campaignId: "temp" as unknown as string,
-          segmentType: "primary",
-          description: (audiences.primary as Record<string, unknown>).description as string || "",
-          demographics: (audiences.primary as Record<string, unknown>).demographics as string || undefined,
-          painPoints: (audiences.primary as Record<string, unknown>).painPoints as string[] || undefined,
-          desires: (audiences.primary as Record<string, unknown>).desires as string[] || undefined,
-          whereToReach: (audiences.primary as Record<string, unknown>).whereToReach as string[] || undefined,
-          confidence: ((audiences.primary as Record<string, unknown>).confidence as number) || 50,
-        });
-        audienceIds.push(primaryId as string);
-      }
-    } catch (e) {
-      console.warn("Convex persistence skipped:", e);
-    }
+    const businessAnalysis = await analyzeBusiness(input, provider);
+    const strategy = await generateFullStrategy(input, businessAnalysis, existingFingerprints, provider);
+    const { pieces: contentPieces, safetyResults } = await generateContentPieces(strategy, input, existingFingerprints, provider);
 
     const costSummary = getTodayCost();
     const approvedCount = safetyResults.filter(r => r.approved).length;
@@ -311,8 +263,6 @@ export async function POST(request: NextRequest) {
         analysis: businessAnalysis,
         strategy,
         contentPieces,
-        businessProfileId,
-        audienceIds,
         status: "generated",
         safetySummary: {
           total: contentPieces.length,
@@ -326,12 +276,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Campaign generation error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    const isAIError = message.includes("NOT CONFIGURED") || message.includes("API_KEY");
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const isAIError = errorMessage.includes("NOT CONFIGURED") || errorMessage.includes("API_KEY");
     return NextResponse.json(
       {
         error: isAIError ? "AI PROVIDER NOT CONFIGURED" : "Error al generar campaña",
-        details: message,
+        details: errorMessage,
         hint: isAIError ? "Set OPENROUTER_API_KEY or GROQ_API_KEY in .env.local" : undefined,
       },
       { status: isAIError ? 503 : 500 }
