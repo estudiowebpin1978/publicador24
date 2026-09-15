@@ -50,7 +50,7 @@ async function chatCompletion(messages: ChatMessage[]): Promise<ChatResponse> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_API_KEY not set');
 
-  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
 
   let lastError: Error | null = null;
 
