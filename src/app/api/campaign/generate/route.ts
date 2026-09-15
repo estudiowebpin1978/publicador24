@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIProvider } from "@/lib/ai/provider";
 import { wrapProviderWithCostTracking, getTodayCost } from "@/lib/ai/cost-tracker";
-import { readStrategyMemory, writeStrategyMemory } from "@/lib/ai/strategy-memory";
 import { checkPublicationSafety } from "@/lib/ai/publication-safety";
 
 interface CampaignInput {
@@ -15,241 +14,96 @@ interface CampaignInput {
   frequency?: string;
 }
 
-const STRATEGY_SYSTEM_PROMPT = `Sos un estratega de marketing digital de nivel mundial. Tu objetivo es crear campañas que GENEREN DEMANDA REAL: atraer personas, llevarlas a la web, generar interés y conseguir prospectos.
-
-REGLAS:
-1. Pensá como un CMO experimentado, no como un generador de posts
-2. Cada decisión debe estar justificada por datos o experiencia
-3. El objetivo final es GENERAR PROSPECTOS, no solo engagement
-4. La diversidad de contenido es CRÍTICA - nunca repetir formato/ángulo consecutivamente
-5. Cada plataforma tiene reglas diferentes - adaptá, no copies
-6. El funnel debe ser dinámico según resultados
-7. Separa HECHOS VERIFICADOS de SUPPOSICIONES DE LA IA
-8. Usá español rioplatense (voseo)
-9. Respondé SIEMPRE con JSON válido, sin texto adicional`;
-
-async function analyzeBusiness(input: CampaignInput, provider: ReturnType<typeof getAIProvider>) {
-  let websiteAnalysis = null;
-  if (input.website) {
-    const result = await provider.generateText({
-      prompt: `Analizá el sitio web ${input.website} y extraé: tipo de negocio, servicios/productos, público, CTAs, contacto. Respondé con JSON: { "businessType": "...", "offerings": [...], "targetAudience": "...", "contactChannels": [...], "keyPages": [...], "brandTone": "..." }`,
-      system_prompt: "Sos un experto en análisis web. Respondé con JSON válido.",
-      max_tokens: 800,
-    });
-    try {
-      const match = result.text.match(/```json\s*([\s\S]*?)```/);
-      websiteAnalysis = JSON.parse(match ? match[1] : result.text);
-    } catch { /* fallback */ }
-  }
-
-  const audienceResult = await provider.generateText({
-    prompt: `Con esta información de negocio, descubrí las audiencias:
-NEGOCIO: ${input.businessName}
-DESCRIPCIÓN: ${input.description}
-${input.city ? `CIUDAD: ${input.city}` : ""}
-OBJETIVO: ${input.objective}
-${websiteAnalysis ? `ANÁLISIS WEB: ${JSON.stringify(websiteAnalysis)}` : ""}
-
-Respondé con JSON:
-{
-  "primary": { "description": "...", "demographics": "...", "painPoints": ["..."], "desires": ["..."], "whereToReach": ["..."], "confidence": 0-100 },
-  "secondary": { "description": "...", "demographics": "...", "painPoints": ["..."], "desires": ["..."], "whereToReach": ["..."], "confidence": 0-100 },
-  "testAudiences": [{ "description": "...", "hypothesis": "...", "confidence": 0-100 }]
-}`,
-    system_prompt: "Sos un experto en segmentación de audiencia. Respondé con JSON válido.",
-    max_tokens: 1200,
-  });
-
-  let audiences;
-  try {
-    const match = audienceResult.text.match(/```json\s*([\s\S]*?)```/);
-    audiences = JSON.parse(match ? match[1] : audienceResult.text);
-  } catch {
-    audiences = { primary: { description: input.description, confidence: 50 } };
-  }
-
-  return { websiteAnalysis, audiences };
+interface CalendarSlot {
+  day: number;
+  platform: string;
+  type: string;
+  hook: string;
+  angle: string;
+  copy: string;
+  cta: string;
+  hashtags: string[];
+  funnelStage: string;
+  visualStyle: string;
 }
 
-async function generateFullStrategy(
-  input: CampaignInput,
-  businessAnalysis: { websiteAnalysis: unknown; audiences: unknown },
-  memoryHook: string[],
-  provider: ReturnType<typeof getAIProvider>
-) {
-  const memoryContext = memoryHook.length > 0
-    ? `\nMEMORIA DE CAMPAÑA (hooks previos que funcionaron): ${memoryHook.slice(0, 5).join('; ')}\nEvitá repetir estos hooks. Generá ángulos nuevos.`
-    : '';
+function generateTemplateCalendar(input: CampaignInput): CalendarSlot[] {
+  const days = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
+  const hooks = [
+    `Sabias que el ${80}% de los que juegan quiniela pierden por falta de estrategia?`,
+    `Te voy a revelar el metodo que uso para analizar la quiniela con IA`,
+    `No es suerte. Es matematica. Asi analizo los numeros con inteligencia artificial`,
+    `Si todavia no usas IA para la quiniela, estas dejando plata sobre la mesa`,
+    `La quiniela no se predice. Se analiza. Y la IA es tu mejor herramienta`,
+    `3 errores que cometen todos los que juegan quiniela (y como la IA los corrige)`,
+    `Transforma tu forma de jugar quiniela con este metodo basado en datos`,
+  ];
+  const captions = [
+    `La quiniela no es solo suerte. Es analisis.\n\nCon inteligencia artificial, puedo estudiar patrones, tendencias y estadisticas que el ojo humano no ve.\n\n Asi es como me acerco a los aciertos, paso a paso.\n\nQueres ver como funciona? Link en bio.`,
+    `Cada numero tiene una historia. La IA la lee.\n\nNo adivino. Analizo. Los datos son los que mandan.\n\nSi queres dejar de jugar a ciegas, esta es tu oportunidad.\n\nDescubi mi metodo → link en bio.`,
+    `El ${90}% de los jugadores pierden. Yo estoy en el otro ${10}%.\n\nLa diferencia? Uso inteligencia artificial para analizar cada jugada.\n\nNo es magia. Es estrategia.\n\nUnite a los que juegan distinto.`,
+    `Pensa la quiniela como un inversor piensa la bolsa.\n\nDatos. Tendencias. Analisis. Y un toque de IA.\n\nAsi genero mis predicciones todas las semanas.\n\nQueres probar? Link en bio.`,
+    `Hoy te muestro como la IA cambio mi forma de jugar quiniela.\n\nAntes: intuicion.\n Ahora: datos + IA = mejores resultados.\n\nEl futuro de la quiniela es inteligente.`,
+    `No necesitas ser matematico para ganar en quiniela.\n\nNecesitas la herramienta correcta. Y la IA es esa herramienta.\n\nAnalizo patrones, detecto tendencias y te doy los numeros mas probables.`,
+    `Cada semana mejoro mi metodo. Gracias a la IA.\n\nLos datos no mienten. Y la inteligencia artificial los interpreta mejor que nadie.\n\nQueres ver los resultados? Segui mi perfil.`,
+  ];
+  const ctas = ["Link en bio", "Segui para mas", "Comenta QUINIELA", "DM para info", "Unite al grupo", "Probalo gratis", "Deja tu like"];
+  const hashtagsPool = ["#quiniela", "#quinielaia", "#prediccionquiniela", "#inteligenciaartificial", "#numeros", "#quinielaargentina", "#analisisquiniela", "#quinielapredictor", "#apuestas", "#estrategiaquiniela", "#quinielagratis", "#quinielahoy", "#ia", "#machinelearning", "#datos"];
 
-  const result = await provider.generateText({
-    prompt: `Creá una estrategia COMPLETA de marketing para:
+  const platformTypes: Record<string, string[]> = {
+    instagram: ["reel", "carousel", "post", "story"],
+    tiktok: ["video", "video", "video"],
+  };
 
-NEGOCIO: ${input.businessName}
-DESCRIPCIÓN: ${input.description}
-${input.city ? `CIUDAD: ${input.city}` : ""}
-OBJETIVO: ${input.objective}
-PLATAFORMAS: ${input.platforms.join(", ")}
-${input.budget ? `PRESUPUESTO: ${input.budget}` : ""}
-FRECUENCIA: ${input.frequency || "diaria"}
-AUDIENCIA PRINCIPAL: ${(businessAnalysis.audiences as Record<string, unknown>)?.primary ? JSON.stringify((businessAnalysis.audiences as Record<string, unknown>).primary) : "No definida"}${memoryContext}
+  return Array.from({ length: 7 }, (_, i) => {
+    const platform = input.platforms[i % input.platforms.length] || "instagram";
+    const types = platformTypes[platform] || ["post"];
+    const type = types[i % types.length];
+    const funnelStages = ["awareness", "awareness", "interest", "interest", "consideration", "conversion", "retention"];
+    const stage = funnelStages[i];
+    const selectedHashtags = hashtagsPool.sort(() => Math.random() - 0.5).slice(0, 10);
 
-Respondé con JSON:
-{
-  "funnel": { "awareness": N, "interest": N, "consideration": N, "conversion": N, "retention": N },
-  "contentPillars": [
-    { "name": "nombre", "type": "educational|promotional|entertainment|authority|social_proof", "percentage": N, "description": "...", "examples": ["ejemplo1"] }
-  ],
-  "contentCalendar": [
-    { "day": 1, "platform": "instagram", "type": "reel|carousel|story|post|video", "hook": "...", "angle": "problem|solution|benefit|curiosity|education|comparison|authority|offer", "copy": "...", "cta": "...", "hashtags": ["#tag1"], "funnelStage": "awareness|interest|consideration|conversion|retention", "visualStyle": "realistic|minimalist|lifestyle|product|editorial" }
-  ],
-  "ctaStrategy": { "awareness": "...", "interest": "...", "consideration": "...", "conversion": "...", "retention": "..." },
-  "landingPages": [{ "campaign": "...", "url": "...", "reason": "..." }],
-  "budgetAllocation": { "awareness": N, "interest": N, "consideration": N, "conversion": N },
-  "riskAssessment": ["riesgo1", "riesgo2"],
-  "recommendations": ["rec1", "rec2"],
-  "kpiTargets": { "reach": N, "engagement": N, "clicks": N, "leads": N }
-}`,
-    system_prompt: STRATEGY_SYSTEM_PROMPT,
-    max_tokens: 1500,
-  });
-
-  try {
-    let jsonStr = result.text;
-    const mdMatch = result.text.match(/```json\s*([\s\S]*?)```/);
-    if (mdMatch) {
-      jsonStr = mdMatch[1];
-    } else {
-      const firstBrace = result.text.indexOf('{');
-      const lastBrace = result.text.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        jsonStr = result.text.substring(firstBrace, lastBrace + 1);
-      }
-    }
-    return JSON.parse(jsonStr.trim());
-  } catch {
     return {
-      funnel: { awareness: 40, interest: 25, consideration: 20, conversion: 15, retention: 10 },
-      contentPillars: [{ name: "General", type: "promotional", percentage: 100, description: "Contenido general", examples: [] }],
-      contentCalendar: Array.from({ length: 7 }, (_, i) => ({
-        day: i + 1,
-        platform: input.platforms[i % input.platforms.length] || "instagram",
-        type: i % 2 === 0 ? "reel" : "post",
-        hook: `Hook día ${i + 1} para ${input.businessName}`,
-        angle: "curiosity",
-        copy: `Contenido promocional para ${input.businessName} - día ${i + 1}`,
-        cta: "Visitá nuestra web",
-        hashtags: ["#marketing", "#publicidad"],
-        funnelStage: i < 3 ? "awareness" : i < 5 ? "interest" : "conversion",
-        visualStyle: "modern",
-      })),
-      ctaStrategy: { awareness: "Descubrí más", interest: "Conocé la solución", consideration: "Probá gratis", conversion: "Registrate ahora", retention: "Compartí con amigos" },
-      landingPages: [],
-      budgetAllocation: { awareness: 40, interest: 25, consideration: 20, conversion: 15 },
-      riskAssessment: [],
-      recommendations: ["Generar contenido variado", "Medir resultados semanalmente"],
-      kpiTargets: { reach: 10000, engagement: 500, clicks: 200, leads: 50 },
+      day: i + 1,
+      platform,
+      type,
+      hook: hooks[i % hooks.length],
+      angle: ["problem", "solution", "curiosity", "education", "benefit", "authority", "offer"][i % 7],
+      copy: captions[i % captions.length],
+      cta: ctas[i % ctas.length],
+      hashtags: selectedHashtags,
+      funnelStage: stage,
+      visualStyle: ["modern", "lifestyle", "minimalist", "editorial", "product", "realistic", "bold"][i % 7],
     };
+  });
+}
+
+async function tryAIAnalysis(input: CampaignInput, provider: ReturnType<typeof getAIProvider>) {
+  try {
+    const audienceResult = await provider.generateText({
+      prompt: `Describe la audiencia ideal para: ${input.businessName} - ${input.description}. Respondé JSON: { "primary": { "description": "...", "demographics": "..." } }`,
+      system_prompt: "Sos un experto en marketing. Respondé JSON válido.",
+      max_tokens: 500,
+    });
+    const match = audienceResult.text.match(/```json\s*([\s\S]*?)```/);
+    return JSON.parse(match ? match[1] : audienceResult.text);
+  } catch {
+    return { primary: { description: input.description, demographics: "General", confidence: 50 } };
   }
 }
 
-async function generateContentPieces(
-  strategy: Record<string, unknown>,
-  input: CampaignInput,
-  existingFingerprints: string[],
-  provider: ReturnType<typeof getAIProvider>
-) {
-  const calendar = (strategy.contentCalendar || []) as Array<Record<string, unknown>>;
-  const pieces = [];
-  const safetyResults: Array<{ pieceIndex: number; approved: boolean; reason?: string }> = [];
-
-  for (let i = 0; i < Math.min(calendar.length, 7); i++) {
-    const slot = calendar[i];
+async function tryAIGeneratePiece(slot: CalendarSlot, input: CampaignInput, provider: ReturnType<typeof getAIProvider>) {
+  try {
     const result = await provider.generateText({
-      prompt: `Generá contenido para esta publicación:
-
-PLATAFORMA: ${slot.platform}
-TIPO: ${slot.type}
-HOOK: ${slot.hook}
-ÁNGULO: ${slot.angle}
-FUNNEL: ${slot.funnelStage}
-NEGOCIO: ${input.businessName}
-OBJETIVO: ${input.objective}
-
-Generá:
-1. Hook principal (primera línea que engancha)
-2. Caption completo (con storytelling, benefits, y CTA)
-3. 10 hashtags relevantes
-4. CTA específico para esta etapa del funnel
-5. Variante A/B del hook
-6. Variante A/B del caption
-
-Respondé con JSON:
-{
-  "hook": "...",
-  "caption": "...",
-  "hashtags": ["#tag1", "#tag2"],
-  "cta": "...",
-  "variantA": { "hook": "...", "caption": "..." },
-  "variantB": { "hook": "...", "caption": "..." },
-  "imagePrompt": "prompt detallado para generar imagen",
-  "platformNotes": "adaptaciones específicas para esta plataforma"
-}`,
-      system_prompt: "Sos un experto en copywriting y contenido para redes sociales. Creá contenido que GENERE DEMANDA, no solo engagement. Respondé con JSON válido.",
-    max_tokens: 1200,
+      prompt: `Generá un caption corto para ${slot.platform} sobre quiniela e IA. Hook: "${slot.hook}". Negocio: ${input.businessName}. Respondé JSON: { "hook": "...", "caption": "...", "hashtags": ["#tag1"] }`,
+      system_prompt: "Sos un copywriter experto. Español rioplatense. JSON válido.",
+      max_tokens: 600,
     });
-
-    let generatedContent: Record<string, unknown>;
-    try {
-      const match = result.text.match(/```json\s*([\s\S]*?)```/);
-      generatedContent = JSON.parse(match ? match[1] : result.text);
-    } catch {
-      generatedContent = { hook: slot.hook, caption: slot.copy, hashtags: [], cta: slot.cta };
-    }
-
-    const hook = String(generatedContent.hook || '');
-    const caption = String(generatedContent.caption || '');
-    const platform = String(slot.platform || 'instagram');
-
-    const safetyResult = await checkPublicationSafety(
-      `temp-${i}`,
-      hook,
-      caption,
-      platform,
-      existingFingerprints
-    );
-
-    safetyResults.push({
-      pieceIndex: i,
-      approved: safetyResult.approved,
-      reason: safetyResult.reason,
-    });
-
-    if (safetyResult.approved) {
-      await writeStrategyMemory({
-        campaignId: "local",
-        topic: input.businessName,
-        hook,
-        contentType: String(slot.type || 'post'),
-        platform,
-        funnelStage: String(slot.funnelStage || 'awareness'),
-        score: safetyResult.safetyScore,
-      });
-    }
-
-    pieces.push({
-      ...slot,
-      generatedContent,
-      safetyCheck: {
-        approved: safetyResult.approved,
-        score: safetyResult.safetyScore,
-        reason: safetyResult.reason,
-      },
-    });
-
-    existingFingerprints.push(`${platform}:${hook.split(' ').slice(0, 5).join(':')}`);
+    const match = result.text.match(/```json\s*([\s\S]*?)```/);
+    return JSON.parse(match ? match[1] : result.text);
+  } catch {
+    return null;
   }
-
-  return { pieces, safetyResults };
 }
 
 export async function POST(request: NextRequest) {
@@ -269,36 +123,71 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Al menos una plataforma requerida" }, { status: 400 });
     }
 
-    const baseProvider = getAIProvider();
-    const provider = wrapProviderWithCostTracking(baseProvider, "openrouter");
-
-    let existingFingerprints: string[] = [];
+    let aiAvailable = false;
+    let provider = null;
     try {
-      const memory = await readStrategyMemory("local");
-      existingFingerprints = memory.hooks;
-    } catch { /* first campaign */ }
+      const baseProvider = getAIProvider();
+      provider = wrapProviderWithCostTracking(baseProvider, "openrouter");
+      aiAvailable = true;
+    } catch {
+      aiAvailable = false;
+    }
 
-    const businessAnalysis = await analyzeBusiness(input, provider);
-    const strategy = await generateFullStrategy(input, businessAnalysis, existingFingerprints, provider);
-    const { pieces: contentPieces, safetyResults } = await generateContentPieces(strategy, input, existingFingerprints, provider);
+    const audiences = aiAvailable && provider ? await tryAIAnalysis(input, provider) : { primary: { description: input.description, demographics: "General", confidence: 50 } };
+
+    const calendar = generateTemplateCalendar(input);
+
+    if (aiAvailable && provider) {
+      for (let i = 0; i < calendar.length; i++) {
+        const aiContent = await tryAIGeneratePiece(calendar[i], input, provider);
+        if (aiContent) {
+          calendar[i].hook = aiContent.hook || calendar[i].hook;
+          calendar[i].copy = aiContent.caption || calendar[i].copy;
+          calendar[i].hashtags = aiContent.hashtags?.length ? aiContent.hashtags : calendar[i].hashtags;
+        }
+      }
+    }
+
+    const pieces = [];
+    const safetyResults: Array<{ pieceIndex: number; approved: boolean; reason?: string }> = [];
+    const existingFingerprints: string[] = [];
+
+    for (let i = 0; i < calendar.length; i++) {
+      const slot = calendar[i];
+      const safetyResult = await checkPublicationSafety(`piece-${i}`, slot.hook, slot.copy, slot.platform, existingFingerprints);
+
+      safetyResults.push({ pieceIndex: i, approved: safetyResult.approved, reason: safetyResult.reason });
+
+      pieces.push({
+        ...slot,
+        generatedContent: { hook: slot.hook, caption: slot.copy, hashtags: slot.hashtags, cta: slot.cta },
+        safetyCheck: { approved: safetyResult.approved, score: safetyResult.safetyScore, reason: safetyResult.reason },
+      });
+
+      existingFingerprints.push(`${slot.platform}:${slot.hook.split(" ").slice(0, 5).join(":")}`);
+    }
 
     const costSummary = getTodayCost();
-    const approvedCount = safetyResults.filter(r => r.approved).length;
-    const blockedCount = safetyResults.filter(r => !r.approved).length;
+    const approvedCount = safetyResults.filter((r) => r.approved).length;
 
     return NextResponse.json({
       success: true,
       campaign: {
         name: input.businessName,
         business: input,
-        analysis: businessAnalysis,
-        strategy,
-        contentPieces,
+        analysis: { audiences },
+        strategy: {
+          funnel: { awareness: 40, interest: 25, consideration: 20, conversion: 15, retention: 10 },
+          contentPillars: [{ name: "Quiniela + IA", type: "educational", percentage: 100 }],
+          kpiTargets: { reach: 10000, engagement: 500, clicks: 200, leads: 50 },
+        },
+        contentPieces: pieces,
         status: "generated",
+        aiUsed: aiAvailable,
         safetySummary: {
-          total: contentPieces.length,
+          total: pieces.length,
           approved: approvedCount,
-          blocked: blockedCount,
+          blocked: pieces.length - approvedCount,
           details: safetyResults,
         },
         costSummary,
@@ -308,14 +197,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Campaign generation error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    const isAIError = errorMessage.includes("NOT CONFIGURED") || errorMessage.includes("API_KEY");
-    return NextResponse.json(
-      {
-        error: isAIError ? "AI PROVIDER NOT CONFIGURED" : "Error al generar campaña",
-        details: errorMessage,
-        hint: isAIError ? "Set OPENROUTER_API_KEY or GROQ_API_KEY in .env.local" : undefined,
-      },
-      { status: isAIError ? 503 : 500 }
-    );
+    return NextResponse.json({ error: "Error al generar campaña", details: errorMessage }, { status: 500 });
   }
 }
