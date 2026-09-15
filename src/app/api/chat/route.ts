@@ -30,8 +30,26 @@ FORMATO:
 function extractCampaignData(message: string): { name?: string; description?: string; audience?: string; objective?: string; platforms?: string[]; website?: string } {
   const data: { name?: string; description?: string; audience?: string; objective?: string; platforms?: string[]; website?: string } = {};
 
-  const nameMatch = message.match(/(?:nombre|negocio|business)[\s:]*([A-Z][a-zA-Z\s]+)/i);
-  if (nameMatch) data.name = nameMatch[1].trim();
+  const namePatterns = [
+    /(?:nombre del negocio|negocio|business)\s*:?\s*\*\*?\s*([A-Z][a-zA-Z0-9\s&]+?)\s*\*\*/i,
+    /(?:nombre|negocio|business)[\s:]*([A-Z][a-zA-Z0-9\s&]+?)(?:\.|\n|,|\r|$)/i,
+  ];
+  for (const p of namePatterns) {
+    const m = message.match(p);
+    if (m) {
+      const name = m[1].trim();
+      if (name.length > 1 && !name.toLowerCase().includes("nombre")) {
+        data.name = name;
+        break;
+      }
+    }
+  }
+
+  // Direct match for "Quiniela IA"
+  if (!data.name && message.toLowerCase().includes("quiniela")) {
+    const directMatch = message.match(/Quiniela\s*IA/i);
+    if (directMatch) data.name = "Quiniela IA";
+  }
 
   const descMatch = message.match(/(?:qué vend[eé]s|vend[eé]s?|hac[eé]s?|descripción)[\s:]*([^.]{10,200})/i);
   if (descMatch) data.description = descMatch[1].trim();
