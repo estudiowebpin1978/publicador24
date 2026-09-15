@@ -1,23 +1,8 @@
 {
-    "framework":  "nextjs",
-    "version":  2,
-    "buildCommand":  "npm run build",
-    "installCommand":  "npm install",
-    "outputDirectory":  ".next",
-    "env":  {
-                "FFMPEG_PATH":  "/usr/bin/ffmpeg",
-                "APP_URL":  "https://publicador24.netlify.app",
-                "OPENROUTER_MODEL":  "google/gemini-3.8-flash",
-                "NEXT_PUBLIC_CONVEX_URL":  "https://fine-owl-595.convex.cloud",
-                "GROQ_MODEL":  "llama-3.3-70b-versatile",
-                "FREETTS_API_KEY":  "ft_live_xmYGa610BCE8huq0nWxjp7AFOPbSTTgA",
-                "AI_MODEL":  "google/gemini-3.8-flash",
-                "FFMPEG_BIN_DIR":  "/usr/bin",
-                "AI_PROVIDER":  "openrouter",
-                "BUFFER_API_KEY":  "Sny3tYp_QY_NvnvTcdpgfSIm05qmmhmVvutKi5VsMMt",
-                "OPENROUTER_API_KEY":  "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",
-                "GROQ_API_KEY":  "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",
-                "POLLINATIONS_API_KEY":  "sk_q3w4sHjxQcabYY89iwCz31tWVAEVY88m"
-            },
-    "devCommand":  "npm run dev"
+  "framework": "nextjs",
+  "version": 2,
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "outputDirectory": ".next",
+  "devCommand": "npm run dev"
 }
