@@ -28,7 +28,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [storedUser, router])
 
   if (!storedUser) {
-    return null
+    return (
+      <div className="flex min-h-screen items-center justify-center p-8">
+        <div className="text-center space-y-4">
+          <h2 className="text-xl font-bold">Necesitas iniciar sesión</h2>
+          <p className="text-muted-foreground">Serás redirigido automáticamente...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
