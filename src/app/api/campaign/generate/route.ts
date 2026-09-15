@@ -34,7 +34,7 @@ async function analyzeBusiness(input: CampaignInput, provider: ReturnType<typeof
     const result = await provider.generateText({
       prompt: `Analizá el sitio web ${input.website} y extraé: tipo de negocio, servicios/productos, público, CTAs, contacto. Respondé con JSON: { "businessType": "...", "offerings": [...], "targetAudience": "...", "contactChannels": [...], "keyPages": [...], "brandTone": "..." }`,
       system_prompt: "Sos un experto en análisis web. Respondé con JSON válido.",
-      max_tokens: 1500,
+      max_tokens: 800,
     });
     try {
       const match = result.text.match(/```json\s*([\s\S]*?)```/);
@@ -57,7 +57,7 @@ Respondé con JSON:
   "testAudiences": [{ "description": "...", "hypothesis": "...", "confidence": 0-100 }]
 }`,
     system_prompt: "Sos un experto en segmentación de audiencia. Respondé con JSON válido.",
-    max_tokens: 2000,
+    max_tokens: 1200,
   });
 
   let audiences;
@@ -110,7 +110,7 @@ Respondé con JSON:
   "kpiTargets": { "reach": N, "engagement": N, "clicks": N, "leads": N }
 }`,
     system_prompt: STRATEGY_SYSTEM_PROMPT,
-    max_tokens: 6000,
+    max_tokens: 1500,
   });
 
   try {
@@ -162,7 +162,7 @@ async function generateContentPieces(
   const pieces = [];
   const safetyResults: Array<{ pieceIndex: number; approved: boolean; reason?: string }> = [];
 
-  for (let i = 0; i < Math.min(calendar.length, 14); i++) {
+  for (let i = 0; i < Math.min(calendar.length, 7); i++) {
     const slot = calendar[i];
     const result = await provider.generateText({
       prompt: `Generá contenido para esta publicación:
@@ -195,7 +195,7 @@ Respondé con JSON:
   "platformNotes": "adaptaciones específicas para esta plataforma"
 }`,
       system_prompt: "Sos un experto en copywriting y contenido para redes sociales. Creá contenido que GENERE DEMANDA, no solo engagement. Respondé con JSON válido.",
-      max_tokens: 2000,
+    max_tokens: 1200,
     });
 
     let generatedContent: Record<string, unknown>;
