@@ -55,7 +55,7 @@ IMPORTANTE:
 - Si falta información clave, preguntala antes de asumir
 - El objetivo final es GENERAR PROSPECTOS, no solo likes`;
 
-async function analyzeWebsite(url: string, ai: ReturnType<typeof getAIProvider>) {
+async function analyzeWebsite(url: string, provider: ReturnType<typeof getAIProvider>) {
   const prompt = `Analizá el siguiente sitio web y extraé información clave. NO inventes información.
 
 URL: ${url}
@@ -76,7 +76,7 @@ Respondé con JSON:
   "assumptions": ["suposición1", "suposición2"]
 }`;
 
-  const result = await ai.generateText({
+  const result = await provider.generateText({
     prompt,
     system_prompt: "Sos un experto en análisis de sitios web y negocios digitales. Respondé SIEMPRE con JSON válido.",
     max_tokens: 1500,
@@ -91,7 +91,7 @@ Respondé con JSON:
   }
 }
 
-async function discoverAudience(businessInfo: string, ai: ReturnType<typeof getAIProvider>) {
+async function discoverAudience(businessInfo: string, provider: ReturnType<typeof getAIProvider>) {
   const prompt = `Con la siguiente información de negocio, descubrí las audiencias posibles.
 
 Negocio: ${businessInfo}
@@ -125,7 +125,7 @@ Respondé con JSON:
   ]
 }`;
 
-  const result = await ai.generateText({
+  const result = await provider.generateText({
     prompt,
     system_prompt: "Sos un experto en segmentación de audiencia y marketing digital. Respondé SIEMPRE con JSON válido.",
     max_tokens: 2000,
@@ -146,7 +146,7 @@ async function generateStrategy(input: {
   audience: string;
   platforms: string[];
   budget?: string;
-  ai: ReturnType<typeof getAIProvider>;
+  provider: ReturnType<typeof getAIProvider>;
 }) {
   const prompt = `Creá una estrategia de marketing completa para:
 
@@ -190,7 +190,7 @@ Respondé con JSON:
   "recommendations": ["rec1", "rec2"]
 }`;
 
-  const result = await ai.generateText({
+  const result = await input.provider.generateText({
     prompt,
     system_prompt: "Sos un estratega de marketing digital experto. Respondé SIEMPRE con JSON válido. Usá español rioplatense.",
     max_tokens: 4000,
@@ -208,14 +208,14 @@ Respondé con JSON:
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { message, history = [], context } = body;
+    const { message, history = [] } = body;
 
     if (!message?.trim()) {
       return NextResponse.json({ error: "Mensaje requerido" }, { status: 400 });
     }
 
-    const baseAI = getAIProvider();
-    const ai = wrapProviderWithCostTracking(baseAI, 'openrouter');
+    const baseProvider = getAIProvider();
+    const provider = wrapProviderWithCostTracking(baseProvider, "openrouter");
 
     const isUrl = /https?:\/\/[^\s]+/.test(message);
     const isCampaignRequest = /campaña|campaign|quiero conseguir|necesito contenido|promocionar/i.test(message);
@@ -227,12 +227,12 @@ export async function POST(request: NextRequest) {
     if (isWebsiteAnalysis && isUrl) {
       const urlMatch = message.match(/https?:\/\/[^\s]+/);
       if (urlMatch) {
-        const websiteData = await analyzeWebsite(urlMatch[0], ai);
+        const websiteData = await analyzeWebsite(urlMatch[0], provider);
         data.websiteAnalysis = websiteData;
         response = `Analicé el sitio web. Esto es lo que encontré:\n\n**Negocio:** ${websiteData.businessName || "No identificado"}\n**Tipo:** ${websiteData.businessType || "No identificado"}\n**Ofertas:** ${(websiteData.offerings || []).join(", ") || "No identificadas"}\n**Público inferido:** ${websiteData.targetAudience || "No identificado"}\n**Contacto:** ${(websiteData.contactChannels || []).join(", ") || "No encontrado"}\n\n**Hechos verificados:**\n${(websiteData.verifiedFacts || []).map((f: string) => `- ${f}`).join("\n") || "- No se pudieron verificar"}\n\n**Suposiciones de la IA:**\n${(websiteData.assumptions || []).map((a: string) => `- ${a}`).join("\n") || "- Ninguna"}\n\n¿Querés que genere una campaña completa para este negocio? Decime el objetivo y las plataformas.`;
       }
     } else if (isCampaignRequest) {
-      const audienceData = await discoverAudience(message, ai);
+      const audienceData = await discoverAudience(message, provider);
       data.audienceDiscovery = audienceData;
 
       const platforms = ["instagram", "facebook"];
@@ -241,18 +241,13 @@ export async function POST(request: NextRequest) {
         objective: "Conseguir clientes y prospectos",
         audience: audienceData.primary?.description || message,
         platforms,
-        ai,
+        provider,
       });
       data.strategy = strategyData;
 
       response = `¡Perfecto! Generé una estrategia completa:\n\n**PÚBLICO DESCUBIERTO:**\n- Principal: ${audienceData.primary?.description || "Por definir"} (Confianza: ${audienceData.primary?.confidence || 0}%)\n- Secundario: ${audienceData.secondary?.description || "Por definir"} (Confianza: ${audienceData.secondary?.confidence || 0}%)\n\n**ESTRATEGIA:**\n- Awareness: ${strategyData.funnel?.awareness || 40}%\n- Interest: ${strategyData.funnel?.interest || 25}%\n- Consideration: ${strategyData.funnel?.consideration || 20}%\n- Conversion: ${strategyData.funnel?.conversion || 15}%\n- Retention: ${strategyData.funnel?.retention || 10}%\n\n**PILARES DE CONTENIDO:**\n${(strategyData.pillars || []).map((p: { name: string; objective: string }) => `- ${p.name}: ${p.objective}`).join("\n") || "- Por definir"}\n\n¿Querés que genere el contenido para las primeras 2 semanas? ¿O preferís ajustar algo primero?`;
     } else {
-      const historyMessages = history.map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      }));
-
-      const result = await ai.generateText({
+      const result = await provider.generateText({
         prompt: message,
         system_prompt: SYSTEM_PROMPT,
         max_tokens: 2000,
@@ -270,12 +265,12 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("Chat API error:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    const isAIError = message.includes("NOT CONFIGURED") || message.includes("API_KEY");
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const isAIError = errorMessage.includes("NOT CONFIGURED") || errorMessage.includes("API_KEY");
     return NextResponse.json(
       {
         error: isAIError ? "AI PROVIDER NOT CONFIGURED" : "Error al procesar el mensaje",
-        details: message,
+        details: errorMessage,
         hint: isAIError ? "Set OPENROUTER_API_KEY or GROQ_API_KEY in .env.local" : undefined,
       },
       { status: isAIError ? 503 : 500 }
