@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ConvexHttpClient } from "convex/browser";
-
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
 async function callBuffer(query: string, variables?: Record<string, unknown>) {
   const apiKey = process.env.BUFFER_API_KEY;
@@ -37,29 +34,18 @@ async function getBufferChannels() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { api } = await import("@convex/_generated/api");
     const body = await request.json();
-    const { contentPieceId, platform, scheduleAt } = body;
+    const { hook, caption, hashtags, platform, scheduleAt } = body;
 
-    if (!contentPieceId) {
+    if (!hook || !caption) {
       return NextResponse.json(
-        { error: "contentPieceId is required" },
+        { error: "hook and caption are required" },
         { status: 400 }
       );
     }
 
-    // Get the content piece
-    const piece = await convex.query(api.contentPieces.getById, { id: contentPieceId });
-    if (!piece) {
-      return NextResponse.json(
-        { error: "Content piece not found" },
-        { status: 404 }
-      );
-    }
-
-    // Get Buffer channels
     const channels = await getBufferChannels();
-    const targetPlatform = platform || piece.platform || "instagram";
+    const targetPlatform = platform || "instagram";
     const channel = channels.find((c) => c.service === targetPlatform) || channels[0];
 
     if (!channel) {
@@ -69,10 +55,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build the post text
-    const text = `${piece.hook}\n\n${piece.body}\n\n${piece.hashtags?.map((h: string) => `#${h}`).join(" ") || ""}`;
+    const hashtagStr = Array.isArray(hashtags)
+      ? hashtags.map((h: string) => (h.startsWith("#") ? h : `#${h}`)).join(" ")
+      : "";
+    const text = `${hook}\n\n${caption}${hashtagStr ? "\n\n" + hashtagStr : ""}`;
 
-    // Publish to Buffer
     const input: Record<string, unknown> = {
       channelId: channel.id,
       text,
@@ -83,6 +70,12 @@ export async function POST(request: NextRequest) {
       input.schedulingType = "scheduled";
     } else {
       input.schedulingType = "sendNow";
+    }
+
+    if (targetPlatform === "instagram") {
+      input.metadata = { instagram: { type: "post", shouldShareToFeed: true } };
+    } else if (targetPlatform === "tiktok") {
+      input.metadata = { tiktok: {} };
     }
 
     const result = await callBuffer(
@@ -101,23 +94,6 @@ export async function POST(request: NextRequest) {
         { error: postResult?.message || "Failed to publish" },
         { status: 500 }
       );
-    }
-
-    // Record the republish
-    try {
-      await convex.mutation(api.publishedPosts.create, {
-        scheduledPostId: contentPieceId,
-        socialAccountId: channel.id,
-        platform: targetPlatform,
-        platformPostId: postResult.post.id,
-        platformPostUrl: `https://${channel.service}.com/post/${postResult.post.id}`,
-        caption: text,
-        hashtags: piece.hashtags || [],
-        mediaUrls: [],
-        publishedAt: Date.now(),
-      });
-    } catch {
-      // Best effort
     }
 
     return NextResponse.json({
