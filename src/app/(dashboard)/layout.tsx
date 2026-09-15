@@ -2,7 +2,6 @@
 
 import React from "react"
 import { useRouter } from "next/navigation"
-import ConvexClientProvider from "@/components/providers/convex-provider"
 import { AppLayout } from "@/components/layout/app-layout"
 import { ErrorBoundary } from "@/components/error-boundary"
 
@@ -33,12 +32,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <ConvexClientProvider>
-      <AppLayout>
-        <ErrorBoundary>
-          {children}
-        </ErrorBoundary>
-      </AppLayout>
-    </ConvexClientProvider>
+    <AppLayout>
+      <ErrorBoundary>
+        {children}
+      </ErrorBoundary>
+    </AppLayout>
   )
 }

@@ -1,49 +1,68 @@
 "use client"
 
-import { createContext, useContext, useState, ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { supabase } from "@/lib/supabase/client"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 interface User {
   userId: string
   email: string
   name: string
-  token: string
 }
 
 interface AuthContextType {
   isAuthenticated: boolean
   user: User | null
   logout: () => void
+  loading: boolean
 }
 
 const AuthContext = createContext<AuthContextType>({
   isAuthenticated: false,
   user: null,
   logout: () => {},
+  loading: true,
 })
 
-function getStoredUser(): User | null {
-  if (typeof window === "undefined") return null
-  const stored = localStorage.getItem("autopublisher_user")
-  if (!stored) return null
-  try {
-    return JSON.parse(stored)
-  } catch {
-    localStorage.removeItem("autopublisher_user")
-    return null
+function mapUser(supabaseUser: SupabaseUser): User {
+  return {
+    userId: supabaseUser.id,
+    email: supabaseUser.email ?? "",
+    name: supabaseUser.user_metadata?.name ?? supabaseUser.email?.split("@")[0] ?? "",
   }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => getStoredUser())
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const logout = () => {
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser(mapUser(session.user))
+      }
+      setLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(mapUser(session.user))
+      } else {
+        setUser(null)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const logout = async () => {
+    await supabase.auth.signOut()
     setUser(null)
-    localStorage.removeItem("autopublisher_user")
     window.location.href = "/login"
   }
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated: !!user, user, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated: !!user, user, logout, loading }}>
       {children}
     </AuthContext.Provider>
   )

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Sparkles } from "lucide-react"
-import { useMutation, api } from "@/hooks/use-convex"
+import { supabase } from "@/lib/supabase/client"
 
 export default function RegisterPage() {
   const [name, setName] = React.useState("")
@@ -17,7 +17,6 @@ export default function RegisterPage() {
   const [error, setError] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
   const router = useRouter()
-  const registerMutation = useMutation(api.auth.register)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,13 +24,21 @@ export default function RegisterPage() {
     setIsLoading(true)
 
     try {
-      const result = await registerMutation({ email, password, name })
-      localStorage.setItem("autopublisher_user", JSON.stringify({
-        userId: result.userId,
-        email: result.email,
-        name: result.name,
-        token: result.token,
-      }))
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { name } },
+      })
+      if (error) throw error
+
+      if (data.user) {
+        localStorage.setItem("autopublisher_user", JSON.stringify({
+          userId: data.user.id,
+          email: data.user.email,
+          name,
+        }))
+      }
+
       router.push("/dashboard")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al crear cuenta"
