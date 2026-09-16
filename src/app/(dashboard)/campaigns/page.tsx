@@ -15,11 +15,33 @@ import {
   MoreHorizontal,
 } from "lucide-react"
 import Link from "next/link"
-import { useQuery } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
+
+interface Campaign {
+  id: string
+  name: string
+  description: string
+  idea: string
+  objective: string
+  platforms: string[]
+  status: string
+  content_count: number
+  published_count: number
+  created_at: number
+}
 
 export default function CampaignsPage() {
-  const campaigns = useQuery(api.campaigns.list, {})
+  const [campaigns, setCampaigns] = React.useState<Campaign[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    fetch("/api/campaigns")
+      .then((r) => r.json())
+      .then((data) => {
+        setCampaigns(data.campaigns || [])
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
 
   const statusColors: Record<string, string> = {
     DRAFT: "bg-gray-100 text-gray-800",
@@ -27,6 +49,24 @@ export default function CampaignsPage() {
     PAUSED: "bg-yellow-100 text-yellow-800",
     COMPLETED: "bg-blue-100 text-blue-800",
     ARCHIVED: "bg-gray-100 text-gray-500",
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Campañas</h1>
+            <p className="text-muted-foreground">Cargando...</p>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}><CardContent className="h-48 animate-pulse bg-muted" /></Card>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -59,8 +99,8 @@ export default function CampaignsPage() {
           </Card>
         </Link>
 
-        {campaigns?.map((campaign) => (
-          <Card key={campaign._id} className="hover:shadow-md transition-shadow">
+        {campaigns.map((campaign) => (
+          <Card key={campaign.id} className="hover:shadow-md transition-shadow">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -84,7 +124,7 @@ export default function CampaignsPage() {
                 )}
 
                 <div className="flex flex-wrap gap-1">
-                  {campaign.platforms.map((platform) => (
+                  {(campaign.platforms || []).map((platform) => (
                     <Badge key={platform} variant="outline" className="text-xs">
                       {platform}
                     </Badge>
@@ -92,18 +132,18 @@ export default function CampaignsPage() {
                 </div>
 
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{campaign.contentCount} piezas</span>
-                  <span>{campaign.publishedCount} publicadas</span>
+                  <span>{campaign.content_count} piezas</span>
+                  <span>{campaign.published_count} publicadas</span>
                 </div>
 
                 <div className="flex gap-2">
-                  <Link href={`/campaigns/${campaign._id}`} className="flex-1">
+                  <Link href={`/campaigns/${campaign.id}`} className="flex-1">
                     <Button variant="outline" size="sm" className="w-full">
                       <Eye className="size-4 mr-1" />
                       Ver
                     </Button>
                   </Link>
-                  <Link href={`/analytics?campaign=${campaign._id}`} className="flex-1">
+                  <Link href={`/analytics?campaign=${campaign.id}`} className="flex-1">
                     <Button variant="outline" size="sm" className="w-full">
                       <BarChart3 className="size-4 mr-1" />
                       Métricas
@@ -116,7 +156,7 @@ export default function CampaignsPage() {
         ))}
       </div>
 
-      {campaigns && campaigns.length === 0 && (
+      {campaigns.length === 0 && (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Sparkles className="size-12 text-muted-foreground mb-4" />

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAIProvider } from "@/lib/ai/provider";
 import { wrapProviderWithCostTracking, getTodayCost } from "@/lib/ai/cost-tracker";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -124,9 +125,33 @@ export async function POST(request: NextRequest) {
       response = `Recibí los datos para **${campaignData.name || 'Quiniela IA'}**:\n\n- **Negocio:** ${campaignData.description || 'Plataforma web con IA para análisis de Quiniela'}\n- **Audiencia:** ${campaignData.audience || 'Personas en Argentina interesadas en Quiniela'}\n- **Objetivo:** ${campaignData.objective || 'Alcance viral, seguidores, usuarios web'}\n- **Plataformas:** ${(campaignData.platforms || ['TikTok', 'Instagram']).join(', ')}\n- **Web:** https://quiniela-ia-two.vercel.app/\n\nVoy a crear una campaña con contenido natural y realista (reels, posts, imágenes auténticas) para captar más gente. Las publicaciones irán directo a Buffer (Instagram + TikTok) automáticamente.`;
     }
 
+    let campaignId: string | null = null;
+
+    if (hasCampaignData) {
+      try {
+        const supabase = getSupabaseAdmin();
+        const { data: campaign } = await supabase
+          .from("campaigns")
+          .insert({
+            name: campaignData.name || "Quiniela IA",
+            description: campaignData.description || "",
+            idea: message.substring(0, 500),
+            objective: campaignData.objective || "",
+            target_audience: campaignData.audience || "",
+            platforms: campaignData.platforms || ["instagram", "tiktok"],
+            status: "DRAFT",
+          })
+          .select()
+          .single();
+        if (campaign) campaignId = campaign.id;
+      } catch (e) {
+        console.error("Failed to save campaign:", e);
+      }
+    }
+
     return NextResponse.json({
       response,
-      data: { aiUsed: usedAI, campaignDetected: hasCampaignData, ...campaignData },
+      data: { aiUsed: usedAI, campaignDetected: hasCampaignData, campaignId, ...campaignData },
       costSummary: getTodayCost(),
       timestamp: Date.now(),
     });
