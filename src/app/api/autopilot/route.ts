@@ -102,16 +102,18 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
         for (const channel of channels) {
           try {
             let metadata = {};
+            let schedulingType: "automatic" | "notification" = "automatic";
             if (channel.service === "instagram") {
               metadata = { instagram: { type: "post", shouldShareToFeed: true } };
             } else if (channel.service === "facebook") {
               metadata = { facebook: { type: "post" } };
+              schedulingType = "notification";
             }
 
             const post = await createBufferPost({
               channelId: channel.id,
               text,
-              schedulingType: "automatic",
+              schedulingType,
               mode: "addToQueue",
               metadata,
               assets: [{ image: { url: imageUrl } }],
