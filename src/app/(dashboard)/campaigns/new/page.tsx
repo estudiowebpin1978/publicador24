@@ -35,8 +35,6 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useMutation } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
 
 const STEPS = [
   { id: "idea", label: "Idea", icon: Lightbulb },
@@ -121,11 +119,6 @@ const CONTENT_TYPES = [
 
 export default function CampaignWizardPage() {
   const router = useRouter()
-  const createCampaign = useMutation(api.campaigns.create)
-  const updateCampaign = useMutation(api.campaigns.update)
-  const createContentPack = useMutation(api.contentPacks.create)
-  const createContentPiece = useMutation(api.contentPieces.create)
-  const updatePieceStatus = useMutation(api.contentPieces.updateStatus)
 
   const [state, setState] = React.useState<CampaignWizardState>(initialState)
 
@@ -173,20 +166,31 @@ export default function CampaignWizardPage() {
   const handlePersistAndSchedule = async () => {
     setState((prev) => ({ ...prev, isPersisting: true }))
     try {
-      const campaign = await createCampaign({
-        name: state.generatedCampaign?.strategy?.campaignName || state.product || state.idea,
-        description: state.idea,
-        objective: state.objective,
-        platforms: state.platforms,
-        status: "ACTIVE",
-        projectId: undefined,
+      const campaignRes = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: state.generatedCampaign?.strategy?.campaignName || state.product || state.idea,
+          description: state.idea,
+          objective: state.objective,
+          platforms: state.platforms,
+          status: "ACTIVE",
+        }),
       })
+      const campaignData = await campaignRes.json()
+      const campaignId = campaignData.campaign?.id
 
-      const packId = await createContentPack({
-        campaignId: campaign,
-        name: `${state.product || state.idea} - Pack Inicial`,
-        description: "Contenido generado por IA",
+      const packRes = await fetch("/api/content-packs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campaign_id: campaignId,
+          name: `${state.product || state.idea} - Pack Inicial`,
+          total_pieces: state.selectedPieces.length,
+        }),
       })
+      const packData = await packRes.json()
+      const packId = packData.pack?.id
 
       const pieces = state.generatedCampaign?.contentPieces || []
       let persistedCount = 0
@@ -196,27 +200,30 @@ export default function CampaignWizardPage() {
         const gen = piece.generatedContent || {}
         if (!state.selectedPieces.includes(String(gen.hook || `piece-${i}`))) continue
 
-        await createContentPiece({
-          contentPackId: packId,
-          campaignId: campaign,
-          title: gen.hook || piece.hook || `Pieza ${i + 1}`,
-          hook: gen.hook || piece.hook || "",
-          body: gen.caption || piece.copy || "",
-          cta: gen.cta || piece.cta || "",
-          contentType: piece.funnelStage === "conversion" ? "conversion" : piece.funnelStage === "interest" ? "capture" : "educational",
-          funnelStage: piece.funnelStage || "awareness",
-          platform: piece.platform || "instagram",
-          hashtags: gen.hashtags || piece.hashtags || [],
-          keywords: [],
-          score: piece.safetyCheck?.score || 80,
-          status: "GENERATED",
+        await fetch("/api/content-pieces", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content_pack_id: packId,
+            campaign_id: campaignId,
+            title: gen.hook || piece.hook || `Pieza ${i + 1}`,
+            hook: gen.hook || piece.hook || "",
+            body: gen.caption || piece.copy || "",
+            cta: gen.cta || piece.cta || "",
+            content_type: piece.funnelStage === "conversion" ? "conversion" : piece.funnelStage === "interest" ? "capture" : "educational",
+            funnel_stage: piece.funnelStage || "awareness",
+            platform: piece.platform || "instagram",
+            hashtags: gen.hashtags || piece.hashtags || [],
+            score: piece.safetyCheck?.score || 80,
+            status: "GENERATED",
+          }),
         })
         persistedCount++
       }
 
       setState((prev) => ({
         ...prev,
-        campaignId: campaign,
+        campaignId: campaignId,
         isPersisting: false,
         currentStep: 6,
       }))
