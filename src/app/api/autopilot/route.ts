@@ -142,7 +142,7 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
                 content_piece_id: cp.id,
                 platform: channel.service,
                 channel_id: channel.id,
-                status: "scheduled",
+                status: "pending",
                 scheduled_at: Date.now(),
                 external_post_id: post.id,
               });
