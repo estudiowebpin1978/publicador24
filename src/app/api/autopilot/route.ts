@@ -9,9 +9,10 @@ interface LoopResult {
   contentPublished: number;
   errors: string[];
   details: string[];
+  posts: { platform: string; id: string; status: string }[];
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request?: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
     const result: LoopResult = {
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
       contentPublished: 0,
       errors: [],
       details: [],
+      posts: [],
     };
 
     const { data: campaigns } = await supabase
@@ -29,102 +31,120 @@ export async function POST(request: NextRequest) {
       .limit(5);
 
     if (!campaigns || campaigns.length === 0) {
-      return NextResponse.json({ ...result, details: ["No active campaigns found"] });
+      return NextResponse.json({ ...result, details: ["No hay campañas activas"] });
     }
 
     let channels: BufferChannel[] = [];
+    let orgId = "";
     try {
       const account = await getBufferAccount();
-      const orgId = account.account.organizations[0]?.id;
+      orgId = account.account.organizations[0]?.id || "";
       if (orgId) {
         channels = await getBufferChannels(orgId);
       }
     } catch (e) {
-      result.errors.push(`Buffer connection failed: ${e instanceof Error ? e.message : "unknown"}`);
+      result.errors.push(`Buffer: ${e instanceof Error ? e.message : "error"}`);
+    }
+
+    if (channels.length === 0) {
+      return NextResponse.json({ ...result, errors: [...result.errors, "No hay canales de Buffer conectados"] });
     }
 
     for (const campaign of campaigns) {
-      const prompt = `Generá una publicación de redes sociales para la campaña "${campaign.name}". 
-      Nicho: ${campaign.niche || "general"}
-      Objetivo: ${campaign.objective || "engagement"}
-      Plataformas: ${campaign.platforms?.join(", ") || "todas"}
-      
-      Generá: 1 hook impactante, 1 cuerpo de texto, 1 call to action, y 5 hashtags relevantes.
-      Respondé en formato JSON: { "hook": "...", "body": "...", "cta": "...", "hashtags": ["..."] }`;
+      const prompt = `Generá una publicación de redes sociales para Instagram/TikTok/Facebook.
+Campaña: ${campaign.name}
+Nicho: ${campaign.industry || campaign.description || "general"}
+Público: ${campaign.target_audience || "general argentino"}
+Plataformas: ${campaign.platforms?.join(", ") || "todas"}
+
+Generá EXACTAMENTE en este formato JSON (sin texto adicional):
+{
+  "hook": "Frase gancho de máximo 10 palabras",
+  "body": "Cuerpo del post de 2-3 oraciones en español rioplatense",
+  "cta": "Call to action con URL quiniela-ia-two.vercel.app",
+  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6"]
+}`;
 
       try {
         const response = await generateTextWithFallback(prompt, {
-          systemPrompt: "Sos un experto en marketing digital y redes sociales argentino. Generá contenido en español rioplatense.",
-          maxTokens: 500,
+          systemPrompt: "Sos un experto en marketing digital argentino. Generás contenido viral para redes sociales. Español rioplatense. Respondé SOLO con el JSON, sin texto adicional.",
+          maxTokens: 400,
         });
 
         let content;
         try {
           const jsonMatch = response.match(/\{[\s\S]*\}/);
-          content = jsonMatch ? JSON.parse(jsonMatch[0]) : { hook: response.slice(0, 100), body: response, cta: "¡Descubrí más!", hashtags: [] };
+          content = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
         } catch {
-          content = { hook: response.slice(0, 100), body: response, cta: "¡Descubrí más!", hashtags: [] };
+          content = null;
+        }
+
+        if (!content || !content.hook) {
+          result.errors.push(`IA no generó contenido válido para: ${campaign.name}`);
+          continue;
         }
 
         result.contentGenerated++;
-        result.details.push(`Generated content for campaign: ${campaign.name}`);
+        result.details.push(`Contenido generado: ${content.hook}`);
 
-        const { error: insertError } = await supabase.from("content_pieces").insert({
-          campaign_id: campaign.id,
-          project_id: campaign.project_id,
-          platform: campaign.platforms?.[0] || "instagram",
-          content_type: "educational",
-          hook: content.hook,
-          body: content.body,
-          cta: content.cta,
-          hashtags: content.hashtags || [],
-          status: "generated",
-          score: 75,
-          created_at: Date.now(),
-        });
+        const images = [
+          "quiniela-matematica.png",
+          "quiniela-patron.png",
+          "quiniela-metodo.png",
+          "quiniela-factores.png",
+          "quiniela-datos.png",
+        ];
+        const randomImage = images[Math.floor(Math.random() * images.length)];
+        const imageUrl = `https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/${randomImage}`;
 
-        if (insertError) {
-          result.errors.push(`DB insert failed: ${insertError.message}`);
-        }
+        const text = `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${(content.hashtags || []).join(" ")}`;
 
         for (const channel of channels) {
-          const platformMap: Record<string, string> = {
-            instagram: "instagram",
-            facebook: "facebook",
-            tiktok: "tiktok",
-          };
-
-          if (platformMap[channel.service] && campaign.platforms?.includes(channel.service)) {
-            try {
-              const text = `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${content.hashtags?.join(" ") || ""}`;
-              const post = await createBufferPost({
-                channelId: channel.id,
-                text,
-                schedulingType: "addnow",
-              });
-
-              result.contentPublished++;
-              result.details.push(`Published to ${channel.service} (${channel.displayName}): ${post.id}`);
-
-              await supabase.from("scheduled_posts").insert({
-                campaign_id: campaign.id,
-                content_piece_id: null,
-                platform: channel.service,
-                channel_id: channel.id,
-                status: "published",
-                scheduled_at: Date.now(),
-                published_at: Date.now(),
-                buffer_post_id: post.id,
-              });
-            } catch (e) {
-              result.errors.push(`Publish to ${channel.service} failed: ${e instanceof Error ? e.message : "unknown"}`);
+          try {
+            let metadata = {};
+            if (channel.service === "instagram") {
+              metadata = { instagram: { type: "post", shouldShareToFeed: true } };
+            } else if (channel.service === "facebook") {
+              metadata = { facebook: { type: "post" } };
             }
+
+            const post = await createBufferPost({
+              channelId: channel.id,
+              text,
+              schedulingType: "automatic",
+              mode: "addToQueue",
+              metadata,
+              assets: [{ image: { url: imageUrl } }],
+            });
+
+            result.contentPublished++;
+            result.posts.push({ platform: channel.service, id: post.id, status: post.status });
+            result.details.push(`Publicado en ${channel.service} (${channel.displayName})`);
+
+            await supabase.from("scheduled_posts").insert({
+              campaign_id: campaign.id,
+              platform: channel.service,
+              channel_id: channel.id,
+              status: "scheduled",
+              scheduled_at: Date.now(),
+              buffer_post_id: post.id,
+            });
+          } catch (e) {
+            result.errors.push(`${channel.service}: ${e instanceof Error ? e.message : "error"}`);
           }
         }
       } catch (e) {
-        result.errors.push(`Content generation failed for ${campaign.name}: ${e instanceof Error ? e.message : "unknown"}`);
+        result.errors.push(`IA ${campaign.name}: ${e instanceof Error ? e.message : "error"}`);
       }
     }
+
+    await supabase.from("notifications").insert({
+      type: result.errors.length > 0 ? "warning" : "success",
+      title: "Autopilot ejecutado",
+      message: `Generados: ${result.contentGenerated} | Publicados: ${result.contentPublished} | Errores: ${result.errors.length}`,
+      read: false,
+      created_at: Date.now(),
+    });
 
     return NextResponse.json(result);
   } catch (error) {
@@ -132,5 +152,20 @@ export async function POST(request: NextRequest) {
       { error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
+  }
+}
+
+export async function GET() {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: posts } = await supabase
+      .from("scheduled_posts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    return NextResponse.json({ recentPosts: posts || [] });
+  } catch (error) {
+    return NextResponse.json({ recentPosts: [] });
   }
 }

@@ -1,8 +1,8 @@
 {
-  "framework": "nextjs",
-  "version": 2,
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "outputDirectory": ".next",
-  "devCommand": "npm run dev"
+  "crons": [
+    {
+      "path": "/api/cron/autopilot",
+      "schedule": "0 */4 * * *"
+    }
+  ]
 }

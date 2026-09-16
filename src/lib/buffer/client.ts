@@ -51,43 +51,53 @@ export async function getBufferChannels(organizationId: string): Promise<BufferC
   return data.channels;
 }
 
-export async function getBufferChannel(channelId: string): Promise<BufferChannel> {
-  const data = await bufferGraphQL<{ channel: BufferChannel }>(
-    `{ channel(input: { id: "${channelId}" }) { id name service displayName avatar isDisconnected } }`
-  );
-  return data.channel;
-}
-
 export async function createBufferPost(input: {
   channelId: string;
   text: string;
-  schedulingType?: "addnow" | "next" | "custom";
+  schedulingType?: "automatic" | "notification";
+  mode?: "addToQueue" | "shareNext" | "shareNow" | "customScheduled";
   scheduledAt?: string;
-  media?: { url: string; type?: string };
+  assets?: { image?: { url: string; metadata?: { altText?: string } }; video?: { url: string } }[];
+  metadata?: Record<string, unknown>;
 }): Promise<{ id: string; status: string }> {
+  const assetsJson = input.assets
+    ? input.assets.map((a) => {
+        if (a.image) return `{ image: { url: "${a.image.url}"${a.image.metadata ? `, metadata: { altText: "${a.image.metadata.altText || ""}" }` : ""} } }`;
+        if (a.video) return `{ video: { url: "${a.video.url}" } }`;
+        return "{}";
+      }).join(", ")
+    : "";
+
+  const metadataJson = input.metadata
+    ? `, metadata: ${JSON.stringify(input.metadata).replace(/"/g, '\\"').replace(/\\"/g, '"')}`
+    : "";
+
   const mutation = `
-    mutation CreatePost($input: CreatePostInput!) {
-      createPost(input: $input) {
-        post {
-          id
-          status
+    mutation CreatePost {
+      createPost(input: {
+        channelId: "${input.channelId}",
+        text: ${JSON.stringify(input.text)},
+        schedulingType: ${input.schedulingType || "automatic"},
+        mode: ${input.mode || "addToQueue"}${metadataJson}${assetsJson ? `,
+        assets: [${assetsJson}]` : ""}
+      }) {
+        ... on PostActionSuccess {
+          post { id status }
+        }
+        ... on MutationError {
+          message
         }
       }
     }
   `;
 
-  const variables = {
-    input: {
-      channelId: input.channelId,
-      text: input.text,
-      schedulingType: input.schedulingType || "addnow",
-      ...(input.scheduledAt && { scheduledAt: input.scheduledAt }),
-      ...(input.media && { media: input.media }),
-    },
-  };
+  const data = await bufferGraphQL<{ createPost: { post?: { id: string; status: string }; message?: string } }>(mutation);
 
-  const data = await bufferGraphQL<{ createPost: { post: { id: string; status: string } } }>(mutation, variables);
-  return data.createPost.post;
+  if (data.createPost.message) {
+    throw new Error(data.createPost.message);
+  }
+
+  return data.createPost.post!;
 }
 
 export async function getBufferPosts(channelId: string, first: number = 10): Promise<BufferPost[]> {
@@ -95,11 +105,4 @@ export async function getBufferPosts(channelId: string, first: number = 10): Pro
     `{ posts(input: { channelId: "${channelId}" }) { edges { node { id text status createdAt sentAt } } } }`
   );
   return data.posts.edges.map((e) => e.node);
-}
-
-export async function getDailyLimits(organizationId: string, channelIds: string[]) {
-  const data = await bufferGraphQL<{ dailyPostingLimits: { channelId: string; limit: number; scheduled: number; sent: number; isAtLimit: boolean }[] }>(
-    `{ dailyPostingLimits(input: { organizationId: "${organizationId}", channelIds: ${JSON.stringify(channelIds)} }) { channelId limit scheduled sent isAtLimit } }`
-  );
-  return data.dailyPostingLimits;
 }
