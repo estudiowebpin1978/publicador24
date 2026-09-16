@@ -5,8 +5,7 @@ import * as React from "react"
 import { CalendarView } from "@/components/calendar/calendar-view"
 import { Card, CardContent } from "@/components/ui/card"
 import { List, CalendarDays, Clock } from "lucide-react"
-import { useQuery } from "@/hooks/use-convex"
-import { api } from "@convex/_generated/api"
+import { useQuery, api } from "@/hooks/use-convex"
 
 export default function CalendarPage() {
   const scheduledPosts = useQuery(api.scheduledPosts.listUpcoming)

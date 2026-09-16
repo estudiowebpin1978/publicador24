@@ -10,8 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import { Search, TrendingUp, Hash, Star, Copy, ArrowUpRight } from "lucide-react"
-import { useQuery } from "@/hooks/use-convex"
-import { api } from "@convex/_generated/api"
+import { useQuery, api } from "@/hooks/use-convex"
 
 export default function HashtagsPage() {
   const [searchQuery, setSearchQuery] = React.useState("")

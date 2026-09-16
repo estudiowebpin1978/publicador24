@@ -18,8 +18,7 @@ import { Search, Bell, Menu, LogOut, Settings, User, CreditCard } from "lucide-r
 import Link from "next/link"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useRouter } from "next/navigation"
-import { useQuery } from "convex/react"
-import { api } from "@/hooks/use-convex"
+import { useQuery, api } from "@/hooks/use-convex"
 
 interface HeaderProps {
   onMenuToggle?: () => void
