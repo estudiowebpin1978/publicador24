@@ -2,35 +2,29 @@ import { NextResponse } from "next/server";
 import { getTodayCost } from "@/lib/ai/cost-tracker";
 
 export async function GET() {
-  const aiProvider = process.env.AI_PROVIDER || "openrouter";
-  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== "your-key";
+  const aiProvider = process.env.AI_PROVIDER || "groq";
   const hasGroq = !!process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== "your-key";
+  const hasHF = !!process.env.HF_API_KEY;
   const bufferKey = process.env.BUFFER_API_KEY;
   const bufferConfigured = !!bufferKey && bufferKey !== "tu-key-aqui" && bufferKey !== "your-buffer-api-key";
-  const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  const hasSupabase = !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
   const costSummary = getTodayCost();
 
-  const aiStatus = aiProvider === "openrouter"
-    ? (hasOpenRouter ? "CONFIGURED" : "NOT CONFIGURED — OPENROUTER_API_KEY missing")
-    : aiProvider === "groq"
-    ? (hasGroq ? "CONFIGURED" : "NOT CONFIGURED — GROQ_API_KEY missing")
-    : `UNKNOWN PROVIDER: ${aiProvider}`;
+  const aiStatus = hasGroq ? "CONFIGURED" : hasHF ? "CONFIGURED (HF)" : "NOT CONFIGURED";
 
   const allStatuses = {
     ai: {
       provider: aiProvider,
       status: aiStatus,
-      model: aiProvider === "openrouter"
-        ? (process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001")
-        : (process.env.GROQ_MODEL || "llama-3.3-70b-versatile"),
+      groq: hasGroq ? "CONFIGURED" : "NOT CONFIGURED",
+      huggingface: hasHF ? "CONFIGURED" : "NOT CONFIGURED",
     },
     buffer: {
-      status: bufferConfigured ? "CONFIGURED" : "NOT CONFIGURED — BUFFER_API_KEY is placeholder (tu-key-aqui). Get a real key from https://buffer.com/developers/api",
+      status: bufferConfigured ? "CONFIGURED" : "NOT CONFIGURED",
       apiKeyPresent: bufferConfigured,
     },
-    convex: {
-      url: convexUrl || "NOT SET",
-      status: convexUrl ? "CONFIGURED" : "NOT CONFIGURED — NEXT_PUBLIC_CONVEX_URL missing",
+    supabase: {
+      status: hasSupabase ? "CONFIGURED" : "NOT CONFIGURED",
     },
     costTracking: {
       todayCostUsd: costSummary.totalCost,
@@ -47,6 +41,6 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     platform: "publicador24",
     integrations: allStatuses,
-    ready: aiStatus === "CONFIGURED" && bufferConfigured,
+    ready: aiStatus === "CONFIGURED" && bufferConfigured && hasSupabase,
   });
 }

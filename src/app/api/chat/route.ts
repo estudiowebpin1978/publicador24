@@ -11,22 +11,25 @@ interface ChatMessage {
 interface ChatRequest {
   message: string;
   history?: ChatMessage[];
+  project_id?: string;
 }
 
-const SYSTEM_PROMPT = `Sos Publicador24, asistente de marketing para Quiniela IA. Tu objetivo: crear campañas que generen demanda real para quiniela-ia-two.vercel.app.
+const SYSTEM_PROMPT = `Sos Publicador24, asistente de marketing autónomo. Tu objetivo: crear campañas que generen demanda real para cualquier negocio.
 
 CAPACIDADES:
-- Analizar negocios
-- Descubrir audiencias
-- Crear estrategias de marketing
-- Generar contenido para TikTok e Instagram
+- Analizar negocios y sitios web
+- Descubrir audiencias y dolores
+- Crear estrategias de marketing personalizadas
+- Generar contenido para redes sociales (Instagram, TikTok, Facebook, LinkedIn)
 - Programar publicaciones automáticas
+- Generar reels y videos
 
 FORMATO:
 - Español rioplatense (voseo)
 - Conciso, directo
 - Siempre pensar en GENERAR DEMANDA, no solo likes
-- Si el usuario da datos del negocio, generá campaña inmediatamente`;
+- Si el usuario da datos del negocio, generá campaña inmediatamente
+- NUNCA asumir un negocio específico — esperar datos del usuario`;
 
 function extractCampaignData(message: string): { name?: string; description?: string; audience?: string; objective?: string; platforms?: string[]; website?: string } {
   const data: { name?: string; description?: string; audience?: string; objective?: string; platforms?: string[]; website?: string } = {};
@@ -44,12 +47,6 @@ function extractCampaignData(message: string): { name?: string; description?: st
         break;
       }
     }
-  }
-
-  // Direct match for "Quiniela IA"
-  if (!data.name && message.toLowerCase().includes("quiniela")) {
-    const directMatch = message.match(/Quiniela\s*IA/i);
-    if (directMatch) data.name = "Quiniela IA";
   }
 
   const descMatch = message.match(/(?:qué vend[eé]s|vend[eé]s?|hac[eé]s?|descripción)[\s:]*([^.]{10,200})/i);
@@ -75,10 +72,9 @@ function extractCampaignData(message: string): { name?: string; description?: st
   const urlMatch = message.match(/(https?:\/\/[^\s]+)/i);
   if (urlMatch) data.website = urlMatch[1];
 
-  if (message.toLowerCase().includes("quiniela ia")) data.name = data.name || "Quiniela IA";
   if (!data.description) data.description = message.substring(0, 200);
-  if (!data.audience) data.audience = "Personas de Argentina interesadas en Quiniela, estadísticas y números";
-  if (!data.objective) data.objective = "Lograr alcance viral, miles de seguidores y usuarios en la web";
+  if (!data.audience) data.audience = "Audiencia general interesada en el producto o servicio";
+  if (!data.objective) data.objective = "Generar demanda, alcance y seguidores en redes sociales";
 
   return data;
 }
@@ -86,7 +82,7 @@ function extractCampaignData(message: string): { name?: string; description?: st
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { message } = body;
+    const { message, project_id } = body;
 
     if (!message?.trim()) {
       return NextResponse.json({ error: "Mensaje requerido" }, { status: 400 });
@@ -102,8 +98,8 @@ export async function POST(request: NextRequest) {
       const baseProvider = getAIProvider();
       const provider = wrapProviderWithCostTracking(baseProvider, "groq");
 
-      if (hasCampaignData && (campaignData.name || message.toLowerCase().includes("quiniela"))) {
-        const aiPrompt = `El usuario quiere promocionar: ${campaignData.name || 'Quiniela IA'} - ${campaignData.description || 'plataforma de análisis con IA para quiniela'}. Objetivo: ${campaignData.objective || 'alcance viral y usuarios'}. Plataformas: ${campaignData.platforms?.join(", ") || 'TikTok, Instagram'}. Generá una respuesta breve que confirme que se va a crear una campaña con contenido natural y realista, mencioná que se usará el sitio https://quiniela-ia-two.vercel.app. Sé entusiasta.`;
+      if (hasCampaignData && campaignData.name) {
+        const aiPrompt = `El usuario quiere promocionar: ${campaignData.name} - ${campaignData.description || 'su negocio'}. Objetivo: ${campaignData.objective || 'generar demanda y alcance'}. Plataformas: ${campaignData.platforms?.join(", ") || 'TikTok, Instagram'}. Sitio web: ${campaignData.website || 'no especificado'}. Generá una respuesta breve que confirme que se va a crear una campaña con contenido natural y realista. Sé entusiasta y profesional.`;
 
         const result = await provider.generateText({
           prompt: aiPrompt,
@@ -122,7 +118,7 @@ export async function POST(request: NextRequest) {
         usedAI = true;
       }
     } catch {
-      response = `Recibí los datos para **${campaignData.name || 'Quiniela IA'}**:\n\n- **Negocio:** ${campaignData.description || 'Plataforma web con IA para análisis de Quiniela'}\n- **Audiencia:** ${campaignData.audience || 'Personas en Argentina interesadas en Quiniela'}\n- **Objetivo:** ${campaignData.objective || 'Alcance viral, seguidores, usuarios web'}\n- **Plataformas:** ${(campaignData.platforms || ['TikTok', 'Instagram']).join(', ')}\n- **Web:** https://quiniela-ia-two.vercel.app/\n\nVoy a crear una campaña con contenido natural y realista (reels, posts, imágenes auténticas) para captar más gente. Las publicaciones irán directo a Buffer (Instagram + TikTok) automáticamente.`;
+      response = `Recibí los datos para **${campaignData.name || 'tu negocio'}**:\n\n- **Negocio:** ${campaignData.description || 'Descripción no especificada'}\n- **Audiencia:** ${campaignData.audience || 'Audiencia general'}\n- **Objetivo:** ${campaignData.objective || 'Generar demanda y alcance'}\n- **Plataformas:** ${(campaignData.platforms || ['TikTok', 'Instagram']).join(', ')}\n- **Web:** ${campaignData.website || 'No especificado'}\n\nVoy a crear una campaña con contenido natural y realista (reels, posts, imágenes auténticas) para captar más gente. Las publicaciones irán directo a Buffer (Instagram + TikTok) automáticamente.`;
     }
 
     let campaignId: string | null = null;
@@ -133,7 +129,8 @@ export async function POST(request: NextRequest) {
         const { data: campaign } = await supabase
           .from("campaigns")
           .insert({
-            name: campaignData.name || "Quiniela IA",
+            ...(project_id ? { project_id } : {}),
+            name: campaignData.name || "Campaña sin nombre",
             description: campaignData.description || "",
             idea: message.substring(0, 500),
             objective: campaignData.objective || "",

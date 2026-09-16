@@ -159,7 +159,7 @@ Respondé con JSON:
     return {
       hook: result.text.substring(0, 100),
       caption: result.text,
-      hashtags: ["quiniela", "predicciones", "ia"],
+      hashtags: [],
       cta: "Visitalo ahora",
     };
   }
