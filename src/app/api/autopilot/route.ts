@@ -123,14 +123,30 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
             result.posts.push({ platform: channel.service, id: post.id, status: post.status });
             result.details.push(`Publicado en ${channel.service} (${channel.displayName})`);
 
-            await supabase.from("scheduled_posts").insert({
+            const { data: cp } = await supabase.from("content_pieces").insert({
               campaign_id: campaign.id,
+              title: content.hook,
+              body: content.body,
+              cta: content.cta,
+              hashtags: content.hashtags || [],
+              status: "PUBLISHED",
               platform: channel.service,
-              channel_id: channel.id,
-              status: "scheduled",
-              scheduled_at: Date.now(),
-              buffer_post_id: post.id,
-            });
+              media_urls: [imageUrl],
+              external_post_id: post.id,
+              published_at: Date.now(),
+            }).select("id").single();
+
+            if (cp) {
+              await supabase.from("scheduled_posts").insert({
+                campaign_id: campaign.id,
+                content_piece_id: cp.id,
+                platform: channel.service,
+                channel_id: channel.id,
+                status: "scheduled",
+                scheduled_at: Date.now(),
+                external_post_id: post.id,
+              });
+            }
           } catch (e) {
             result.errors.push(`${channel.service}: ${e instanceof Error ? e.message : "error"}`);
           }

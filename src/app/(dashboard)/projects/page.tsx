@@ -46,7 +46,11 @@ export default function ProjectsPage() {
   React.useEffect(() => {
     fetch("/api/projects")
       .then((res) => res.json())
-      .then((data) => setProjects(data.projects || data || []))
+      .then((res) => res.json())
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.projects || [];
+        setProjects(list.map((p: Record<string, unknown>) => ({ ...p, _id: p.id || p._id })));
+      })
       .catch(() => setProjects([]))
       .finally(() => setLoading(false));
   }, []);
@@ -58,7 +62,7 @@ export default function ProjectsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      setProjects((prev) => prev.filter((p) => p._id !== id));
+      setProjects((prev) => prev.filter((p) => (p._id || p.id) !== id));
     } catch (error) {
       console.error("Failed to delete project:", error);
     }
