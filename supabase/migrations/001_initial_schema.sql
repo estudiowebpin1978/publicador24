@@ -1,84 +1,86 @@
 -- 001_initial_schema.sql
 -- Migration: Initial schema for universal autonomous marketing platform
--- This migration creates all core tables for projects, campaigns, content management,
--- scheduling, analytics, strategy memory, notifications, brand profiles, and social accounts.
+-- Execute this in Supabase Dashboard > SQL Editor
+-- Safe to run multiple times (IF NOT EXISTS on all statements)
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Projects: Universal business profiles
-CREATE TABLE public.projects (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    url TEXT,
-    description TEXT,
-    industry TEXT,
-    location TEXT,
-    target_audience TEXT,
-    website_analysis JSONB,
-    brand_voice JSONB,
-    logo_url TEXT,
-    colors JSONB,
-    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'archived')),
-    created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
-    updated_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
-);
+-- ============================================
+-- ALTER EXISTING TABLES (add missing columns)
+-- ============================================
 
--- Campaigns: Per-project campaigns
-CREATE TABLE public.campaigns (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    description TEXT,
-    objective TEXT,
-    platforms TEXT[] DEFAULT '{}',
-    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused', 'completed', 'archived')),
-    content_count INT DEFAULT 0,
-    published_count INT DEFAULT 0,
-    schedule_config JSONB,
-    autopilot_level TEXT DEFAULT 'off' CHECK (autopilot_level IN ('off', 'review', 'full')),
-    created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
-    updated_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
-);
+-- Projects: add new columns if missing
+DO $$ BEGIN
+  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS industry TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS location TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS target_audience TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS website_analysis JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS brand_voice JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS logo_url TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS colors JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS updated_at BIGINT DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
--- Content packs: Groups of content pieces per campaign
-CREATE TABLE public.content_packs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    total_pieces INT DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'generating', 'ready', 'published', 'archived')),
-    created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
-    updated_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
-);
+-- Campaigns: add autopilot_level if missing
+DO $$ BEGIN
+  ALTER TABLE public.campaigns ADD COLUMN IF NOT EXISTS autopilot_level VARCHAR(50) DEFAULT 'MANUAL';
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
 
--- Content pieces: Individual content items
-CREATE TABLE public.content_pieces (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
-    content_pack_id UUID REFERENCES public.content_packs(id) ON DELETE SET NULL,
-    title TEXT NOT NULL,
-    hook TEXT,
-    body TEXT NOT NULL,
-    cta TEXT,
-    content_type TEXT NOT NULL CHECK (content_type IN ('post', 'story', 'reel', 'video', 'article', 'carousel', 'ad', 'email', 'thread')),
-    funnel_stage TEXT DEFAULT 'awareness' CHECK (funnel_stage IN ('awareness', 'consideration', 'conversion', 'retention', 'advocacy')),
-    platform TEXT NOT NULL,
-    hashtags TEXT[] DEFAULT '{}',
-    score FLOAT DEFAULT 0,
-    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'approved', 'scheduled', 'publishing', 'published', 'failed', 'archived')),
-    media_urls JSONB,
-    external_post_id TEXT,
-    scheduled_at BIGINT,
-    published_at BIGINT,
-    error_message TEXT,
-    retry_count INT DEFAULT 0,
-    idempotency_key TEXT UNIQUE,
-    created_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000),
-    updated_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
-);
+-- Content pieces: add new columns if missing
+DO $$ BEGIN
+  ALTER TABLE public.content_pieces ADD COLUMN IF NOT EXISTS media_urls JSONB;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.content_pieces ADD COLUMN IF NOT EXISTS external_post_id TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.content_pieces ADD COLUMN IF NOT EXISTS published_at BIGINT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.content_pieces ADD COLUMN IF NOT EXISTS error_message TEXT;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.content_pieces ADD COLUMN IF NOT EXISTS retry_count INT DEFAULT 0;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE public.content_pieces ADD COLUMN IF NOT EXISTS idempotency_key TEXT UNIQUE;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- ============================================
+-- CREATE NEW TABLES
+-- ============================================
 
 -- Scheduled posts: Publication queue
-CREATE TABLE public.scheduled_posts (
+CREATE TABLE IF NOT EXISTS public.scheduled_posts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
     content_piece_id UUID NOT NULL REFERENCES public.content_pieces(id) ON DELETE CASCADE,
@@ -97,7 +99,7 @@ CREATE TABLE public.scheduled_posts (
 );
 
 -- Analytics daily: Daily metrics per platform
-CREATE TABLE public.analytics_daily (
+CREATE TABLE IF NOT EXISTS public.analytics_daily (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
     platform TEXT NOT NULL,
@@ -117,7 +119,7 @@ CREATE TABLE public.analytics_daily (
 );
 
 -- Strategy memory: Learning per campaign
-CREATE TABLE public.strategy_memory (
+CREATE TABLE IF NOT EXISTS public.strategy_memory (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     campaign_id UUID NOT NULL REFERENCES public.campaigns(id) ON DELETE CASCADE,
     metric_type TEXT NOT NULL,
@@ -131,7 +133,7 @@ CREATE TABLE public.strategy_memory (
 );
 
 -- Notifications: Real system notifications
-CREATE TABLE public.notifications (
+CREATE TABLE IF NOT EXISTS public.notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type TEXT NOT NULL CHECK (type IN ('info', 'warning', 'error', 'success', 'system')),
     title TEXT NOT NULL,
@@ -142,7 +144,7 @@ CREATE TABLE public.notifications (
 );
 
 -- Brand profiles: Per-project brand configuration
-CREATE TABLE public.brand_profiles (
+CREATE TABLE IF NOT EXISTS public.brand_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
     tone TEXT,
@@ -160,7 +162,7 @@ CREATE TABLE public.brand_profiles (
 );
 
 -- Social accounts: Connected social accounts
-CREATE TABLE public.social_accounts (
+CREATE TABLE IF NOT EXISTS public.social_accounts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     platform TEXT NOT NULL,
@@ -175,40 +177,19 @@ CREATE TABLE public.social_accounts (
     updated_at BIGINT NOT NULL DEFAULT (EXTRACT(EPOCH FROM NOW()) * 1000)
 );
 
--- Indexes for frequently queried columns
+-- ============================================
+-- INDEXES
+-- ============================================
 
-CREATE INDEX idx_campaigns_project_id ON public.campaigns(project_id);
-CREATE INDEX idx_campaigns_status ON public.campaigns(status);
-
-CREATE INDEX idx_content_packs_campaign_id ON public.content_packs(campaign_id);
-
-CREATE INDEX idx_content_pieces_campaign_id ON public.content_pieces(campaign_id);
-CREATE INDEX idx_content_pieces_content_pack_id ON public.content_pieces(content_pack_id);
-CREATE INDEX idx_content_pieces_platform ON public.content_pieces(platform);
-CREATE INDEX idx_content_pieces_status ON public.content_pieces(status);
-CREATE INDEX idx_content_pieces_scheduled_at ON public.content_pieces(scheduled_at);
-CREATE INDEX idx_content_pieces_idempotency_key ON public.content_pieces(idempotency_key);
-
-CREATE INDEX idx_scheduled_posts_campaign_id ON public.scheduled_posts(campaign_id);
-CREATE INDEX idx_scheduled_posts_content_piece_id ON public.scheduled_posts(content_piece_id);
-CREATE INDEX idx_scheduled_posts_platform ON public.scheduled_posts(platform);
-CREATE INDEX idx_scheduled_posts_status ON public.scheduled_posts(status);
-CREATE INDEX idx_scheduled_posts_scheduled_at ON public.scheduled_posts(scheduled_at);
-CREATE INDEX idx_scheduled_posts_idempotency_key ON public.scheduled_posts(idempotency_key);
-
-CREATE INDEX idx_analytics_daily_campaign_id ON public.analytics_daily(campaign_id);
-CREATE INDEX idx_analytics_daily_platform ON public.analytics_daily(platform);
-CREATE INDEX idx_analytics_daily_date ON public.analytics_daily(date);
-
-CREATE INDEX idx_strategy_memory_campaign_id ON public.strategy_memory(campaign_id);
-CREATE INDEX idx_strategy_memory_platform ON public.strategy_memory(platform);
-
-CREATE INDEX idx_notifications_read ON public.notifications(read);
-CREATE INDEX idx_notifications_campaign_id ON public.notifications(campaign_id);
-CREATE INDEX idx_notifications_created_at ON public.notifications(created_at);
-
-CREATE INDEX idx_brand_profiles_project_id ON public.brand_profiles(project_id);
-
-CREATE INDEX idx_social_accounts_user_id ON public.social_accounts(user_id);
-CREATE INDEX idx_social_accounts_platform ON public.social_accounts(platform);
-CREATE INDEX idx_social_accounts_status ON public.social_accounts(status);
+CREATE INDEX IF NOT EXISTS idx_scheduled_posts_campaign_id ON public.scheduled_posts(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_scheduled_posts_status ON public.scheduled_posts(status);
+CREATE INDEX IF NOT EXISTS idx_scheduled_posts_scheduled_at ON public.scheduled_posts(scheduled_at);
+CREATE INDEX IF NOT EXISTS idx_analytics_daily_campaign_id ON public.analytics_daily(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_daily_platform ON public.analytics_daily(platform);
+CREATE INDEX IF NOT EXISTS idx_analytics_daily_date ON public.analytics_daily(date);
+CREATE INDEX IF NOT EXISTS idx_strategy_memory_campaign_id ON public.strategy_memory(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(read);
+CREATE INDEX IF NOT EXISTS idx_notifications_campaign_id ON public.notifications(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_brand_profiles_project_id ON public.brand_profiles(project_id);
+CREATE INDEX IF NOT EXISTS idx_social_accounts_user_id ON public.social_accounts(user_id);
+CREATE INDEX IF NOT EXISTS idx_social_accounts_platform ON public.social_accounts(platform);
