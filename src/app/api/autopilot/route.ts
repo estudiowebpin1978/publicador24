@@ -1,196 +1,136 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateTextWithFallback } from "@/lib/ai/multi-provider";
-import { generateImageWithFallback } from "@/lib/ai/multi-image";
-import { getTodayCost } from "@/lib/ai/cost-tracker";
-import { checkPublicationSafety } from "@/lib/ai/publication-safety";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { getBufferAccount, getBufferChannels, createBufferPost, type BufferChannel } from "@/lib/buffer/client";
 
 interface LoopResult {
   timestamp: number;
   contentGenerated: number;
   contentPublished: number;
-  safetyChecks: number;
   errors: string[];
   details: string[];
 }
 
-async function callBuffer(endpoint: string, options?: RequestInit) {
-  const apiKey = process.env.BUFFER_API_KEY;
-  if (!apiKey || apiKey === "tu-key-aqui" || apiKey === "your-buffer-api-key") {
-    throw new Error("BUFFER NOT CONFIGURED");
-  }
-
-  const res = await fetch(`https://api.buffer.com/1${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      ...options?.headers,
-    },
-  });
-
-  if (!res.ok) {
-    if (res.status === 429) throw new Error("BUFFER_RATE_LIMIT");
-    throw new Error(`Buffer HTTP ${res.status}`);
-  }
-
-  return res.json();
-}
-
-async function getBufferChannels() {
-  const data = await callBuffer("/profiles.json");
-  const profiles = data || [];
-  return profiles.filter(
-    (p: { service: string; schedule_status: string }) =>
-      p.service === "instagram" || p.service === "tiktok" || p.service === "facebook"
-  );
-}
-
-async function publishToBuffer(text: string, profileId: string, media?: { photo?: string }, platform?: string) {
-  const body: Record<string, unknown> = {
-    profile_ids: [profileId],
-    text,
-    now: false,
-  };
-
-  if (media) {
-    body.media = media;
-  }
-
-  const result = await callBuffer("/updates/create.json", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-  return result;
-}
-
-async function loadCampaignContent(projectId?: string) {
+export async function POST(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
-    let query = supabase
+    const result: LoopResult = {
+      timestamp: Date.now(),
+      contentGenerated: 0,
+      contentPublished: 0,
+      errors: [],
+      details: [],
+    };
+
+    const { data: campaigns } = await supabase
       .from("campaigns")
-      .select("id, name, description, objective, target_audience, platforms")
+      .select("*")
       .eq("status", "active")
-      .limit(1);
-
-    if (projectId) {
-      query = query.eq("project_id", projectId);
-    }
-
-    const { data: campaigns } = await query;
-    if (!campaigns?.length) return null;
-
-    const campaign = campaigns[0];
-    const { data: pieces } = await supabase
-      .from("content_pieces")
-      .select("id, hook, body, cta, hashtags, content_type, platform")
-      .eq("campaign_id", campaign.id)
-      .eq("status", "draft")
       .limit(5);
 
-    return { campaign, pieces: pieces || [] };
-  } catch {
-    return null;
-  }
-}
+    if (!campaigns || campaigns.length === 0) {
+      return NextResponse.json({ ...result, details: ["No active campaigns found"] });
+    }
 
-export async function POST(_request: NextRequest) {
-  const result: LoopResult = {
-    timestamp: Date.now(),
-    contentGenerated: 0,
-    contentPublished: 0,
-    safetyChecks: 0,
-    errors: [],
-    details: [],
-  };
-
-  try {
-    let channels: { id: string; service: string; name: string }[] = [];
+    let channels: BufferChannel[] = [];
     try {
-      channels = await getBufferChannels();
-      result.details.push(`Buffer: ${channels.length} channels connected`);
+      const account = await getBufferAccount();
+      const orgId = account.account.organizations[0]?.id;
+      if (orgId) {
+        channels = await getBufferChannels(orgId);
+      }
     } catch (e) {
-      result.errors.push(`Buffer: ${e instanceof Error ? e.message : "connection failed"}`);
-      return NextResponse.json(result);
+      result.errors.push(`Buffer connection failed: ${e instanceof Error ? e.message : "unknown"}`);
     }
 
-    if (channels.length === 0) {
-      result.errors.push("No active Buffer channels found");
-      return NextResponse.json(result);
-    }
+    for (const campaign of campaigns) {
+      const prompt = `Generá una publicación de redes sociales para la campaña "${campaign.name}". 
+      Nicho: ${campaign.niche || "general"}
+      Objetivo: ${campaign.objective || "engagement"}
+      Plataformas: ${campaign.platforms?.join(", ") || "todas"}
+      
+      Generá: 1 hook impactante, 1 cuerpo de texto, 1 call to action, y 5 hashtags relevantes.
+      Respondé en formato JSON: { "hook": "...", "body": "...", "cta": "...", "hashtags": ["..."] }`;
 
-    const campaignContent = await loadCampaignContent();
+      try {
+        const response = await generateTextWithFallback(prompt, {
+          systemPrompt: "Sos un experto en marketing digital y redes sociales argentino. Generá contenido en español rioplatense.",
+          maxTokens: 500,
+        });
 
-    for (let i = 0; i < Math.min(channels.length, 3); i++) {
-      const channel = channels[i];
-      let hook = "";
-      let caption = "";
-      let hashtags: string[] = [];
-
-      if (campaignContent && campaignContent.pieces.length > 0) {
-        const piece = campaignContent.pieces[i % campaignContent.pieces.length];
-        hook = piece.hook || "";
-        caption = piece.body || "";
-        hashtags = piece.hashtags || [];
-      } else {
+        let content;
         try {
-          const aiResult = await generateTextWithFallback(
-            `Generá un contenido corto para ${channel.service} sobre: ${campaignContent?.campaign?.description || 'un negocio genérico'}. Objetivo: ${campaignContent?.campaign?.objective || 'generar demanda'}. Respondé JSON: { "hook": "...", "caption": "...", "hashtags": ["#tag1"] }`,
-            "Sos un copywriter experto. Español rioplatense. JSON válido."
-          );
-          const match = aiResult.text.match(/```json\s*([\s\S]*?)```/);
-          const parsed = JSON.parse(match ? match[1] : aiResult.text);
-          hook = parsed.hook || "Contenido generado automáticamente";
-          caption = parsed.caption || "";
-          hashtags = parsed.hashtags || [];
+          const jsonMatch = response.match(/\{[\s\S]*\}/);
+          content = jsonMatch ? JSON.parse(jsonMatch[0]) : { hook: response.slice(0, 100), body: response, cta: "¡Descubrí más!", hashtags: [] };
         } catch {
-          hook = "Contenido generado automáticamente";
-          caption = "Publicación generada por Publicador24";
-          hashtags = [];
+          content = { hook: response.slice(0, 100), body: response, cta: "¡Descubrí más!", hashtags: [] };
         }
-      }
 
-      const safety = await checkPublicationSafety(`auto-${i}`, hook, caption, channel.service);
-      result.safetyChecks++;
+        result.contentGenerated++;
+        result.details.push(`Generated content for campaign: ${campaign.name}`);
 
-      if (!safety.approved) {
-        result.details.push(`Blocked: ${hook.substring(0, 40)}... — ${safety.reason}`);
-        continue;
-      }
+        const { error: insertError } = await supabase.from("content_pieces").insert({
+          campaign_id: campaign.id,
+          project_id: campaign.project_id,
+          platform: campaign.platforms?.[0] || "instagram",
+          content_type: "educational",
+          hook: content.hook,
+          body: content.body,
+          cta: content.cta,
+          hashtags: content.hashtags || [],
+          status: "generated",
+          score: 75,
+          created_at: Date.now(),
+        });
 
-      const hashtagStr = hashtags.length ? "\n\n" + hashtags.join(" ") : "";
-      const text = `${hook}\n\n${caption}${hashtagStr}`;
+        if (insertError) {
+          result.errors.push(`DB insert failed: ${insertError.message}`);
+        }
 
-      let media: { photo?: string } | undefined;
-      try {
-        const imageResult = await generateImageWithFallback(`${hook}, ${channel.service}, social media`, "1:1");
-        if (imageResult.url) media = { photo: imageResult.url };
-      } catch {
-        // Image generation is best-effort
-      }
+        for (const channel of channels) {
+          const platformMap: Record<string, string> = {
+            instagram: "instagram",
+            facebook: "facebook",
+            tiktok: "tiktok",
+          };
 
-      try {
-        const postResult = await publishToBuffer(text, channel.id, media, channel.service);
-        if (postResult?.success || postResult?.updates?.[0]?.id) {
-          result.contentPublished++;
-          result.details.push(`Published: ${hook.substring(0, 40)}... → ${channel.name}`);
+          if (platformMap[channel.service] && campaign.platforms?.includes(channel.service)) {
+            try {
+              const text = `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${content.hashtags?.join(" ") || ""}`;
+              const post = await createBufferPost({
+                channelId: channel.id,
+                text,
+                schedulingType: "addnow",
+              });
+
+              result.contentPublished++;
+              result.details.push(`Published to ${channel.service} (${channel.displayName}): ${post.id}`);
+
+              await supabase.from("scheduled_posts").insert({
+                campaign_id: campaign.id,
+                content_piece_id: null,
+                platform: channel.service,
+                channel_id: channel.id,
+                status: "published",
+                scheduled_at: Date.now(),
+                published_at: Date.now(),
+                buffer_post_id: post.id,
+              });
+            } catch (e) {
+              result.errors.push(`Publish to ${channel.service} failed: ${e instanceof Error ? e.message : "unknown"}`);
+            }
+          }
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "failed";
-        if (msg.includes("RATE_LIMIT")) {
-          result.errors.push("Buffer rate limited — stopping");
-          break;
-        }
-        result.errors.push(`Publish: ${msg}`);
+        result.errors.push(`Content generation failed for ${campaign.name}: ${e instanceof Error ? e.message : "unknown"}`);
       }
     }
-
-    result.details.push(`Cost today: $${getTodayCost().totalCost.toFixed(4)} | ${getTodayCost().totalTokens} tokens`);
 
     return NextResponse.json(result);
   } catch (error) {
-    result.errors.push(`Fatal: ${error instanceof Error ? error.message : "unknown"}`);
-    return NextResponse.json(result, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
 }
-
