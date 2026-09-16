@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useAction, useQuery } from "convex/react";
-import { api } from "@convex/_generated/api";
+import { useAction, useQuery, api } from "@/hooks/use-convex";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
