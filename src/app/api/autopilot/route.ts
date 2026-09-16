@@ -66,14 +66,14 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
 }`;
 
       try {
-        const response = await generateTextWithFallback(prompt, {
-          systemPrompt: "Sos un experto en marketing digital argentino. Generás contenido viral para redes sociales. Español rioplatense. Respondé SOLO con el JSON, sin texto adicional.",
-          maxTokens: 400,
-        });
+        const response = await generateTextWithFallback(
+          prompt,
+          "Sos un experto en marketing digital argentino. Generás contenido viral para redes sociales. Español rioplatense. Respondé SOLO con el JSON, sin texto adicional."
+        );
 
         let content;
         try {
-          const jsonMatch = response.match(/\{[\s\S]*\}/);
+          const jsonMatch = response.text.match(/\{[\s\S]*\}/);
           content = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
         } catch {
           content = null;
@@ -85,7 +85,7 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
         }
 
         result.contentGenerated++;
-        result.details.push(`Contenido generado: ${content.hook}`);
+        result.details.push(`Contenido generado: ${content.hook}`);;
 
         const images = [
           "quiniela-matematica.png",
