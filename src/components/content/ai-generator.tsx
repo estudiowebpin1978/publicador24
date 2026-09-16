@@ -51,31 +51,49 @@ export function AIGenerator({ onGenerated, className }: AIGeneratorProps) {
 
   const handleGenerate = async () => {
     setIsGenerating(true)
-    // Simulate AI generation
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      const res = await fetch("/api/content/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: form.topic,
+          objective: form.objective,
+          audience: form.audience,
+          language: form.language,
+          tone: form.tone,
+          platforms: form.platforms,
+          cta: form.cta,
+        }),
+      })
 
-    const mockGenerated: GeneratedContent = {
-      original: `Exciting news about ${form.topic || "our latest update"}! We're thrilled to share this with our ${form.audience || "valued community"}. ${form.cta ? form.cta : "Check it out and let us know what you think!"}`,
-      variants: {
-        instagram: `Exciting news about ${form.topic || "our latest update"}! 🎉\n\nWe're thrilled to share this with our ${form.audience || "valued community"}. ${form.cta || "Check it out and let us know what you think!"} ✨`,
-        tiktok: `Wait for it... 🤯\n\n${form.topic || "This changes everything!"} Stay tuned for more!`,
-        x: `Big news: ${form.topic || "our latest update"} is here!\n\n${form.cta || "What do you think?"}`,
-        facebook: `We're excited to announce ${form.topic || "our latest update"}!\n\nOur ${form.audience || "amazing community"} deserves to be the first to know. ${form.cta || "Share your thoughts below!"}`,
-      },
-      hashtags: form.hashtags
-        ? form.hashtags.split(",").map((h) => h.trim())
-        : ["#innovation", "#trending", "#socialmedia", "#marketing"],
-      mentions: form.mentions
-        ? form.mentions.split(",").map((m) => m.trim())
-        : [],
-      score: Math.floor(Math.random() * 20) + 75,
-      risk: Math.random() > 0.7 ? "medium" : "low",
-      bestTime: "9:00 AM - 11:00 AM",
+      if (!res.ok) throw new Error("Generation failed")
+
+      const data = await res.json()
+      const generated: GeneratedContent = {
+        original: data.original || "",
+        variants: data.variants || {},
+        hashtags: data.hashtags || [],
+        mentions: data.mentions || [],
+        score: data.score || 75,
+        risk: data.risk || "low",
+        bestTime: data.bestTime || "9:00 AM - 11:00 AM",
+      }
+
+      setGenerated(generated)
+      onGenerated?.(generated)
+    } catch {
+      setGenerated({
+        original: `Contenido sobre ${form.topic || "tu tema"}`,
+        variants: {},
+        hashtags: form.hashtags ? form.hashtags.split(",").map(h => h.trim()) : [],
+        mentions: form.mentions ? form.mentions.split(",").map(m => m.trim()) : [],
+        score: 70,
+        risk: "low",
+        bestTime: "9:00 AM - 11:00 AM",
+      })
+    } finally {
+      setIsGenerating(false)
     }
-
-    setGenerated(mockGenerated)
-    setIsGenerating(false)
-    onGenerated?.(mockGenerated)
   }
 
   const togglePlatform = (platform: string) => {

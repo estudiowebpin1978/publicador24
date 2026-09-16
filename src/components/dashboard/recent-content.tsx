@@ -1,3 +1,6 @@
+"use client"
+
+import * as React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { FileText } from "lucide-react"
@@ -8,47 +11,8 @@ interface ContentItem {
   title: string
   platform: string
   status: "publicado" | "programado" | "borrador" | "fallido"
-  image?: string
   date: string
 }
-
-const mockContent: ContentItem[] = [
-  {
-    id: "1",
-    title: "10 Tips for Better Social Media Engagement",
-    platform: "instagram",
-    status: "publicado",
-    date: "2 hours ago",
-  },
-  {
-    id: "2",
-    title: "Behind the scenes at our office",
-    platform: "tiktok",
-    status: "programado",
-    date: "Tomorrow at 9:00 AM",
-  },
-  {
-    id: "3",
-    title: "Weekly Industry Newsletter",
-    platform: "linkedin",
-    status: "borrador",
-    date: "Draft",
-  },
-  {
-    id: "4",
-    title: "Product Launch Announcement",
-    platform: "x",
-    status: "publicado",
-    date: "Yesterday",
-  },
-  {
-    id: "5",
-    title: "Customer Testimonial Video",
-    platform: "youtube",
-    status: "fallido",
-    date: "3 days ago",
-  },
-]
 
 const platformIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   instagram: InstagramIcon,
@@ -67,6 +31,62 @@ const statusVariants: Record<string, "default" | "secondary" | "destructive" | "
 }
 
 export function RecentContent() {
+  const [items, setItems] = React.useState<ContentItem[]>([])
+  const [loading, setLoading] = React.useState(true)
+
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/content-pieces?limit=5")
+        if (res.ok) {
+          const data = await res.json()
+          const pieces = (data.pieces || data || []).slice(0, 5)
+          setItems(pieces.map((p: Record<string, unknown>) => ({
+            id: p.id as string,
+            title: (p.title as string) || (p.hook as string) || "Sin título",
+            platform: (p.platform as string) || "instagram",
+            status: p.status === "published" ? "publicado"
+              : p.status === "scheduled" ? "programado"
+              : p.status === "failed" ? "fallido"
+              : "borrador",
+            date: p.created_at ? new Date(p.created_at as number).toLocaleDateString("es-AR") : "Hoy",
+          })))
+        }
+      } catch {
+        // No data yet
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Contenido Reciente</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-14 animate-pulse rounded-lg bg-muted" />
+          ))}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (items.length === 0) {
+    return (
+      <Card>
+        <CardHeader><CardTitle>Contenido Reciente</CardTitle></CardHeader>
+        <CardContent className="flex flex-col items-center justify-center py-8 text-center">
+          <FileText className="mb-2 size-8 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">No hay contenido creado todavía.</p>
+          <p className="text-xs text-muted-foreground">Creá una campaña para generar contenido.</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -74,7 +94,7 @@ export function RecentContent() {
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-3">
-          {mockContent.map((item) => {
+          {items.map((item) => {
             const PlatformIcon = platformIcons[item.platform] || FileText
             return (
               <div

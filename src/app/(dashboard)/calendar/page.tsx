@@ -5,14 +5,38 @@ import * as React from "react"
 import { CalendarView } from "@/components/calendar/calendar-view"
 import { Card, CardContent } from "@/components/ui/card"
 import { List, CalendarDays, Clock } from "lucide-react"
-import { useQuery, api } from "@/hooks/use-convex"
+
+interface CalendarEvent {
+  id: string
+  title: string
+  date: Date
+  platform: string
+  status: "published" | "scheduled" | "draft"
+  time: string
+}
 
 export default function CalendarPage() {
-  const scheduledPosts = useQuery(api.scheduledPosts.listUpcoming)
-  const contentPieces = useQuery(api.contentPieces.list)
-  const contents = useQuery(api.content.list)
+  const [events, setEvents] = React.useState<CalendarEvent[]>([])
+  const [loading, setLoading] = React.useState(true)
 
-  if (scheduledPosts === undefined) {
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/calendar-events")
+        if (res.ok) {
+          const data = await res.json()
+          setEvents(data.events || [])
+        }
+      } catch {
+        // No data yet
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -31,31 +55,9 @@ export default function CalendarPage() {
     )
   }
 
-  const pieceMap = new Map((contentPieces || []).map((p: any) => [p._id, p]))
-  const contentMap = new Map((contents || []).map((c: any) => [c._id, c]))
-
-  const events = scheduledPosts.map((post: any) => {
-    let title = "Publicación programada"
-    if (post.contentPieceId) {
-      const piece = pieceMap.get(post.contentPieceId)
-      if (piece) title = piece.title || piece.hook || title
-    } else if (post.contentId) {
-      const content = contentMap.get(post.contentId)
-      if (content) title = content.title || title
-    }
-    return {
-      id: post._id,
-      title,
-      date: new Date(post.scheduledAt),
-      platform: post.platform,
-      status: post.status === "PUBLISHED" ? "published" : post.status === "QUEUED" ? "scheduled" : "draft",
-      time: new Date(post.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }
-  })
-
-  const upcomingCount = events.filter((e: any) => new Date(e.date) >= new Date() && e.status === "scheduled").length
-  const draftCount = events.filter((e: any) => e.status === "draft").length
-  const todayCount = events.filter((e: any) => {
+  const upcomingCount = events.filter(e => new Date(e.date) >= new Date() && e.status === "scheduled").length
+  const draftCount = events.filter(e => e.status === "draft").length
+  const todayCount = events.filter(e => {
     const today = new Date()
     const eventDate = new Date(e.date)
     return eventDate.getDate() === today.getDate() &&
@@ -108,12 +110,22 @@ export default function CalendarPage() {
         </Card>
       </div>
 
-      <CalendarView
-        events={events}
-        onEventClick={(event) => console.log("Event clicked:", event)}
-        onDateClick={(date) => console.log("Date clicked:", date)}
-        onAddEvent={() => console.log("Add event")}
-      />
+      {events.length === 0 ? (
+        <Card className="flex flex-col items-center justify-center py-16 text-center">
+          <CardContent className="space-y-3">
+            <CalendarDays className="mx-auto size-12 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">No hay publicaciones programadas todavía.</p>
+            <p className="text-xs text-muted-foreground">Creá una campaña y generá contenido para verlo acá.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <CalendarView
+          events={events}
+          onEventClick={(event) => console.log("Event clicked:", event)}
+          onDateClick={(date) => console.log("Date clicked:", date)}
+          onAddEvent={() => {}}
+        />
+      )}
     </div>
   )
 }

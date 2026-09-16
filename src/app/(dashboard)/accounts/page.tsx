@@ -6,22 +6,29 @@ import { AccountCard } from "@/components/social/account-card"
 import { ConnectDialog } from "@/components/social/connect-dialog"
 import { Card, CardContent } from "@/components/ui/card"
 import { Users, AlertCircle } from "lucide-react"
-import { useQuery, useMutation } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
+
+interface SocialAccount {
+  _id: string
+  platform: string
+  displayName?: string
+  username?: string
+  avatarUrl?: string
+  status: string
+  tokenStatus?: string
+  lastPostAt?: number
+  permissions?: string[]
+}
 
 export default function AccountsPage() {
-  const accounts = useQuery(api.socialAccounts.list)
-  const removeAccount = useMutation(api.socialAccounts.remove)
-  const updateAccount = useMutation(api.socialAccounts.update)
-  const createAccount = useMutation(api.socialAccounts.create)
-
-  const [bufferChannels, setBufferChannels] = React.useState<any[]>([])
-  const [loadingBuffer, setLoadingBuffer] = React.useState(true)
+  const [accounts, setAccounts] = React.useState<SocialAccount[]>([])
+  const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
-    fetch("/api/health")
-      .then(() => setLoadingBuffer(false))
-      .catch(() => setLoadingBuffer(false))
+    fetch("/api/social-accounts")
+      .then((res) => res.json())
+      .then((data) => setAccounts(data.accounts || data || []))
+      .catch(() => setAccounts([]))
+      .finally(() => setLoading(false))
   }, [])
 
   const handleConnect = async (platform: string) => {
@@ -33,17 +40,22 @@ export default function AccountsPage() {
   }
 
   const handleDisconnect = async (platform: string) => {
-    const account = accounts?.find((a: any) => a.platform === platform)
+    const account = accounts.find((a) => a.platform === platform)
     if (account) {
-      await removeAccount({ id: account._id })
+      try {
+        await fetch("/api/social-accounts", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: account._id }),
+        })
+        setAccounts((prev) => prev.filter((a) => a._id !== account._id))
+      } catch (error) {
+        console.error("Failed to disconnect:", error)
+      }
     }
   }
 
-  const handleUpdate = async (id: string, updates: { displayName?: string; avatarUrl?: string; status?: string }) => {
-    await updateAccount({ id, ...updates })
-  }
-
-  if (accounts === undefined) {
+  if (loading) {
     return (
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -66,8 +78,8 @@ export default function AccountsPage() {
     )
   }
 
-  const connectedCount = accounts.filter((a: any) => a.status === "connected").length
-  const errorCount = accounts.filter((a: any) => a.status === "error" || a.tokenStatus === "expired").length
+  const connectedCount = accounts.filter((a) => a.status === "connected").length
+  const errorCount = accounts.filter((a) => a.status === "error" || a.tokenStatus === "expired").length
 
   return (
     <div className="space-y-6">
@@ -121,7 +133,7 @@ export default function AccountsPage() {
             Ninguna cuenta conectada. Hacé clic en "Conectar Nueva Cuenta" para empezar.
           </div>
         ) : (
-          accounts.map((account: any) => (
+          accounts.map((account) => (
             <AccountCard
               key={account._id}
               platform={account.platform}

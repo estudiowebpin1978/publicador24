@@ -17,14 +17,23 @@ import {
   MapPin,
   Link as LinkIcon,
 } from "lucide-react"
-import { useQuery, useMutation } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
+
+interface BrandProfile {
+  _id: string
+  name?: string
+  description?: string
+  tone?: string
+  visualStyle?: string
+  website?: string
+  phone?: string
+  location?: string
+  colors?: { primary?: string; secondary?: string; accent?: string }
+  defaultCtas?: string[]
+}
 
 export default function BrandKitPage() {
-  const brandProfile = useQuery(api.brandProfiles.getDefault)
-  const createProfile = useMutation(api.brandProfiles.create)
-  const updateProfile = useMutation(api.brandProfiles.update)
-
+  const [brandProfile, setBrandProfile] = React.useState<BrandProfile | null>(null)
+  const [loading, setLoading] = React.useState(true)
   const [name, setName] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [tone, setTone] = React.useState("")
@@ -41,21 +50,29 @@ export default function BrandKitPage() {
   const initializedRef = React.useRef(false)
 
   React.useEffect(() => {
-    if (brandProfile && !initializedRef.current) {
-      initializedRef.current = true
-      setName(brandProfile.name || "")
-      setDescription(brandProfile.description || "")
-      setTone(brandProfile.tone || "")
-      setVisualStyle(brandProfile.visualStyle || "")
-      setWebsite(brandProfile.website || "")
-      setPhone(brandProfile.phone || "")
-      setLocation(brandProfile.location || "")
-      setPrimaryColor(brandProfile.colors?.primary || "#7c3aed")
-      setSecondaryColor(brandProfile.colors?.secondary || "#4f46e5")
-      setAccentColor(brandProfile.colors?.accent || "#ec4899")
-      setDefaultCtas(brandProfile.defaultCtas || [])
-    }
-  }, [brandProfile])
+    fetch("/api/brand-profiles")
+      .then((res) => res.json())
+      .then((data) => {
+        const profile = data.profile || data
+        setBrandProfile(profile)
+        if (profile && !initializedRef.current) {
+          initializedRef.current = true
+          setName(profile.name || "")
+          setDescription(profile.description || "")
+          setTone(profile.tone || "")
+          setVisualStyle(profile.visualStyle || "")
+          setWebsite(profile.website || "")
+          setPhone(profile.phone || "")
+          setLocation(profile.location || "")
+          setPrimaryColor(profile.colors?.primary || "#7c3aed")
+          setSecondaryColor(profile.colors?.secondary || "#4f46e5")
+          setAccentColor(profile.colors?.accent || "#ec4899")
+          setDefaultCtas(profile.defaultCtas || [])
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   const handleSave = async () => {
     const profileData = {
@@ -70,13 +87,25 @@ export default function BrandKitPage() {
       defaultCtas,
     }
 
-    if (brandProfile) {
-      await updateProfile({ id: brandProfile._id, ...profileData })
-    } else {
-      await createProfile(profileData)
+    try {
+      if (brandProfile) {
+        await fetch("/api/brand-profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: brandProfile._id, ...profileData }),
+        })
+      } else {
+        await fetch("/api/brand-profiles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(profileData),
+        })
+      }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (error) {
+      console.error("Failed to save:", error)
     }
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
   }
 
   const addCta = () => {

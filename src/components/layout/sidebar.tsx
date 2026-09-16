@@ -38,7 +38,7 @@ interface SidebarProps {
 export function Sidebar({ className }: SidebarProps) {
   const pathname = usePathname()
   const { user } = useAuth()
-  const userEmail = user?.email || "usuario@publicador24.com"
+  const userEmail = user?.email || "usuario"
 
   return (
     <div className={cn(

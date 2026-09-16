@@ -8,172 +8,167 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import { Search, TrendingUp, Hash, Star, Copy, ArrowUpRight } from "lucide-react"
-import { useQuery, api } from "@/hooks/use-convex"
+import { Search, TrendingUp, Hash, Copy } from "lucide-react"
+
+interface Hashtag {
+  tag: string
+  category: string
+  relevance: number
+  popularity: string
+}
 
 export default function HashtagsPage() {
   const [searchQuery, setSearchQuery] = React.useState("")
-  const hashtags = useQuery(api.hashtags.list)
+  const [hashtags, setHashtags] = React.useState<Hashtag[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [generating, setGenerating] = React.useState(false)
+  const [topic, setTopic] = React.useState("")
 
-  if (hashtags === undefined) {
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/hashtags")
+        if (res.ok) {
+          const data = await res.json()
+          setHashtags(data.hashtags || [])
+        }
+      } catch {
+        // No data
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const handleGenerate = async () => {
+    if (!topic.trim()) return
+    setGenerating(true)
+    try {
+      const res = await fetch("/api/hashtags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setHashtags(data.hashtags || [])
+      }
+    } catch {
+      // ignore
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const filtered = hashtags.filter(h =>
+    !searchQuery || h.tag.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  const trending = filtered.filter(h => h.relevance > 60).sort((a, b) => b.relevance - a.relevance).slice(0, 10)
+  const categories = Array.from(new Map(filtered.map(h => [h.category, h])).values()).slice(0, 5)
+
+  if (loading) {
     return (
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Inteligencia de Hashtags</h1>
-          <p className="text-muted-foreground">Descubrí y optimizá hashtags para lograr el máximo alcance.</p>
+          <p className="text-muted-foreground">Generá hashtags relevantes para tu contenido.</p>
         </div>
-        <div className="relative max-w-md animate-pulse"><div className="h-10 bg-muted rounded" /></div>
-        <Tabs defaultValue="trending">
-          <TabsList>
-            <TabsTrigger value="trending"><TrendingUp className="size-4" /> En Tendencia</TabsTrigger>
-            <TabsTrigger value="recommended"><Star className="size-4" /> Recomendados</TabsTrigger>
-            <TabsTrigger value="categories"><Hash className="size-4" /> Categorías</TabsTrigger>
-          </TabsList>
-          <TabsContent value="trending" className="space-y-4">
-            <Card><CardContent className="h-96 animate-pulse bg-muted" /></Card>
-          </TabsContent>
-          <TabsContent value="recommended" className="space-y-4">
-            <Card><CardContent className="h-96 animate-pulse bg-muted" /></Card>
-          </TabsContent>
-          <TabsContent value="categories" className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Card key={i} className="animate-pulse"><CardContent className="h-24" /></Card>
-              ))}
-            </div>
-          </TabsContent>
-        </Tabs>
+        <div className="h-10 w-full max-w-md animate-pulse bg-muted rounded" />
+        <Card><CardContent className="h-96 animate-pulse bg-muted" /></Card>
       </div>
     )
   }
-
-  const trendingHashtags = hashtags
-    .filter((h: any) => h.finalScore && h.finalScore > 50)
-    .sort((a: any, b: any) => (b.finalScore || 0) - (a.finalScore || 0))
-    .slice(0, 10)
-
-  const recommendedHashtags = hashtags
-    .filter((h: any) => h.relevanceScore && h.relevanceScore > 60)
-    .sort((a: any, b: any) => (b.relevanceScore || 0) - (a.relevanceScore || 0))
-    .slice(0, 6)
-
-  const categories = Array.from(
-    new Map(hashtags.map((h: any) => [h.category || "Uncategorized", h])).values()
-  ).slice(0, 5).map((h: any, index: number) => ({
-    name: h.category || "Uncategorized",
-    count: hashtags.filter((x: any) => x.category === h.category).length,
-    color: ["bg-blue-500", "bg-violet-500", "bg-pink-500", "bg-cyan-500", "bg-green-500"][index % 5],
-  }))
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Inteligencia de Hashtags</h1>
-        <p className="text-muted-foreground">Descubrí y optimizá hashtags para lograr el máximo alcance.</p>
+        <p className="text-muted-foreground">Generá hashtags relevantes para tu contenido.</p>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="flex gap-3 max-w-md">
         <Input
-          placeholder="Buscar hashtags..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9"
+          placeholder="Tema o industria (ej: diseño web, gastronomía)"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
         />
+        <Button onClick={handleGenerate} disabled={generating || !topic.trim()}>
+          {generating ? "Generando..." : "Generar"}
+        </Button>
       </div>
 
-      <Tabs defaultValue="trending">
-        <TabsList>
-          <TabsTrigger value="trending"><TrendingUp className="size-4" /> En Tendencia</TabsTrigger>
-          <TabsTrigger value="recommended"><Star className="size-4" /> Recomendados</TabsTrigger>
-          <TabsTrigger value="categories"><Hash className="size-4" /> Categorías</TabsTrigger>
-        </TabsList>
+      {hashtags.length === 0 ? (
+        <Card className="flex flex-col items-center justify-center py-16 text-center">
+          <CardContent className="space-y-3">
+            <Hash className="mx-auto size-12 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">Ingresá un tema y generá hashtags relevantes.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Tabs defaultValue="trending">
+          <TabsList>
+            <TabsTrigger value="trending"><TrendingUp className="size-4" /> Recomendados</TabsTrigger>
+            <TabsTrigger value="categories"><Hash className="size-4" /> Categorías</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="trending" className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle>Hashtags en Tendencia</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {trendingHashtags.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No se encontraron hashtags en tendencia</p>
-                ) : (
-                  trendingHashtags.map((item: any, index: number) => (
-                    <div key={item._id} className="flex items-center justify-between rounded-lg border p-4">
-                      <div className="flex items-center gap-4">
-                        <div className="text-lg font-bold text-muted-foreground">{index + 1}</div>
-                        <div>
-                          <p className="font-medium">{item.tag}</p>
-                          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                            <span>{item.popularityScore ? `${(item.popularityScore / 1000).toFixed(1)}K` : "N/A"} publicaciones</span>
-                            <Badge variant="secondary">{item.category || "General"}</Badge>
+          <TabsContent value="trending" className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle>Hashtags Recomendados</CardTitle></CardHeader>
+              <CardContent>
+                <div className="relative mb-4">
+                  <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input placeholder="Filtrar hashtags..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+                </div>
+                <div className="space-y-3">
+                  {trending.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">No se encontraron hashtags</p>
+                  ) : (
+                    trending.map((item, index) => (
+                      <div key={item.tag} className="flex items-center justify-between rounded-lg border p-4">
+                        <div className="flex items-center gap-4">
+                          <div className="text-lg font-bold text-muted-foreground">{index + 1}</div>
+                          <div>
+                            <p className="font-medium">{item.tag}</p>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <span>{item.popularity}</span>
+                              <Badge variant="secondary">{item.category}</Badge>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-sm font-medium">{item.finalScore || 0}/100</p>
-                          <Progress value={item.finalScore || 0} className="w-20" />
+                        <div className="flex items-center gap-4">
+                          <Badge variant="outline">{item.relevance}/100</Badge>
+                          <Button variant="ghost" size="icon-sm" onClick={() => navigator.clipboard.writeText(item.tag)}>
+                            <Copy className="size-4" />
+                          </Button>
                         </div>
-                        <span className="flex items-center text-sm text-green-600">
-                          <ArrowUpRight className="size-3" />
-                          {item.trendScore || 0}%
-                        </span>
-                        <Button variant="ghost" size="icon-sm"><Copy className="size-4" /></Button>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <TabsContent value="recommended" className="space-y-4">
-          <Card>
-            <CardHeader><CardTitle>Recomendados para tu Contenido</CardTitle></CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {recommendedHashtags.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8 col-span-2">Aún no hay recomendaciones</p>
-                ) : (
-                  recommendedHashtags.map((item: any) => (
-                    <div key={item._id} className="flex items-center justify-between rounded-lg border p-4">
-                      <div>
-                        <p className="font-medium">{item.tag}</p>
-                        <p className="text-sm text-muted-foreground">Alta relevancia para tu nicho</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {item.popularityScore ? `${(item.popularityScore / 1000).toFixed(1)}K` : "N/A"} publicaciones
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{item.relevanceScore || 0}</Badge>
-                        <Button variant="ghost" size="icon-sm"><Copy className="size-4" /></Button>
-                      </div>
+          <TabsContent value="categories" className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {categories.map((cat, i) => (
+                <Card key={cat.category} className="cursor-pointer transition-shadow hover:shadow-md">
+                  <CardContent className="flex items-center gap-4">
+                    <div className={cn("size-3 rounded-full", ["bg-blue-500", "bg-violet-500", "bg-pink-500", "bg-cyan-500", "bg-green-500"][i % 5])} />
+                    <div>
+                      <p className="font-medium">{cat.category}</p>
+                      <p className="text-sm text-muted-foreground">{filtered.filter(h => h.category === cat.category).length} hashtags</p>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="categories" className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {categories.map((category) => (
-              <Card key={category.name} className="cursor-pointer transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center gap-4">
-                  <div className={cn("size-3 rounded-full", category.color)} />
-                  <div>
-                    <p className="font-medium">{category.name}</p>
-                    <p className="text-sm text-muted-foreground">{category.count} hashtags</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   )
 }
