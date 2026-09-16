@@ -68,8 +68,19 @@ export async function createBufferPost(input: {
       }).join(", ")
     : "";
 
-  const metadataJson = input.metadata
-    ? `, metadata: ${JSON.stringify(input.metadata).replace(/"/g, '\\"').replace(/\\"/g, '"')}`
+  const metadataStr = input.metadata
+    ? (() => {
+        const parts: string[] = [];
+        for (const [key, value] of Object.entries(input.metadata)) {
+          if (typeof value === "object" && value !== null) {
+            const inner = Object.entries(value)
+              .map(([k, v]) => `${k}: ${typeof v === "boolean" ? v : `"${v}"}`)
+              .join(", ");
+            parts.push(`${key}: { ${inner} }`);
+          }
+        }
+        return parts.length > 0 ? `, metadata: { ${parts.join(", ")} }` : "";
+      })()
     : "";
 
   const mutation = `
@@ -78,7 +89,7 @@ export async function createBufferPost(input: {
         channelId: "${input.channelId}",
         text: ${JSON.stringify(input.text)},
         schedulingType: ${input.schedulingType || "automatic"},
-        mode: ${input.mode || "addToQueue"}${metadataJson}${assetsJson ? `,
+        mode: ${input.mode || "addToQueue"}${metadataStr}${assetsJson ? `,
         assets: [${assetsJson}]` : ""}
       }) {
         ... on PostActionSuccess {
