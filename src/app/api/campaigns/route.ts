@@ -21,22 +21,25 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const supabase = getSupabaseAdmin()
 
+    const insertData: Record<string, unknown> = {
+      name: body.name,
+      description: body.description || "",
+      idea: body.idea || "",
+      objective: body.objective || "",
+      target_audience: body.target_audience || "",
+      platforms: body.platforms || [],
+      style: body.style || "profesional",
+      offer: body.offer || "",
+      url: body.url || "",
+      status: body.status || "DRAFT",
+      content_count: body.content_count || 0,
+      published_count: body.published_count || 0,
+    };
+    if (body.project_id) insertData.project_id = body.project_id;
+
     const { data, error } = await supabase
       .from("campaigns")
-      .insert({
-        name: body.name,
-        description: body.description || "",
-        idea: body.idea || "",
-        objective: body.objective || "",
-        target_audience: body.target_audience || "",
-        platforms: body.platforms || [],
-        style: body.style || "profesional",
-        offer: body.offer || "",
-        url: body.url || "",
-        status: body.status || "DRAFT",
-        content_count: body.content_count || 0,
-        published_count: body.published_count || 0,
-      })
+      .insert(insertData)
       .select()
       .single()
 

@@ -3,6 +3,7 @@ import { generateTextWithFallback } from "@/lib/ai/multi-provider";
 import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { getTodayCost } from "@/lib/ai/cost-tracker";
 import { checkPublicationSafety } from "@/lib/ai/publication-safety";
+import { getSupabaseAdmin } from "@/lib/supabase/server";
 
 interface LoopResult {
   timestamp: number;
@@ -13,19 +14,19 @@ interface LoopResult {
   details: string[];
 }
 
-async function callBuffer(query: string, variables?: Record<string, unknown>) {
+async function callBuffer(endpoint: string, options?: RequestInit) {
   const apiKey = process.env.BUFFER_API_KEY;
   if (!apiKey || apiKey === "tu-key-aqui" || apiKey === "your-buffer-api-key") {
     throw new Error("BUFFER NOT CONFIGURED");
   }
 
-  const res = await fetch("https://api.buffer.com", {
-    method: "POST",
+  const res = await fetch(`https://api.buffer.com/1${endpoint}`, {
+    ...options,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
+      ...options?.headers,
     },
-    body: JSON.stringify({ query, variables }),
   });
 
   if (!res.ok) {
@@ -33,78 +34,65 @@ async function callBuffer(query: string, variables?: Record<string, unknown>) {
     throw new Error(`Buffer HTTP ${res.status}`);
   }
 
-  const data = await res.json();
-  if (data.errors) {
-    const code = data.errors[0]?.extensions?.code;
-    if (code === "RATE_LIMIT_EXCEEDED") throw new Error("BUFFER_RATE_LIMIT");
-    throw new Error(`Buffer: ${data.errors[0]?.message || "unknown"}`);
-  }
-  return data.data;
+  return res.json();
 }
 
 async function getBufferChannels() {
-  const accountData = await callBuffer(`{ account { id organizations { id } } }`);
-  const orgId = accountData.account.organizations[0]?.id;
-  if (!orgId) throw new Error("No Buffer organization found");
-
-  const channelsData = await callBuffer(
-    `{ channels(input: { organizationId: "${orgId}" }) { id service displayName name isDisconnected isLocked } }`
+  const data = await callBuffer("/profiles.json");
+  const profiles = data || [];
+  return profiles.filter(
+    (p: { service: string; schedule_status: string }) =>
+      p.service === "instagram" || p.service === "tiktok" || p.service === "facebook"
   );
-  return channelsData.channels.filter((ch: { isDisconnected: boolean; isLocked: boolean }) => !ch.isDisconnected && !ch.isLocked);
 }
 
-async function publishToBuffer(text: string, channelId: string, imageUrl?: string, platform?: string) {
-  const input: Record<string, unknown> = {
-    channelId,
+async function publishToBuffer(text: string, profileId: string, media?: { photo?: string }, platform?: string) {
+  const body: Record<string, unknown> = {
+    profile_ids: [profileId],
     text,
-    mode: "addToQueue",
-    schedulingType: "automatic",
-    needsApproval: false,
+    now: false,
   };
 
-  if (imageUrl) {
-    input.assets = { image: { url: imageUrl } };
+  if (media) {
+    body.media = media;
   }
 
-  if (platform === "instagram") {
-    input.metadata = { instagram: { type: "post", shouldShareToFeed: true } };
-  } else if (platform === "facebook") {
-    input.metadata = { facebook: { type: "post" } };
-  } else if (platform === "tiktok") {
-    input.metadata = { tiktok: {} };
-  }
-
-  const result = await callBuffer(
-    `mutation CreatePost($input: CreatePostInput!) {
-      createPost(input: $input) {
-        ... on PostActionSuccess { post { id text status } }
-        ... on MutationError { message }
-      }
-    }`,
-    { input }
-  );
-  return result.createPost;
+  const result = await callBuffer("/updates/create.json", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return result;
 }
 
-const HOOKS = [
-  "Sabias que el 80% de los que juegan quiniela pierden por falta de estrategia?",
-  "Te voy a revelar el metodo que uso para analizar la quiniela con IA",
-  "No es suerte. Es matematica. Asi analizo los numeros con inteligencia artificial",
-  "Si todavia no usas IA para la quiniela, estas dejando plata sobre la mesa",
-  "La quiniela no se predice. Se analiza. Y la IA es tu mejor herramienta",
-  "3 errores que cometen todos los que juegan quiniela (y como la IA los corrige)",
-  "Transforma tu forma de jugar quiniela con este metodo basado en datos",
-];
+async function loadCampaignContent(projectId?: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    let query = supabase
+      .from("campaigns")
+      .select("id, name, description, objective, target_audience, platforms")
+      .eq("status", "active")
+      .limit(1);
 
-const CAPTIONS = [
-  "La quiniela no es solo suerte. Es analisis.\n\nCon inteligencia artificial, puedo estudiar patrones, tendencias y estadisticas que el ojo humano no ve.\n\nAsi es como me acerco a los aciertos, paso a paso.\n\nQueres ver como funciona? Link en bio.",
-  "Cada numero tiene una historia. La IA la lee.\n\nNo adivino. Analizo. Los datos son los que mandan.\n\nSi queres dejar de jugar a ciegas, esta es tu oportunidad.\n\nDescubi mi metodo → link en bio.",
-  "El 90% de los jugadores pierden. Yo estoy en el otro 10%.\n\nLa diferencia? Uso inteligencia artificial para analizar cada jugada.\n\nNo es magia. Es estrategia.\n\nUnite a los que juegan distinto.",
-  "Pensa la quiniela como un inversor piensa la bolsa.\n\nDatos. Tendencias. Analisis. Y un toque de IA.\n\nAsi genero mis predicciones todas las semanas.\n\nQueres probar? Link en bio.",
-  "Hoy te muestro como la IA cambio mi forma de jugar quiniela.\n\nAntes: intuicion.\nAhora: datos + IA = mejores resultados.\n\nEl futuro de la quiniela es inteligente.",
-  "No necesitas ser matematico para ganar en quiniela.\n\nNecesitas la herramienta correcta. Y la IA es esa herramienta.\n\nAnalizo patrones, detecto tendencias y te doy los numeros mas probables.",
-  "Cada semana mejoro mi metodo. Gracias a la IA.\n\nLos datos no mienten. Y la inteligencia artificial los interpreta mejor que nadie.\n\nQueres ver los resultados? Segui mi perfil.",
-];
+    if (projectId) {
+      query = query.eq("project_id", projectId);
+    }
+
+    const { data: campaigns } = await query;
+    if (!campaigns?.length) return null;
+
+    const campaign = campaigns[0];
+    const { data: pieces } = await supabase
+      .from("content_pieces")
+      .select("id, hook, body, cta, hashtags, content_type, platform")
+      .eq("campaign_id", campaign.id)
+      .eq("status", "draft")
+      .limit(5);
+
+    return { campaign, pieces: pieces || [] };
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(_request: NextRequest) {
   const result: LoopResult = {
@@ -117,7 +105,7 @@ export async function POST(_request: NextRequest) {
   };
 
   try {
-    let channels: { id: string; service: string; displayName: string }[] = [];
+    let channels: { id: string; service: string; name: string }[] = [];
     try {
       channels = await getBufferChannels();
       result.details.push(`Buffer: ${channels.length} channels connected`);
@@ -131,34 +119,35 @@ export async function POST(_request: NextRequest) {
       return NextResponse.json(result);
     }
 
-    const instaChannels = channels.filter((c) => c.service === "instagram");
-    const tiktokChannels = channels.filter((c) => c.service === "tiktok");
-    const targetChannels = [...instaChannels, ...tiktokChannels];
+    const campaignContent = await loadCampaignContent();
 
-    if (targetChannels.length === 0) {
-      result.errors.push("No Instagram or TikTok channels found in Buffer");
-      return NextResponse.json(result);
-    }
+    for (let i = 0; i < Math.min(channels.length, 3); i++) {
+      const channel = channels[i];
+      let hook = "";
+      let caption = "";
+      let hashtags: string[] = [];
 
-    for (let i = 0; i < Math.min(targetChannels.length, 3); i++) {
-      const channel = targetChannels[i];
-      const hookIdx = i % HOOKS.length;
-      const captionIdx = i % CAPTIONS.length;
-
-      let hook = HOOKS[hookIdx];
-      let caption = CAPTIONS[captionIdx];
-
-      try {
-        const aiResult = await generateTextWithFallback(
-          `Generá un caption corto para ${channel.service} sobre quiniela e IA. Hook: "${hook}". Respondé JSON: { "hook": "...", "caption": "..." }`,
-          "Sos un copywriter experto. Español rioplatense. JSON válido."
-        );
-        const match = aiResult.text.match(/```json\s*([\s\S]*?)```/);
-        const parsed = JSON.parse(match ? match[1] : aiResult.text);
-        hook = parsed.hook || hook;
-        caption = parsed.caption || caption;
-      } catch {
-        // Use template content - AI not available
+      if (campaignContent && campaignContent.pieces.length > 0) {
+        const piece = campaignContent.pieces[i % campaignContent.pieces.length];
+        hook = piece.hook || "";
+        caption = piece.body || "";
+        hashtags = piece.hashtags || [];
+      } else {
+        try {
+          const aiResult = await generateTextWithFallback(
+            `Generá un contenido corto para ${channel.service} sobre: ${campaignContent?.campaign?.description || 'un negocio genérico'}. Objetivo: ${campaignContent?.campaign?.objective || 'generar demanda'}. Respondé JSON: { "hook": "...", "caption": "...", "hashtags": ["#tag1"] }`,
+            "Sos un copywriter experto. Español rioplatense. JSON válido."
+          );
+          const match = aiResult.text.match(/```json\s*([\s\S]*?)```/);
+          const parsed = JSON.parse(match ? match[1] : aiResult.text);
+          hook = parsed.hook || "Contenido generado automáticamente";
+          caption = parsed.caption || "";
+          hashtags = parsed.hashtags || [];
+        } catch {
+          hook = "Contenido generado automáticamente";
+          caption = "Publicación generada por Publicador24";
+          hashtags = [];
+        }
       }
 
       const safety = await checkPublicationSafety(`auto-${i}`, hook, caption, channel.service);
@@ -169,22 +158,22 @@ export async function POST(_request: NextRequest) {
         continue;
       }
 
-      const hashtags = ["#quiniela", "#quinielaia", "#prediccionquiniela", "#inteligenciaartificial", "#quinielaargentina", "#analisisquiniela", "#ia", "#numeros", "#estrategiaquiniela", "#quinielagratis"];
-      const text = `${hook}\n\n${caption}\n\n${hashtags.join(" ")}`;
+      const hashtagStr = hashtags.length ? "\n\n" + hashtags.join(" ") : "";
+      const text = `${hook}\n\n${caption}${hashtagStr}`;
 
-      let imageUrl: string | undefined;
+      let media: { photo?: string } | undefined;
       try {
-        const imageResult = await generateImageWithFallback(`${hook}, quiniela, inteligencia artificial, social media`, "1:1");
-        imageUrl = imageResult.url;
+        const imageResult = await generateImageWithFallback(`${hook}, ${channel.service}, social media`, "1:1");
+        if (imageResult.url) media = { photo: imageResult.url };
       } catch {
         // Image generation is best-effort
       }
 
       try {
-        const postResult = await publishToBuffer(text, channel.id, imageUrl, channel.service);
-        if (postResult?.post?.id) {
+        const postResult = await publishToBuffer(text, channel.id, media, channel.service);
+        if (postResult?.success || postResult?.updates?.[0]?.id) {
           result.contentPublished++;
-          result.details.push(`Published: ${hook.substring(0, 40)}... → ${channel.displayName}`);
+          result.details.push(`Published: ${hook.substring(0, 40)}... → ${channel.name}`);
         }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "failed";
@@ -204,6 +193,4 @@ export async function POST(_request: NextRequest) {
     return NextResponse.json(result, { status: 500 });
   }
 }
-
-
 
