@@ -1,16 +1,68 @@
 "use client";
 
 import * as React from "react";
-import { useQuery, useMutation, api } from "@/hooks/use-convex";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Plus, Briefcase, FolderOpen } from "lucide-react";
 
+interface Project {
+  _id: string;
+  name: string;
+  description?: string;
+  industry?: string;
+  website?: string;
+  status: string;
+  campaignCount?: number;
+}
+
+function RefreshCw(props: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+      <path d="M3 3v5h5" />
+      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+      <path d="M16 16h5v5" />
+    </svg>
+  );
+}
+
 export default function ProjectsPage() {
-  const projects = useQuery(api.projects.list);
-  const deleteProject = useMutation(api.projects.remove);
+  const [projects, setProjects] = React.useState<Project[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    fetch("/api/projects")
+      .then((res) => res.json())
+      .then((data) => setProjects(data.projects || data || []))
+      .catch(() => setProjects([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const deleteProject = async (id: string) => {
+    try {
+      await fetch("/api/projects", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      setProjects((prev) => prev.filter((p) => p._id !== id));
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -29,7 +81,7 @@ export default function ProjectsPage() {
         </Link>
       </div>
 
-      {!projects ? (
+      {loading ? (
         <div className="flex items-center justify-center py-12">
           <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -92,7 +144,7 @@ export default function ProjectsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => deleteProject({ id: project._id })}
+                    onClick={() => deleteProject(project._id)}
                   >
                     Eliminar
                   </Button>
@@ -103,27 +155,5 @@ export default function ProjectsPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function RefreshCw(props: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-      <path d="M16 16h5v5" />
-    </svg>
   );
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useMutation, api } from "@/hooks/use-convex";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,6 @@ import Link from "next/link";
 
 export default function NewProjectPage() {
   const router = useRouter();
-  const createProject = useMutation(api.projects.create);
 
   const [name, setName] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -27,11 +25,15 @@ export default function NewProjectPage() {
 
     setIsSubmitting(true);
     try {
-      await createProject({
-        name: name.trim(),
-        description: description.trim() || undefined,
-        website: website.trim() || undefined,
-        industry: industry.trim() || undefined,
+      await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          website: website.trim() || undefined,
+          industry: industry.trim() || undefined,
+        }),
       });
       router.push("/projects");
     } catch (error) {

@@ -9,8 +9,6 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TrendingUp, ArrowUpRight, Hash, Zap } from "lucide-react"
 import { InstagramIcon, TwitterIcon, FacebookIcon } from "@/components/ui/social-icons"
-import { useQuery } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
 
 interface Trend {
   _id: string
@@ -23,9 +21,18 @@ interface Trend {
 }
 
 export default function TrendsPage() {
-  const trends = useQuery(api.trends.listRecent) as Trend[] | undefined
+  const [trends, setTrends] = React.useState<Trend[]>([])
+  const [loading, setLoading] = React.useState(true)
 
-  if (trends === undefined) {
+  React.useEffect(() => {
+    fetch("/api/trends")
+      .then((res) => res.json())
+      .then((data) => setTrends(data.trends || data || []))
+      .catch(() => setTrends([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
     return (
       <div className="space-y-6">
         <div>
@@ -56,19 +63,19 @@ export default function TrendsPage() {
   }
 
   const trendingTopics = trends
-    .filter((t: Trend) => t.trendScore && t.trendScore > 50)
-    .sort((a: Trend, b: Trend) => (b.trendScore || 0) - (a.trendScore || 0))
+    .filter((t) => t.trendScore && t.trendScore > 50)
+    .sort((a, b) => (b.trendScore || 0) - (a.trendScore || 0))
     .slice(0, 8)
 
   const relatedHashtags = trends
-    .flatMap((t: Trend) => t.relatedHashtags || [])
+    .flatMap((t) => t.relatedHashtags || [])
     .slice(0, 6)
-    .map((tag: string, index: number) => ({ tag, volume: `${Math.floor(Math.random() * 1000 + 100)}K` }))
+    .map((tag, index) => ({ tag, volume: `${Math.floor(Math.random() * 1000 + 100)}K` }))
 
   const platformTrends = {
-    instagram: trends.filter((t: Trend) => t.platform === "instagram").slice(0, 3),
-    x: trends.filter((t: Trend) => t.platform === "x" || t.platform === "twitter").slice(0, 3),
-    facebook: trends.filter((t: Trend) => t.platform === "facebook").slice(0, 3),
+    instagram: trends.filter((t) => t.platform === "instagram").slice(0, 3),
+    x: trends.filter((t) => t.platform === "x" || t.platform === "twitter").slice(0, 3),
+    facebook: trends.filter((t) => t.platform === "facebook").slice(0, 3),
   }
 
   return (
@@ -93,7 +100,7 @@ export default function TrendsPage() {
                   {trendingTopics.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">No se encontraron temas en tendencia</p>
                   ) : (
-                    trendingTopics.map((item: Trend, index: number) => (
+                    trendingTopics.map((item, index) => (
                       <div key={item._id} className="flex items-center justify-between rounded-lg border p-4">
                         <div className="flex items-center gap-4">
                           <div className="text-lg font-bold text-muted-foreground">{index + 1}</div>
@@ -127,7 +134,7 @@ export default function TrendsPage() {
                   <p className="text-center text-muted-foreground py-8">Sin hashtags relacionados</p>
                 ) : (
                   <>
-                    {relatedHashtags.map((item: { tag: string; volume: string }) => (
+                    {relatedHashtags.map((item) => (
                       <div key={item.tag} className="flex items-center justify-between rounded-lg border p-3">
                         <div className="flex items-center gap-2">
                           <Hash className="size-4 text-muted-foreground" />
@@ -146,7 +153,7 @@ export default function TrendsPage() {
 
         <TabsContent value="platforms" className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Object.entries(platformTrends).map(([platform, platformTrendsData]: [string, Trend[]]) => {
+            {Object.entries(platformTrends).map(([platform, platformTrendsData]) => {
               const platformConfig = {
                 instagram: { icon: InstagramIcon, color: "text-pink-500" },
                 x: { icon: TwitterIcon, color: "text-sky-500" },
@@ -167,7 +174,7 @@ export default function TrendsPage() {
                     {platformTrendsData.length === 0 ? (
                       <p className="text-center text-muted-foreground py-4">Sin tendencias para esta plataforma</p>
                     ) : (
-                      platformTrendsData.map((trend: Trend) => (
+                      platformTrendsData.map((trend) => (
                         <div key={trend._id} className="flex items-center justify-between rounded-lg border p-3">
                           <span className="font-medium">{trend.keyword}</span>
                           <Badge variant="outline">{trend.trendScore || 0}</Badge>

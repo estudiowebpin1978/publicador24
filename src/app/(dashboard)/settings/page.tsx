@@ -23,20 +23,9 @@ import {
   CreditCard,
   Key,
   Save,
-  Eye,
-  EyeOff,
-  Copy,
 } from "lucide-react"
-import { useQuery, useMutation } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
 
 export default function SettingsPage() {
-  const [showApiKey, setShowApiKey] = React.useState(false)
-
-  const existingProfile = useQuery(api.settings.getProfile)
-  const existingWorkspace = useQuery(api.settings.getWorkspace)
-  const existingBrandVoice = useQuery(api.settings.getBrandVoice)
-
   const [profileData, setProfileData] = React.useState({
     firstName: "",
     lastName: "",
@@ -60,49 +49,48 @@ export default function SettingsPage() {
   const brandInitRef = React.useRef(false)
 
   React.useEffect(() => {
-    if (existingProfile && !profileInitRef.current) {
-      profileInitRef.current = true
-      setProfileData({
-        firstName: existingProfile.firstName || "",
-        lastName: existingProfile.lastName || "",
-        email: existingProfile.email || "",
-        timezone: existingProfile.timezone || "America/Argentina/Buenos_Aires",
+    fetch("/api/setup")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.profile && !profileInitRef.current) {
+          profileInitRef.current = true
+          setProfileData({
+            firstName: data.profile.firstName || "",
+            lastName: data.profile.lastName || "",
+            email: data.profile.email || "",
+            timezone: data.profile.timezone || "America/Argentina/Buenos_Aires",
+          })
+        }
+        if (data.workspace && !workspaceInitRef.current) {
+          workspaceInitRef.current = true
+          setWorkspaceData({
+            name: data.workspace.name || "",
+            url: data.workspace.url || "",
+            language: data.workspace.language || "es",
+          })
+        }
+        if (data.brandVoice && !brandInitRef.current) {
+          brandInitRef.current = true
+          setBrandData({
+            tone: data.brandVoice.tone || "professional",
+            values: data.brandVoice.values || "",
+            personality: data.brandVoice.personality || "",
+            writingStyle: data.brandVoice.writingStyle || "",
+          })
+        }
       })
-    }
-  }, [existingProfile])
-
-  React.useEffect(() => {
-    if (existingWorkspace && !workspaceInitRef.current) {
-      workspaceInitRef.current = true
-      setWorkspaceData({
-        name: existingWorkspace.name || "",
-        url: existingWorkspace.url || "",
-        language: existingWorkspace.language || "es",
-      })
-    }
-  }, [existingWorkspace])
-
-  React.useEffect(() => {
-    if (existingBrandVoice && !brandInitRef.current) {
-      brandInitRef.current = true
-      setBrandData({
-        tone: existingBrandVoice.tone || "professional",
-        values: existingBrandVoice.values || "",
-        personality: existingBrandVoice.personality || "",
-        writingStyle: existingBrandVoice.writingStyle || "",
-      })
-    }
-  }, [existingBrandVoice])
-
-  const saveProfile = useMutation(api.settings.saveProfile)
-  const saveWorkspace = useMutation(api.settings.saveWorkspace)
-  const saveBrandVoice = useMutation(api.settings.saveBrandVoice)
+      .catch(() => {})
+  }, [])
 
   const [saved, setSaved] = React.useState<string | null>(null)
 
   const handleSaveProfile = async () => {
     try {
-      await saveProfile(profileData)
+      await fetch("/api/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ section: "profile", ...profileData }),
+      })
       setSaved("profile")
       setTimeout(() => setSaved(null), 2000)
     } catch {
@@ -112,7 +100,11 @@ export default function SettingsPage() {
 
   const handleSaveWorkspace = async () => {
     try {
-      await saveWorkspace(workspaceData)
+      await fetch("/api/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ section: "workspace", ...workspaceData }),
+      })
       setSaved("workspace")
       setTimeout(() => setSaved(null), 2000)
     } catch {
@@ -122,7 +114,11 @@ export default function SettingsPage() {
 
   const handleSaveBrand = async () => {
     try {
-      await saveBrandVoice(brandData)
+      await fetch("/api/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ section: "brandVoice", ...brandData }),
+      })
       setSaved("brand")
       setTimeout(() => setSaved(null), 2000)
     } catch {
@@ -132,7 +128,6 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Configuración</h1>
         <p className="text-muted-foreground">
@@ -187,7 +182,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="timezone">Zona Horaria</Label>
-                <Select value={profileData.timezone} onValueChange={(v) => setProfileData(prev => ({ ...prev, timezone: v || "utc-5" }))}>
+                <Select value={profileData.timezone} onValueChange={(v) => setProfileData(prev => ({ ...prev, timezone: v || "America/Argentina/Buenos_Aires" }))}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -360,15 +355,6 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">Pollinations (Imágenes)</p>
-                    <p className="text-sm text-muted-foreground font-mono">Configurado en .env.local</p>
-                  </div>
-                  <Badge variant="default" className="bg-green-500">Activo</Badge>
-                </div>
-              </div>
-              <div className="rounded-xl border p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Convex (Base de datos)</p>
                     <p className="text-sm text-muted-foreground font-mono">Configurado en .env.local</p>
                   </div>
                   <Badge variant="default" className="bg-green-500">Activo</Badge>

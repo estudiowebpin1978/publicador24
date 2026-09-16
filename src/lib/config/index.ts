@@ -150,7 +150,7 @@ export const config: AppConfig = {
   rateLimits: createPlatformRateLimits(),
   spamSafety: createSpamSafetyThresholds(),
   contentScoreWeights: createContentScoreWeights(),
-  mockMode: getEnvBoolean('SOCIAL_MOCK_MODE', true),
+  mockMode: getEnvBoolean('SOCIAL_MOCK_MODE', false),
   appUrl: getEnv('APP_URL', 'http://localhost:3000'),
   cronSecret: getEnv('CRON_SECRET'),
 };

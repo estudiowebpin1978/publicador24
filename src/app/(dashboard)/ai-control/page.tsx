@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useAction, useQuery, api } from "@/hooks/use-convex";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,23 +19,28 @@ export default function AIControlCenterPage() {
   const [isRunning, setIsRunning] = React.useState(false);
   const [loopResult, setLoopResult] = React.useState<Record<string, unknown> | null>(null);
 
-  const setKillSwitch = useAction(api.campaignHealth.setGlobalKillSwitch);
-
   const [health, setHealth] = React.useState<Record<string, unknown> | null>(null);
-
-  const autopilotSettings = useQuery(api.autopilot.getSettings);
+  const [autopilotSettings, setAutopilotSettings] = React.useState<Record<string, unknown> | null>(null);
+  const [loadingSettings, setLoadingSettings] = React.useState(true);
 
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/health");
-        const data = await res.json();
+        const [healthRes, settingsRes] = await Promise.all([
+          fetch("/api/health"),
+          fetch("/api/autopilot"),
+        ]);
+        const healthData = await healthRes.json();
+        const settingsData = await settingsRes.json();
         if (!cancelled) {
-          setHealth(data);
+          setHealth(healthData);
+          setAutopilotSettings(settingsData.settings || settingsData);
         }
       } catch (error) {
         console.error("Failed to load data:", error);
+      } finally {
+        if (!cancelled) setLoadingSettings(false);
       }
     })();
     return () => { cancelled = true; };
@@ -81,11 +85,23 @@ export default function AIControlCenterPage() {
   };
 
   const handleToggleKillSwitch = async () => {
-    const isPaused = autopilotSettings?.level === "STOPPED";
-    await setKillSwitch({ paused: !isPaused });
+    const isPaused = (autopilotSettings?.level as string) === "STOPPED";
+    try {
+      await fetch("/api/autopilot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "toggle", paused: !isPaused }),
+      });
+      setAutopilotSettings((prev) => ({
+        ...prev,
+        level: isPaused ? "NORMAL" : "STOPPED",
+      }));
+    } catch (error) {
+      console.error("Failed to toggle kill switch:", error);
+    }
   };
 
-  const isPaused = autopilotSettings?.level === "STOPPED";
+  const isPaused = (autopilotSettings?.level as string) === "STOPPED";
   const healthData = (health as Record<string, unknown>) || {};
   const integrations = (healthData.integrations as Record<string, unknown>) || {};
   const costTracking = (integrations.costTracking as Record<string, unknown>) || {};

@@ -22,8 +22,6 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import type { SocialPlatform, SpamRiskLevel } from "@/types"
-import { useMutation, useAction } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
 
 const STEPS = [
   "Ingresar Contenido",
@@ -150,7 +148,7 @@ function generateMockData(input: ContentInputData) {
     {
       id: "c6",
       style: "Promotional",
-      text: `🚀 Ready to level up your ${topic} game?\n\nWe just launched our new framework and the results speak for themselves:\n\n✅ 3x more engagement\n✅ 50% less time creating\n✅ Content that actually converts\n\nLimited spots available. Link in bio.`,
+      text: `Ready to level up your ${topic} game?\n\nWe just launched our new framework and the results speak for themselves:\n\n3x more engagement\n50% less time creating\nContent that actually converts\n\nLimited spots available. Link in bio.`,
       wordCount: 38,
       score: 81,
     },
@@ -241,9 +239,6 @@ export default function CreateContentPage() {
   const [isAnalyzing, setIsAnalyzing] = React.useState(false)
   const [isGenerating, setIsGenerating] = React.useState(false)
 
-  const generateContent = useAction(api.generateContent.generateFullContent)
-  const createContent = useMutation(api.content.create)
-
   const setStep = (step: number) =>
     setState((prev) => ({ ...prev, currentStep: Math.max(0, Math.min(step, STEPS.length - 1)) }))
 
@@ -252,21 +247,25 @@ export default function CreateContentPage() {
     setState((prev) => ({ ...prev, input: data }))
     
     try {
-      const result = await generateContent({
-        topic: data.productName || data.text || "Content",
-        audience: "general audience",
-        platforms: ["instagram", "x", "facebook"],
-        tone: "professional",
-        language: "en",
-        brandVoice: { tone: "professional", style: "conversational" },
+      const res = await fetch("/api/content/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: data.productName || data.text || "Content",
+          audience: "general audience",
+          platforms: ["instagram", "x", "facebook"],
+          tone: "professional",
+          language: "en",
+        }),
       })
+      const result = await res.json()
       
       setState((prev) => ({
         ...prev,
         analysis: {
-          topic: result.title,
-          entities: [],
-          keywords: [],
+          topic: result.title || data.productName || "Generated Content",
+          entities: result.entities || [],
+          keywords: result.keywords || [],
           intent: "Engagement & Awareness",
           sentiment: "positive",
           audience: "general audience",
@@ -508,20 +507,24 @@ export default function CreateContentPage() {
   const handlePublish = async () => {
     if (state.decision === "approved") {
       try {
-        await createContent({
-          title: state.titles.find(t => t.id === state.selectedTitleId)?.text || "Generated Content",
-          description: state.captions.find(c => c.id === state.selectedCaptionId)?.text || "",
-          contentType: "post",
-          language: "en",
-          targetPlatforms: state.adaptations.map(a => a.platform),
-          brandVoice: { tone: "professional", style: "conversational" },
-          metadata: {
-            generatedFrom: "wizard",
-            hooks: state.hooks,
-            selectedHook: state.hooks.find(h => h.id === state.selectedHookId),
-            selectedTitle: state.titles.find(t => t.id === state.selectedTitleId),
-            selectedCaption: state.captions.find(c => c.id === state.selectedCaptionId),
-          },
+        await fetch("/api/content-pieces", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: state.titles.find(t => t.id === state.selectedTitleId)?.text || "Generated Content",
+            description: state.captions.find(c => c.id === state.selectedCaptionId)?.text || "",
+            contentType: "post",
+            language: "en",
+            targetPlatforms: state.adaptations.map(a => a.platform),
+            brandVoice: { tone: "professional", style: "conversational" },
+            metadata: {
+              generatedFrom: "wizard",
+              hooks: state.hooks,
+              selectedHook: state.hooks.find(h => h.id === state.selectedHookId),
+              selectedTitle: state.titles.find(t => t.id === state.selectedTitleId),
+              selectedCaption: state.captions.find(c => c.id === state.selectedCaptionId),
+            },
+          }),
         })
         alert("¡Contenido publicado con éxito!")
       } catch (error) {

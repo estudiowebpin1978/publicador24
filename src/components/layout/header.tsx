@@ -14,11 +14,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Search, Bell, Menu, LogOut, Settings, User, CreditCard } from "lucide-react"
+import { Search, Bell, Menu, LogOut, Settings, User } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/lib/auth/auth-context"
 import { useRouter } from "next/navigation"
-import { useQuery, api } from "@/hooks/use-convex"
 
 interface HeaderProps {
   onMenuToggle?: () => void
@@ -27,9 +26,22 @@ interface HeaderProps {
 
 export function Header({ onMenuToggle, className }: HeaderProps) {
   const [searchValue, setSearchValue] = React.useState("")
-  const notifications = useQuery(api.notifications.listUnread, { limit: 20 }) || []
+  const [notifications, setNotifications] = React.useState<Array<{ id: string; title: string; message: string; type: string }>>([])
   const { user, logout } = useAuth()
   const router = useRouter()
+
+  React.useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/notifications?limit=5")
+        if (res.ok) {
+          const data = await res.json()
+          setNotifications(data.notifications || [])
+        }
+      } catch { /* ignore */ }
+    }
+    load()
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -44,7 +56,6 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
         className
       )}
     >
-      {/* Mobile Menu Toggle */}
       <Button
         variant="ghost"
         size="icon-sm"
@@ -55,7 +66,6 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
         <span className="sr-only">Alternar menú</span>
       </Button>
 
-      {/* Search */}
       <div className="relative flex-1 max-w-md">
         <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
         <Input
@@ -67,9 +77,7 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
         />
       </div>
 
-      {/* Right side */}
       <div className="flex items-center gap-2">
-        {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -98,7 +106,7 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
               </DropdownMenuItem>
             ) : (
               notifications.slice(0, 5).map((n) => (
-                <DropdownMenuItem key={n._id} className="flex flex-col items-start gap-1 p-3 text-white hover:bg-white/5">
+                <DropdownMenuItem key={n.id} className="flex flex-col items-start gap-1 p-3 text-white hover:bg-white/5">
                   <div className="flex items-center gap-2">
                     <div className={`size-2 rounded-full ${n.type === "success" ? "bg-emerald-500" : n.type === "warning" ? "bg-amber-500" : n.type === "error" ? "bg-red-500" : "bg-violet-500"}`} />
                     <span className="font-medium">{n.title}</span>
@@ -114,17 +122,16 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button variant="ghost" size="icon-sm" className="text-slate-400 hover:text-white hover:bg-white/10" />
             }
           >
-              <Avatar size="sm">
-                <AvatarImage src="/logo-ew.svg" alt="Publicador24" />
-                <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white text-sm font-black tracking-wider">P24</AvatarFallback>
-              </Avatar>
+            <Avatar size="sm">
+              <AvatarImage src="/logo-ew.svg" alt="Publicador24" />
+              <AvatarFallback className="bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white text-sm font-black tracking-wider">P24</AvatarFallback>
+            </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 bg-[#1a1a2e] border-white/10">
             <DropdownMenuLabel className="text-white">
@@ -137,10 +144,6 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
             <DropdownMenuItem className="text-slate-300 hover:bg-white/5 hover:text-white">
               <User className="size-4" />
               Perfil
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-slate-300 hover:bg-white/5 hover:text-white">
-              <CreditCard className="size-4" />
-              Facturación
             </DropdownMenuItem>
             <DropdownMenuItem className="text-slate-300 hover:bg-white/5 hover:text-white">
               <Settings className="size-4" />

@@ -13,29 +13,64 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { CheckCircle, XCircle, Clock, Eye, FileText } from "lucide-react"
-import { useQuery, useMutation } from "@/hooks/use-convex"
-import { api } from "@/hooks/use-convex"
+
+interface ContentPiece {
+  _id: string
+  title?: string
+  hook?: string
+  body?: string
+  cta?: string
+  platform: string
+  contentType: string
+  funnelStage: string
+  score?: number
+  hashtags?: string[]
+  status?: string
+}
 
 export default function ApprovalPage() {
-  const contentPieces = useQuery(api.contentPieces.list, { status: "GENERATED" })
-  const scheduledPosts = useQuery(api.scheduledPosts.list, { status: "QUEUED" })
-  const publishedPosts = useQuery(api.publishedPosts.list)
-  const updatePieceStatus = useMutation(api.contentPieces.updateStatus)
-  const removePiece = useMutation(api.contentPieces.remove)
-
+  const [pendingPieces, setPendingPieces] = React.useState<ContentPiece[]>([])
+  const [scheduledCount, setScheduledCount] = React.useState(0)
+  const [publishedCount, setPublishedCount] = React.useState(0)
+  const [loading, setLoading] = React.useState(true)
   const [selectedPiece, setSelectedPiece] = React.useState<string | null>(null)
   const [showDetail, setShowDetail] = React.useState(false)
 
-  const pendingPieces = contentPieces || []
-  const pendingCount = pendingPieces.length
-  const scheduledCount = scheduledPosts?.length || 0
-  const publishedCount = publishedPosts?.length || 0
+  const fetchData = async () => {
+    try {
+      const [contentRes, scheduledRes, publishedRes] = await Promise.all([
+        fetch("/api/content-pieces?status=GENERATED"),
+        fetch("/api/content-pieces?status=QUEUED"),
+        fetch("/api/content-pieces?status=PUBLISHED"),
+      ])
+      const contentData = await contentRes.json()
+      const scheduledData = await scheduledRes.json()
+      const publishedData = await publishedRes.json()
+      setPendingPieces(contentData.pieces || contentData || [])
+      setScheduledCount(scheduledData.pieces?.length || scheduledData.length || 0)
+      setPublishedCount(publishedData.pieces?.length || publishedData.length || 0)
+    } catch (error) {
+      console.error("Failed to load data:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
-  const selectedPieceData = pendingPieces.find((p: any) => p._id === selectedPiece)
+  React.useEffect(() => {
+    fetchData()
+  }, [])
+
+  const pendingCount = pendingPieces.length
+  const selectedPieceData = pendingPieces.find((p) => p._id === selectedPiece)
 
   const handleApprove = async (id: string) => {
     try {
-      await updatePieceStatus({ id, status: "APPROVED" })
+      await fetch("/api/content-pieces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "APPROVED" }),
+      })
+      setPendingPieces((prev) => prev.filter((p) => p._id !== id))
     } catch (error) {
       console.error("Failed to approve:", error)
     }
@@ -44,7 +79,12 @@ export default function ApprovalPage() {
 
   const handleReject = async (id: string) => {
     try {
-      await removePiece({ id })
+      await fetch("/api/content-pieces", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      setPendingPieces((prev) => prev.filter((p) => p._id !== id))
     } catch (error) {
       console.error("Failed to reject:", error)
     }
@@ -104,7 +144,7 @@ export default function ApprovalPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {contentPieces === undefined ? (
+          {loading ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Clock className="size-12 text-muted-foreground mb-4 animate-pulse" />
               <p className="text-sm text-muted-foreground">Cargando contenido...</p>
@@ -116,7 +156,7 @@ export default function ApprovalPage() {
               <p className="text-sm text-muted-foreground">Ningún contenido pendiente de aprobación</p>
             </div>
           ) : (
-            pendingPieces.map((piece: any) => (
+            pendingPieces.map((piece) => (
               <div
                 key={piece._id}
                 className="flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center"
@@ -132,9 +172,9 @@ export default function ApprovalPage() {
                     <span>{piece.funnelStage}</span>
                   </div>
                   <p className="mt-2 text-sm line-clamp-2">{piece.body}</p>
-                  {piece.hashtags?.length > 0 && (
+                  {piece.hashtags && piece.hashtags.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
-                      {piece.hashtags.slice(0, 5).map((tag: string) => (
+                      {piece.hashtags.slice(0, 5).map((tag) => (
                         <Badge key={tag} variant="outline" className="text-xs">
                           {tag}
                         </Badge>
@@ -208,11 +248,11 @@ export default function ApprovalPage() {
                     {selectedPieceData.cta}
                   </div>
                 </div>
-                {selectedPieceData.hashtags?.length > 0 && (
+                {selectedPieceData.hashtags && selectedPieceData.hashtags.length > 0 && (
                   <div>
                     <p className="text-sm font-medium text-muted-foreground mb-1">Hashtags</p>
                     <div className="flex flex-wrap gap-1">
-                      {selectedPieceData.hashtags.map((h: string) => (
+                      {selectedPieceData.hashtags.map((h) => (
                         <Badge key={h} variant="secondary">{h}</Badge>
                       ))}
                     </div>
