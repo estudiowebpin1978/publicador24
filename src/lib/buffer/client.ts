@@ -75,7 +75,15 @@ export async function createBufferPost(input: {
       if (typeof value === "object" && value !== null) {
         const innerParts: string[] = [];
         for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-          innerParts.push(k + ": " + (typeof v === "boolean" ? String(v) : JSON.stringify(v)));
+          if (typeof v === "boolean") {
+            innerParts.push(k + ": " + String(v));
+          } else if (typeof v === "number") {
+            innerParts.push(k + ": " + String(v));
+          } else if (k === "type") {
+            innerParts.push(k + ": " + v);
+          } else {
+            innerParts.push(k + ": " + JSON.stringify(v));
+          }
         }
         parts.push(key + ": { " + innerParts.join(", ") + " }");
       }
