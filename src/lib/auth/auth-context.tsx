@@ -37,26 +37,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(mapUser(session.user))
-      }
-      setLoading(false)
-    })
+    let active = true
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUser(mapUser(session.user))
-      } else {
-        setUser(null)
-      }
-    })
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!active) return
+        if (session?.user) {
+          setUser(mapUser(session.user))
+        }
+        setLoading(false)
+      })
+      .catch(() => {
+        if (!active) return
+        setLoading(false)
+      })
 
-    return () => subscription.unsubscribe()
+    let sub: { unsubscribe: () => void } | undefined
+    try {
+      const result = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session?.user) {
+          setUser(mapUser(session.user))
+        } else {
+          setUser(null)
+        }
+      })
+      sub = result.data.subscription
+    } catch {
+      // onAuthStateChange failed, continue without it
+    }
+
+    return () => {
+      active = false
+      sub?.unsubscribe()
+    }
   }, [])
 
   const logout = async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } catch {
+      // signOut failed, continue
+    }
     setUser(null)
     window.location.href = "/login"
   }
