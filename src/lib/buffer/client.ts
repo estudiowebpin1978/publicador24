@@ -68,20 +68,22 @@ export async function createBufferPost(input: {
       }).join(", ")
     : "";
 
-  const metadataStr = input.metadata
-    ? (() => {
-        const parts: string[] = [];
-        for (const [key, value] of Object.entries(input.metadata)) {
-          if (typeof value === "object" && value !== null) {
-            const inner = Object.entries(value)
-              .map(([k, v]) => `${k}: ${typeof v === "boolean" ? v : `"${v}"}`)
-              .join(", ");
-            parts.push(`${key}: { ${inner} }`);
-          }
+  let metadataStr = "";
+  if (input.metadata) {
+    const parts: string[] = [];
+    for (const [key, value] of Object.entries(input.metadata)) {
+      if (typeof value === "object" && value !== null) {
+        const innerParts: string[] = [];
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          innerParts.push(k + ": " + (typeof v === "boolean" ? String(v) : JSON.stringify(v)));
         }
-        return parts.length > 0 ? `, metadata: { ${parts.join(", ")} }` : "";
-      })()
-    : "";
+        parts.push(key + ": { " + innerParts.join(", ") + " }");
+      }
+    }
+    if (parts.length > 0) {
+      metadataStr = ", metadata: { " + parts.join(", ") + " }";
+    }
+  }
 
   const mutation = `
     mutation CreatePost {
