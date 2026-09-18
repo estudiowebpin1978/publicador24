@@ -127,8 +127,14 @@ export async function createBufferPost(input: {
 }
 
 export async function getBufferPosts(channelId: string, first: number = 10): Promise<BufferPost[]> {
+  const accountRes = await bufferGraphQL<{ account: { organizations: { id: string }[] } }>(
+    `{ account { organizations { id } } }`
+  );
+  const orgId = accountRes.account.organizations[0]?.id;
+  if (!orgId) return [];
+
   const data = await bufferGraphQL<{ posts: { edges: { node: BufferPost }[] } }>(
-    `{ posts(input: { channelId: "${channelId}" }) { edges { node { id text status createdAt sentAt } } } }`
+    `{ posts(first: ${first}, input: { organizationId: "${orgId}", filter: { channelIds: ["${channelId}"] } }) { edges { node { id text status createdAt sentAt } } } }`
   );
   return data.posts.edges.map((e) => e.node);
 }

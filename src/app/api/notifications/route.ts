@@ -13,7 +13,13 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(limit);
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ notifications: [] });
+      }
+      throw error;
+    }
     return NextResponse.json({ notifications: data || [] });
   } catch (error) {
     return NextResponse.json(
@@ -33,13 +39,25 @@ export async function PUT(request: NextRequest) {
         .from("notifications")
         .update({ read: true })
         .eq("read", false);
-      if (error) throw error;
+      if (error) {
+        const msg = error.message || "";
+        if (msg.includes("does not exist") || msg.includes("relation")) {
+          return NextResponse.json({ success: false });
+        }
+        throw error;
+      }
     } else if (body.id) {
       const { error } = await supabase
         .from("notifications")
         .update({ read: true })
         .eq("id", body.id);
-      if (error) throw error;
+      if (error) {
+        const msg = error.message || "";
+        if (msg.includes("does not exist") || msg.includes("relation")) {
+          return NextResponse.json({ success: false });
+        }
+        throw error;
+      }
     }
 
     return NextResponse.json({ success: true });
@@ -69,7 +87,13 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ notification: null });
+      }
+      throw error;
+    }
     return NextResponse.json({ notification: data }, { status: 201 });
   } catch (error) {
     return NextResponse.json(

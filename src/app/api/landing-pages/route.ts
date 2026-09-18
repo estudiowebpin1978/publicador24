@@ -37,7 +37,13 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ landingPages: [] });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ landingPage: data });
   } catch (error) {
@@ -56,7 +62,13 @@ export async function GET() {
       .select("id, campaign_id, name, description, cta, url, slug, created_at")
       .order("created_at", { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ landingPages: [] });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ landingPages: data || [] });
   } catch (error) {

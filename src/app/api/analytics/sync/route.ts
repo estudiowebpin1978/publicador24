@@ -24,11 +24,17 @@ async function bufferGraphQL<T>(query: string): Promise<T> {
 }
 
 async function fetchChannelsWithPosts(organizationId: string) {
-  const data = await bufferGraphQL<{
-    channels: {
-      id: string;
-      service: string;
-      name: string;
+  const [channelsData, postsData] = await Promise.all([
+    bufferGraphQL<{
+      channels: {
+        id: string;
+        service: string;
+        name: string;
+      }[];
+    }>(
+      `{ channels(input: { organizationId: "${organizationId}" }) { id service name } }`
+    ),
+    bufferGraphQL<{
       posts: {
         edges: {
           node: {
@@ -37,6 +43,7 @@ async function fetchChannelsWithPosts(organizationId: string) {
             status: string;
             createdAt: string;
             sentAt?: string;
+            channelId: string;
             metrics?: {
               impressions?: number;
               reach?: number;
@@ -49,20 +56,25 @@ async function fetchChannelsWithPosts(organizationId: string) {
           };
         }[];
       };
-    }[];
-  }>(
-    `{ channels(input: { organizationId: "${organizationId}" }) {
-      id service name
-      posts(first: 50, status: "sent") {
-        edges { node {
-          id text status createdAt sentAt
-          metrics { impressions reach likes comments shares clicks views }
-        } }
-      }
-    } }`
-  );
+    }>(
+      `{ posts(first: 200, input: { organizationId: "${organizationId}", filter: { status: [sent] } }) { edges { node { id text status createdAt sentAt channelId metrics { impressions reach likes comments shares clicks views } } } } }`
+    ),
+  ]);
 
-  return data.channels;
+  const postsByChannel = new Map<string, typeof postsData.posts.edges>();
+  for (const edge of postsData.posts.edges) {
+    const cid = edge.node.channelId;
+    const list = postsByChannel.get(cid) || [];
+    list.push(edge);
+    postsByChannel.set(cid, list);
+  }
+
+  return channelsData.channels.map((ch) => ({
+    id: ch.id,
+    service: ch.service,
+    name: ch.name,
+    posts: { edges: postsByChannel.get(ch.id) || [] },
+  }));
 }
 
 export async function GET(request: NextRequest) {
@@ -146,13 +158,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const { data: recent } = await supabase
+    const { data: recent, error: recentErr } = await supabase
       .from("analytics_daily")
       .select("*")
       .gte("date", since)
       .order("date", { ascending: true });
 
-    const daily = (recent || []).map((row) => ({
+    const isMissingTable = recentErr?.message?.includes("does not exist") || recentErr?.message?.includes("relation");
+    const rows = isMissingTable ? [] : recent || [];
+
+    const daily = rows.map((row) => ({
       date: new Date(row.date).toISOString().split("T")[0],
       platform: row.platform,
       impressions: row.impressions || 0,

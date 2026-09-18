@@ -24,11 +24,17 @@ async function bufferGraphQL<T>(query: string): Promise<T> {
 }
 
 async function fetchBufferAnalytics(organizationId: string) {
-  const data = await bufferGraphQL<{
-    channels: {
-      id: string;
-      service: string;
-      name: string;
+  const [channelsData, postsData] = await Promise.all([
+    bufferGraphQL<{
+      channels: {
+        id: string;
+        service: string;
+        name: string;
+      }[];
+    }>(
+      `{ channels(input: { organizationId: "${organizationId}" }) { id service name } }`
+    ),
+    bufferGraphQL<{
       posts: {
         edges: {
           node: {
@@ -37,6 +43,7 @@ async function fetchBufferAnalytics(organizationId: string) {
             status: string;
             createdAt: string;
             sentAt?: string;
+            channelId: string;
             metrics?: {
               impressions?: number;
               reach?: number;
@@ -49,20 +56,25 @@ async function fetchBufferAnalytics(organizationId: string) {
           };
         }[];
       };
-    }[];
-  }>(
-    `{ channels(input: { organizationId: "${organizationId}" }) {
-      id service name
-      posts(first: 50, status: "sent") {
-        edges { node {
-          id text status createdAt sentAt
-          metrics { impressions reach likes comments shares clicks views }
-        } }
-      }
-    } }`
-  );
+    }>(
+      `{ posts(first: 200, input: { organizationId: "${organizationId}", filter: { status: [sent] } }) { edges { node { id text status createdAt sentAt channelId metrics { impressions reach likes comments shares clicks views } } } } }`
+    ),
+  ]);
 
-  return data.channels;
+  const postsByChannel = new Map<string, typeof postsData.posts.edges>();
+  for (const edge of postsData.posts.edges) {
+    const cid = edge.node.channelId;
+    const list = postsByChannel.get(cid) || [];
+    list.push(edge);
+    postsByChannel.set(cid, list);
+  }
+
+  return channelsData.channels.map((ch) => ({
+    id: ch.id,
+    service: ch.service,
+    name: ch.name,
+    posts: { edges: postsByChannel.get(ch.id) || [] },
+  }));
 }
 
 export async function GET(request: NextRequest) {
@@ -77,7 +89,6 @@ export async function GET(request: NextRequest) {
     const days = daysMap[range] || 7;
     const since = Date.now() - days * 24 * 60 * 60 * 1000;
 
-    // If sync requested, fetch from Buffer and store
     if (sync) {
       try {
         const accountRes = await bufferGraphQL<{
@@ -86,7 +97,6 @@ export async function GET(request: NextRequest) {
         const orgId = accountRes.account.organizations[0]?.id;
         if (orgId) {
           const channels = await fetchBufferAnalytics(orgId);
-          let synced = 0;
 
           for (const channel of channels) {
             for (const edge of channel.posts.edges) {
@@ -96,7 +106,6 @@ export async function GET(request: NextRequest) {
               const sentDate = new Date(post.sentAt);
               const dateStart = new Date(sentDate.getFullYear(), sentDate.getMonth(), sentDate.getDate()).getTime();
 
-              // Check if exists
               const { data: existing } = await supabase
                 .from("analytics_daily")
                 .select("id")
@@ -106,7 +115,6 @@ export async function GET(request: NextRequest) {
                 .single();
 
               if (existing) {
-                // Update
                 await supabase.from("analytics_daily").update({
                   impressions: post.metrics.impressions || 0,
                   reach: post.metrics.reach || 0,
@@ -117,7 +125,6 @@ export async function GET(request: NextRequest) {
                   views: post.metrics.views || 0,
                 }).eq("id", existing.id);
               } else {
-                // Insert
                 await supabase.from("analytics_daily").insert({
                   campaign_id: "00000000-0000-0000-0000-000000000000",
                   platform: channel.service,
@@ -133,16 +140,13 @@ export async function GET(request: NextRequest) {
                   created_at: Date.now(),
                 });
               }
-              synced++;
             }
           }
         }
       } catch (e) {
-        // Sync failed, continue with existing data
       }
     }
 
-    // Query local data
     let query = supabase
       .from("analytics_daily")
       .select("*")
@@ -154,9 +158,11 @@ export async function GET(request: NextRequest) {
     }
 
     const { data: rows, error } = await query;
-    if (error) throw error;
 
-    const daily = (rows || []).map((row) => ({
+    const isMissingTable = error?.message?.includes("does not exist") || error?.message?.includes("relation");
+    const data = isMissingTable ? [] : rows || [];
+
+    const daily = data.map((row) => ({
       date: new Date(row.date).toISOString().split("T")[0],
       platform: row.platform,
       impressions: row.impressions || 0,

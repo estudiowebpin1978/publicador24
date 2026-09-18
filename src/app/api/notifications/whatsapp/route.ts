@@ -18,7 +18,13 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ notifications: [] });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ notification: data }, { status: 201 });
   } catch (error) {
@@ -43,7 +49,13 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(limit);
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ notifications: [] });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ notifications: data || [] });
   } catch (error) {
@@ -64,7 +76,13 @@ export async function PUT(request: NextRequest) {
       .update({ status: body.status, updated_at: Date.now() })
       .eq("id", body.id);
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ success: false, error: "Table not found" });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

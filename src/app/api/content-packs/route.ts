@@ -18,7 +18,13 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      const msg = error.message || ""
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ pack: null })
+      }
+      throw error
+    }
     return NextResponse.json({ pack: data })
   } catch (error) {
     return NextResponse.json({ error: "Error al crear pack" }, { status: 500 })

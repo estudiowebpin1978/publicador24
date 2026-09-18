@@ -38,7 +38,13 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ reply: null });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ reply: data });
   } catch (error) {
@@ -58,7 +64,13 @@ export async function GET() {
       .order("created_at", { ascending: false })
       .limit(50);
 
-    if (error) throw error;
+    if (error) {
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ replies: [] });
+      }
+      throw error;
+    }
 
     return NextResponse.json({ replies: data || [] });
   } catch (error) {

@@ -19,7 +19,13 @@ export async function GET(request: NextRequest) {
     if (status) query = query.eq("status", status)
 
     const { data, error } = await query
-    if (error) throw error
+    if (error) {
+      const msg = error.message || ""
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ pieces: [] })
+      }
+      throw error
+    }
     return NextResponse.json({ pieces: data || [] })
   } catch (error) {
     return NextResponse.json({ error: "Error al obtener piezas" }, { status: 500 })
@@ -50,7 +56,13 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      const msg = error.message || ""
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ piece: null })
+      }
+      throw error
+    }
     return NextResponse.json({ piece: data })
   } catch (error) {
     return NextResponse.json({ error: "Error al crear pieza" }, { status: 500 })
@@ -76,7 +88,13 @@ export async function PUT(request: NextRequest) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      const msg = error.message || ""
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ piece: null })
+      }
+      throw error
+    }
     return NextResponse.json({ piece: data })
   } catch (error) {
     return NextResponse.json({ error: "Error al actualizar" }, { status: 500 })
@@ -91,7 +109,13 @@ export async function DELETE(request: NextRequest) {
 
     const supabase = getSupabaseAdmin()
     const { error } = await supabase.from("content_pieces").delete().eq("id", id)
-    if (error) throw error
+    if (error) {
+      const msg = error.message || ""
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ success: false })
+      }
+      throw error
+    }
     return NextResponse.json({ success: true })
   } catch (error) {
     return NextResponse.json({ error: "Error al eliminar" }, { status: 500 })
