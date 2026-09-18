@@ -48,7 +48,7 @@ async function fetchChannelsWithPosts(organizationId: string) {
         }[];
       };
     }>(
-      `{ posts(first: 200, input: { organizationId: "${organizationId}", filter: { status: [sent] } }) { edges { node { id text status createdAt sentAt channelId } } } }`
+      `{ posts(first: 100, input: { organizationId: "${organizationId}", filter: { status: [sent] } }) { edges { node { id text status createdAt sentAt channelId } } } }`
     ),
   ]);
 
