@@ -42,19 +42,25 @@ Formato: Texto largo con enlace.`,
 
 const IMAGE_STYLES: Record<string, string[]> = {
   tiktok: [
-    "vibrant neon lottery balls floating, dynamic energy, dark background, electric blue and magenta",
-    "excited crowd celebrating lottery win, confetti, vibrant colors, party atmosphere",
-    "futuristic slot machine with glowing numbers, cyberpunk style, neon purple and cyan",
+    "Close-up of hands holding a printed lottery ticket with numbers, store counter background, realistic photo, warm lighting, Argentine quiniela ticket",
+    "Person holding Argentine peso bills in front of a colorful lottery results board, quiniela locale, realistic photo, vibrant colors",
+    "Mobile phone screen showing lottery predictions app with numbers and emojis, dark theme, modern UI, purple and pink accents, realistic mockup",
+    "Lottery balls with numbers 0-9 falling into a glass bowl, dramatic lighting, neon purple and magenta glow, cinematic photo",
+    "Stack of Argentine peso bills next to a lottery ticket on a wooden table, coffee shop setting, warm tones, realistic photo",
   ],
   instagram: [
-    "elegant lottery ticket with gold accents, luxury feel, dark background, premium design",
-    "mobile phone showing lottery app, modern UI, clean design, violet gradient",
-    "winner celebration with champagne, confetti, luxury lifestyle, gold and purple",
+    "Elegant lottery ticket with gold foil details on dark background, premium feel, luxury design, close-up macro photo",
+    "Smartphone showing quiniela predictions app interface, dark theme with purple gradients, modern UI design, realistic mockup",
+    "Person celebrating with lottery ticket in hand, confetti falling, joy expression, party atmosphere, professional photo",
+    "Lottery results board with glowing numbers, neon lights, night atmosphere, Argentine quiniela locale, cinematic photo",
+    "Flat lay of lottery ticket, Argentine pesos, lucky charm, and phone with predictions app, dark background, professional photo",
   ],
   facebook: [
-    "official lottery results board, clean typography, professional design, blue and white",
-    "community of lottery players, friendly atmosphere, warm colors, trust feeling",
-    "lottery jackpot counter showing big numbers, attention grabbing, red and gold",
+    "Official lottery results display board with colorful numbers, clean typography, Argentine quiniela results, professional photo",
+    "Group of friends checking lottery results on phone, happy expressions, community feel, warm lighting, lifestyle photo",
+    "Lottery jackpot counter showing big winning numbers, attention-grabbing display, red and gold colors, dramatic photo",
+    "Person pointing at winning lottery numbers on screen, excited expression, celebration moment, professional photo",
+    "Lottery ticket close-up with highlighted winning numbers, dramatic lighting, focus on ticket details, professional photo",
   ],
 };
 
@@ -102,7 +108,7 @@ function pickTimeSlot(platform: string): Date {
 async function generatePlatformImage(platform: string): Promise<string> {
   const styles = IMAGE_STYLES[platform] || IMAGE_STYLES.instagram;
   const style = styles[Math.floor(Math.random() * styles.length)];
-  const prompt = `Social media post for lottery, ${style}, professional marketing, high quality, no text`;
+  const prompt = `Argentine quiniela lottery, ${style}, photorealistic, high quality, detailed, no text overlay, no words, no letters`;
 
   try {
     const image = await generateImageWithFallback(prompt, "1:1");
