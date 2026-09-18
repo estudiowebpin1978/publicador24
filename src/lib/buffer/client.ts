@@ -18,6 +18,15 @@ export interface BufferPost {
   channel?: { id: string; service: string };
 }
 
+export interface InstagramAudio {
+  audio_id: string;
+  audio_type: string;
+  title: string;
+  display_artist?: string;
+  duration_in_ms?: number;
+  preview_url?: string;
+}
+
 async function bufferGraphQL<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
   const apiKey = process.env.BUFFER_API_KEY;
   if (!apiKey) throw new Error("BUFFER_API_KEY not configured");
@@ -51,19 +60,41 @@ export async function getBufferChannels(organizationId: string): Promise<BufferC
   return data.channels;
 }
 
+// Search Instagram trending audio (music or original sounds)
+export async function searchInstagramAudio(
+  channelId: string,
+  audioType: "music" | "original_sound" = "music",
+  searchQuery?: string
+): Promise<InstagramAudio[]> {
+  const queryParam = searchQuery ? `, searchQuery: "${searchQuery}"` : "";
+  const data = await bufferGraphQL<{ searchInstagramAudio: { audio: InstagramAudio[] } }>(
+    `{ searchInstagramAudio(input: { channelId: "${channelId}", audioType: ${audioType}${queryParam} }) { audio { audio_id audio_type title display_artist duration_in_ms preview_url } } }`
+  );
+  return data.searchInstagramAudio.audio || [];
+}
+
 export async function createBufferPost(input: {
   channelId: string;
   text: string;
   schedulingType?: "automatic" | "notification";
   mode?: "addToQueue" | "shareNext" | "shareNow" | "customScheduled";
   scheduledAt?: string;
-  assets?: { image?: { url: string; metadata?: { altText?: string } }; video?: { url: string } }[];
+  assets?: { image?: { url: string; metadata?: { altText?: string } }; video?: { url: string; metadata?: { thumbnailOffset?: number } } }[];
   metadata?: Record<string, unknown>;
+  // Instagram audio attachment
+  instagramAudio?: { audioId: string; audioVolume?: number; videoVolume?: number };
+  // TikTok auto music
+  tiktokAutoMusic?: boolean;
 }): Promise<{ id: string; status: string }> {
   const assetsJson = input.assets
     ? input.assets.map((a) => {
         if (a.image) return `{ image: { url: "${a.image.url}"${a.image.metadata ? `, metadata: { altText: "${a.image.metadata.altText || ""}" }` : ""} } }`;
-        if (a.video) return `{ video: { url: "${a.video.url}" } }`;
+        if (a.video) {
+          const metaParts: string[] = [];
+          if (a.video.metadata?.thumbnailOffset) metaParts.push(`thumbnailOffset: ${a.video.metadata.thumbnailOffset}`);
+          const metaStr = metaParts.length > 0 ? `, metadata: { ${metaParts.join(", ")} }` : "";
+          return `{ video: { url: "${a.video.url}"${metaStr} } }`;
+        }
         return "{}";
       }).join(", ")
     : "";
@@ -93,13 +124,27 @@ export async function createBufferPost(input: {
     }
   }
 
+  // Add Instagram audio configuration
+  let audioStr = "";
+  if (input.instagramAudio) {
+    const audioVolume = input.instagramAudio.audioVolume || 80;
+    const videoVolume = input.instagramAudio.videoVolume || 50;
+    audioStr = `, audio_configuration: { audio_id: "${input.instagramAudio.audioId}", audio_volume: ${audioVolume}, video_volume: ${videoVolume} }`;
+  }
+
+  // Add TikTok auto_add_music
+  let tiktokStr = "";
+  if (input.tiktokAutoMusic) {
+    tiktokStr = `, auto_add_music: true`;
+  }
+
   const mutation = `
     mutation CreatePost {
       createPost(input: {
         channelId: "${input.channelId}",
         text: ${JSON.stringify(input.text)},
         schedulingType: ${input.schedulingType || "automatic"},
-        mode: ${input.mode || "addToQueue"}${metadataStr}${assetsJson ? `,
+        mode: ${input.mode || "addToQueue"}${metadataStr}${audioStr}${tiktokStr}${assetsJson ? `,
         assets: [${assetsJson}]` : ""}
       }) {
         ... on PostActionSuccess {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateTextWithFallback } from "@/lib/ai/multi-provider";
 import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { getBufferAccount, getBufferChannels, createBufferPost, type BufferChannel } from "@/lib/buffer/client";
+import { getBufferAccount, getBufferChannels, createBufferPost, searchInstagramAudio, type BufferChannel } from "@/lib/buffer/client";
 
 interface LoopResult {
   timestamp: number;
@@ -244,6 +244,30 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
             await new Promise((resolve) => setTimeout(resolve, delayMs));
           }
 
+          // Platform-specific audio configuration
+          let instagramAudio: { audioId: string; audioVolume: number; videoVolume: number } | undefined;
+          let tiktokAutoMusic = false;
+
+          if (platform === "instagram") {
+            try {
+              const trendingAudio = await searchInstagramAudio(channel.id, "music");
+              if (trendingAudio.length > 0) {
+                const audio = trendingAudio[0];
+                instagramAudio = {
+                  audioId: audio.audio_id,
+                  audioVolume: 80,
+                  videoVolume: 50,
+                };
+                result.details.push(`[${platform}] Música: ${audio.title} - ${audio.display_artist || "trending"}`);
+              }
+            } catch (e) {
+              result.details.push(`[${platform}] Audio no disponible, usando imagen estática`);
+            }
+          } else if (platform === "tiktok") {
+            tiktokAutoMusic = true;
+            result.details.push(`[${platform}] Música automática activada (TikTok elige trending)`);
+          }
+
           // Create post in Buffer
           const post = await createBufferPost({
             channelId: channel.id,
@@ -252,6 +276,8 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
             mode: "addToQueue",
             metadata,
             assets: [{ image: { url: imageUrl } }],
+            instagramAudio,
+            tiktokAutoMusic,
           });
 
           result.contentPublished++;
