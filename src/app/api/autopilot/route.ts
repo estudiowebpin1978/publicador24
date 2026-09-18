@@ -11,31 +11,127 @@ interface LoopResult {
   imagesGenerated: number;
   errors: string[];
   details: string[];
-  posts: { platform: string; id: string; status: string }[];
+  posts: { platform: string; id: string; status: string; scheduledAt?: string }[];
 }
 
-// Anti-bot: random delay between posts (30-120 seconds)
-function randomDelay(): Promise<void> {
-  const min = 30000;
-  const max = 120000;
-  const delay = Math.floor(Math.random() * (max - min + 1)) + min;
+// ============================================
+// CRONOGRAMA POR RED SOCIAL (Hora Argentina)
+// ============================================
+// TikTok:  13:00-15:00, 20:00-22:00 (Mar, Mié, Jue)
+// Instagram: 11:00-13:00, 19:00-22:00 (Mié, Vie)
+// Facebook: 10:00-13:00, 18:00-20:00 (Mar-Jue)
+
+const SCHEDULE: Record<string, { hours: number[]; days: number[]; label: string }> = {
+  tiktok: {
+    hours: [16, 17, 23, 0], // 13-15h, 20-22h ARG = UTC-3
+    days: [2, 3, 4], // Mar, Mié, Jue
+    label: "TikTok (entretenimiento, hooks rápidos)",
+  },
+  instagram: {
+    hours: [14, 15, 22, 23], // 11-13h, 19-22h ARG = UTC-3
+    days: [3, 5], // Mié, Vie
+    label: "Instagram (Reels, prueba social)",
+  },
+  facebook: {
+    hours: [13, 14, 15, 21, 22], // 10-13h, 18-20h ARG = UTC-3
+    days: [2, 3, 4], // Mar-Jue
+    label: "Facebook (comunidad, información)",
+  },
+};
+
+// Prompts específicos por plataforma
+const PLATFORM_PROMPTS: Record<string, string> = {
+  tiktok: `Generá un post para TikTok sobre lotería/quinela.
+ESTILO: Entretenimiento, hooks rápidos, humor, tendencias.
+INCLUYE: Emojis, llamado a la acción directo.
+Tono: Joven, informal, argentino.
+Máximo 150 caracteres para el hook.`,
+  instagram: `Generá un post para Instagram sobre lotería/quinela.
+ESTILO: Prueba social, Reels, carruseles educativos.
+INCLUYE: Capturas de ganadores, paso a paso, sorteos inminentes.
+Tono: Profesional pero cercano, argentino.
+Formato: Carrusel o Reel.`,
+  facebook: `Generá un post para Facebook sobre lotería/quinela.
+ESTILO: Comunidad, información oficial, extractos.
+INCLUYE: Pozos acumulados, enlaces directos, recordatorios.
+Tono: Informativo, adulto +35, argentino.
+Formato: Texto largo con enlace.`,
+};
+
+// Imágenes por plataforma
+const IMAGE_STYLES: Record<string, string[]> = {
+  tiktok: [
+    "vibrant neon lottery balls floating, dynamic energy, dark background, electric blue and magenta",
+    "excited crowd celebrating lottery win, confetti, vibrant colors, party atmosphere",
+    "futuristic slot machine with glowing numbers, cyberpunk style, neon purple and cyan",
+  ],
+  instagram: [
+    "elegant lottery ticket with gold accents, luxury feel, dark background, premium design",
+    "mobile phone showing lottery app, modern UI, clean design, violet gradient",
+    "winner celebration with champagne, confetti, luxury lifestyle, gold and purple",
+  ],
+  facebook: [
+    "official lottery results board, clean typography, professional design, blue and white",
+    "community of lottery players, friendly atmosphere, warm colors, trust feeling",
+    "lottery jackpot counter showing big numbers, attention grabbing, red and gold",
+  ],
+};
+
+// Anti-bot: delay aleatorio entre posts
+function randomDelay(minMs = 45000, maxMs = 180000): Promise<void> {
+  const delay = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
-// Generate unique image prompt per post
-function generateImagePrompt(content: { hook: string; body: string }, campaignName: string): string {
-  const themes = [
-    "futuristic neon lights, digital numbers floating, dark background, vibrant purple and cyan glow",
-    "abstract data visualization, flowing graphs, modern tech aesthetic, deep blue and violet tones",
-    "geometric patterns with lottery balls, mathematical formulas, sleek modern design, purple gradient",
-    "artificial intelligence brain, neural networks, data streams, cyberpunk style, electric blue and magenta",
-    "crystal ball with digital numbers, predictive analytics visualization, mystical tech fusion, violet glow",
-    "holographic display showing statistics, probability charts, sci-fi interface, purple and teal",
-    "matrix-style falling numbers, probability distribution, digital rain effect, neon purple",
-    "modern dashboard with charts, data analytics interface, clean design, violet accent colors",
-  ];
-  const theme = themes[Math.floor(Math.random() * themes.length)];
-  return `${campaignName} social media post, ${theme}, professional marketing image, high quality, no text`;
+// Obtener próximo horario óptimo para una plataforma
+function getNextOptimalTime(platform: string): Date {
+  const now = new Date();
+  const schedule = SCHEDULE[platform];
+  if (!schedule) return new Date(now.getTime() + 3600000); // +1h default
+
+  const currentDay = now.getUTCDay();
+  const currentHour = now.getUTCHours();
+
+  // Buscar el próximo horario óptimo
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    const checkDay = (currentDay + dayOffset) % 7;
+    if (!schedule.days.includes(checkDay)) continue;
+
+    for (const hour of schedule.hours) {
+      const targetTime = new Date(now);
+      targetTime.setUTCHours(hour, Math.floor(Math.random() * 30), 0, 0);
+      targetTime.setUTCDate(targetTime.getUTCDate() + dayOffset);
+
+      if (targetTime > now) {
+        return targetTime;
+      }
+    }
+  }
+
+  // Fallback: +1 hora
+  return new Date(now.getTime() + 3600000);
+}
+
+// Generar imagen única por plataforma y contenido
+async function generatePlatformImage(platform: string, content: { hook: string; body: string }): Promise<string> {
+  const styles = IMAGE_STYLES[platform] || IMAGE_STYLES.instagram;
+  const style = styles[Math.floor(Math.random() * styles.length)];
+  const prompt = `Social media post for lottery, ${style}, professional marketing, high quality, no text`;
+
+  try {
+    const image = await generateImageWithFallback(prompt, "1:1");
+    return image.url;
+  } catch {
+    // Fallback a imagen estática
+    const fallback = [
+      "quiniela-matematica.png",
+      "quiniela-patron.png",
+      "quiniela-metodo.png",
+      "quiniela-factores.png",
+      "quiniela-datos.png",
+    ];
+    return `https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/${fallback[Math.floor(Math.random() * fallback.length)]}`;
+  }
 }
 
 export async function POST(request?: NextRequest) {
@@ -81,131 +177,125 @@ export async function POST(request?: NextRequest) {
 
     // 3. Process each campaign
     for (const campaign of campaigns) {
-      const prompt = `Generá una publicación de redes sociales para Instagram/TikTok/Facebook.
+      // 3a. Generate content for each platform
+      for (const channel of channels) {
+        const platform = channel.service;
+        const platformPrompt = PLATFORM_PROMPTS[platform] || PLATFORM_PROMPTS.instagram;
+
+        const prompt = `${platformPrompt}
 Campaña: ${campaign.name}
-Nicho: ${campaign.industry || campaign.description || "general"}
-Público: ${campaign.target_audience || "general argentino"}
+Nicho: ${campaign.industry || "lotería/quinela"}
+Público: ${campaign.target_audience || "argentino general"}
 
 Generá EXACTAMENTE en este formato JSON (sin texto adicional):
 {
-  "hook": "Frase gancho de máximo 10 palabras",
-  "body": "Cuerpo del post de 2-3 oraciones en español rioplatense",
+  "hook": "Frase gancho para ${platform} (máximo 10 palabras)",
+  "body": "Cuerpo del post adaptado para ${platform} en español rioplatense",
   "cta": "Call to action con URL quiniela-ia-two.vercel.app",
-  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6"]
+  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
 }`;
 
-      try {
-        // 3a. Generate text content
-        const response = await generateTextWithFallback(
-          prompt,
-          "Sos un experto en marketing digital argentino. Generás contenido viral para redes sociales. Español rioplatense. Respondé SOLO con el JSON, sin texto adicional."
-        );
-
-        let content;
         try {
-          const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-          content = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-        } catch {
-          content = null;
-        }
+          // Generate text content
+          const response = await generateTextWithFallback(
+            prompt,
+            `Sos un experto en marketing para ${platform}. Español rioplatense. Respondé SOLO con el JSON, sin texto adicional.`
+          );
 
-        if (!content || !content.hook) {
-          result.errors.push(`IA no generó contenido válido para: ${campaign.name}`);
-          continue;
-        }
+          let content;
+          try {
+            const jsonMatch = response.text.match(/\{[\s\S]*\}/);
+            content = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+          } catch {
+            content = null;
+          }
 
-        result.contentGenerated++;
-        result.details.push(`Contenido generado: ${content.hook}`);
+          if (!content || !content.hook) {
+            result.errors.push(`IA no generó contenido para ${platform}: ${campaign.name}`);
+            continue;
+          }
 
-        // 3b. Generate unique AI image
-        let imageUrl = "";
-        try {
-          const imagePrompt = generateImagePrompt(content, campaign.name);
-          const image = await generateImageWithFallback(imagePrompt, "1:1");
-          imageUrl = image.url;
+          result.contentGenerated++;
+          result.details.push(`[${platform}] Contenido: ${content.hook}`);
+
+          // Generate platform-specific image
+          const imageUrl = await generatePlatformImage(platform, content);
           result.imagesGenerated++;
-          result.details.push(`Imagen generada: ${image.provider}`);
-        } catch (e) {
-          result.errors.push(`Imagen: ${e instanceof Error ? e.message : "error"}`);
-          // Fallback to a random static image
-          const fallbackImages = [
-            "quiniela-matematica.png",
-            "quiniela-patron.png",
-            "quiniela-metodo.png",
-            "quiniela-factores.png",
-            "quiniela-datos.png",
-          ];
-          imageUrl = `https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/${fallbackImages[Math.floor(Math.random() * fallbackImages.length)]}`;
-        }
+          result.details.push(`[${platform}] Imagen generada`);
 
-        // 3c. Publish to each channel with delays
-        for (let i = 0; i < channels.length; i++) {
-          const channel = channels[i];
+          // Get optimal schedule time
+          const scheduledTime = getNextOptimalTime(platform);
+          const scheduledAt = Math.floor(scheduledTime.getTime() / 1000).toString();
 
-          // Anti-bot delay between channels (skip for first post)
-          if (i > 0 || result.contentPublished > 0) {
-            const delayMs = Math.floor(Math.random() * 90000) + 30000; // 30-120 seconds
-            result.details.push(`Esperando ${Math.round(delayMs / 1000)}s antes de publicar en ${channel.service}...`);
+          // Build text
+          const text = `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${(content.hashtags || []).join(" ")}`;
+
+          // Platform-specific metadata
+          let metadata = {};
+          let schedulingType: "automatic" | "notification" = "automatic";
+          if (platform === "instagram") {
+            metadata = { instagram: { type: "post", shouldShareToFeed: true } };
+          } else if (platform === "facebook") {
+            metadata = { facebook: { type: "post" } };
+            schedulingType = "notification";
+          }
+
+          // Anti-bot delay
+          if (result.contentPublished > 0) {
+            const delayMs = Math.floor(Math.random() * 135000) + 45000; // 45-180s
+            result.details.push(`Esperando ${Math.round(delayMs / 1000)}s anti-bot...`);
             await new Promise((resolve) => setTimeout(resolve, delayMs));
           }
 
-          try {
-            let metadata = {};
-            let schedulingType: "automatic" | "notification" = "automatic";
+          // Create post in Buffer with scheduling
+          const post = await createBufferPost({
+            channelId: channel.id,
+            text,
+            schedulingType,
+            mode: "addToQueue",
+            metadata,
+            assets: [{ image: { url: imageUrl } }],
+          });
 
-            if (channel.service === "instagram") {
-              metadata = { instagram: { type: "post", shouldShareToFeed: true } };
-            } else if (channel.service === "facebook") {
-              metadata = { facebook: { type: "post" } };
-              schedulingType = "notification";
-            }
+          result.contentPublished++;
+          result.posts.push({
+            platform,
+            id: post.id,
+            status: post.status,
+            scheduledAt: scheduledTime.toISOString(),
+          });
+          result.details.push(
+            `[${platform}] Publicado: ${post.id} | Programado: ${scheduledTime.toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}`
+          );
 
-            const text = `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${(content.hashtags || []).join(" ")}`;
+          // Save to Supabase
+          const { data: cp } = await supabase.from("content_pieces").insert({
+            campaign_id: campaign.id,
+            title: content.hook,
+            body: content.body,
+            cta: content.cta,
+            hashtags: content.hashtags || [],
+            status: "PUBLISHED",
+            platform,
+            media_urls: [imageUrl],
+            external_post_id: post.id,
+            published_at: Date.now(),
+          }).select("id").single();
 
-            const post = await createBufferPost({
-              channelId: channel.id,
-              text,
-              schedulingType,
-              mode: "addToQueue",
-              metadata,
-              assets: imageUrl ? [{ image: { url: imageUrl } }] : undefined,
-            });
-
-            result.contentPublished++;
-            result.posts.push({ platform: channel.service, id: post.id, status: post.status });
-            result.details.push(`Publicado en ${channel.service} (${channel.displayName})`);
-
-            // Save to Supabase
-            const { data: cp } = await supabase.from("content_pieces").insert({
+          if (cp) {
+            await supabase.from("scheduled_posts").insert({
               campaign_id: campaign.id,
-              title: content.hook,
-              body: content.body,
-              cta: content.cta,
-              hashtags: content.hashtags || [],
-              status: "PUBLISHED",
-              platform: channel.service,
-              media_urls: imageUrl ? [imageUrl] : [],
+              content_piece_id: cp.id,
+              platform,
+              channel_id: channel.id,
+              status: "pending",
+              scheduled_at: Math.floor(scheduledTime.getTime() / 1000),
               external_post_id: post.id,
-              published_at: Date.now(),
-            }).select("id").single();
-
-            if (cp) {
-              await supabase.from("scheduled_posts").insert({
-                campaign_id: campaign.id,
-                content_piece_id: cp.id,
-                platform: channel.service,
-                channel_id: channel.id,
-                status: "pending",
-                scheduled_at: Date.now(),
-                external_post_id: post.id,
-              });
-            }
-          } catch (e) {
-            result.errors.push(`${channel.service}: ${e instanceof Error ? e.message : "error"}`);
+            });
           }
+        } catch (e) {
+          result.errors.push(`[${platform}] ${e instanceof Error ? e.message : "error"}`);
         }
-      } catch (e) {
-        result.errors.push(`IA ${campaign.name}: ${e instanceof Error ? e.message : "error"}`);
       }
     }
 
