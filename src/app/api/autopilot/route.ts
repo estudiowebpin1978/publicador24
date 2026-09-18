@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateTextWithFallback } from "@/lib/ai/multi-provider";
 import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { getBufferAccount, getBufferChannels, createBufferPost, searchInstagramAudio, type BufferChannel } from "@/lib/buffer/client";
+import { getBufferAccount, getBufferChannels, createBufferPost, type BufferChannel } from "@/lib/buffer/client";
 
 interface LoopResult {
   timestamp: number;
@@ -73,6 +73,24 @@ const IMAGE_STYLES: Record<string, string[]> = {
     "official lottery results board, clean typography, professional design, blue and white",
     "community of lottery players, friendly atmosphere, warm colors, trust feeling",
     "lottery jackpot counter showing big numbers, attention grabbing, red and gold",
+  ],
+};
+
+// Sonidos trending sugeridos por plataforma
+const TRENDING_SOUNDS: Record<string, string[]> = {
+  tiktok: [
+    "Sonido trending: original sound - quiniela_ia",
+    "Musica viral: busca loteria winner en sonidos",
+    "Audio popular: dinero facile trending",
+    "Sonido en tendencia: ganar es facil",
+    "Usa: success music para mas alcance",
+  ],
+  instagram: [
+    "Sound trending: Reels Music 2026 para mas alcance",
+    "Audio viral: Upbeat Background popular ahora",
+    "Musica en tendencia: Celebration Sound",
+    "Usa: Motivational Beat en tu Reel",
+    "Sonido popular: Lucky Vibes",
   ],
 };
 
@@ -224,8 +242,10 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
           const scheduledTime = pickTimeSlot(platform);
           const scheduledAt = Math.floor(scheduledTime.getTime() / 1000).toString();
 
-          // Build text
-          const text = `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${(content.hashtags || []).join(" ")}`;
+          // Build text with trending sound suggestion
+          const sounds = TRENDING_SOUNDS[platform];
+          const soundSuggestion = sounds ? sounds[Math.floor(Math.random() * sounds.length)] : "";
+          const text = `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${(content.hashtags || []).join(" ")}${soundSuggestion ? "\n\n\uD83C\uDFB5 " + soundSuggestion : ""}`;
 
           // Platform-specific metadata
           let metadata = {};
@@ -244,30 +264,6 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
             await new Promise((resolve) => setTimeout(resolve, delayMs));
           }
 
-          // Platform-specific audio configuration
-          let instagramAudio: { audioId: string; audioVolume: number; videoVolume: number } | undefined;
-          let tiktokAutoMusic = false;
-
-          if (platform === "instagram") {
-            try {
-              const trendingAudio = await searchInstagramAudio(channel.id, "music");
-              if (trendingAudio.length > 0) {
-                const audio = trendingAudio[0];
-                instagramAudio = {
-                  audioId: audio.audio_id,
-                  audioVolume: 80,
-                  videoVolume: 50,
-                };
-                result.details.push(`[${platform}] Música: ${audio.title} - ${audio.display_artist || "trending"}`);
-              }
-            } catch (e) {
-              result.details.push(`[${platform}] Audio no disponible, usando imagen estática`);
-            }
-          } else if (platform === "tiktok") {
-            tiktokAutoMusic = true;
-            result.details.push(`[${platform}] Música automática activada (TikTok elige trending)`);
-          }
-
           // Create post in Buffer
           const post = await createBufferPost({
             channelId: channel.id,
@@ -276,8 +272,6 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
             mode: "addToQueue",
             metadata,
             assets: [{ image: { url: imageUrl } }],
-            instagramAudio,
-            tiktokAutoMusic,
           });
 
           result.contentPublished++;
