@@ -15,50 +15,49 @@ interface LoopResult {
 }
 
 // ============================================
-// CRONOGRAMA POR RED SOCIAL (Hora Argentina)
+// POOL DE HORARIOS - ARGENTINA (UTC-3)
 // ============================================
-// TikTok:  13:00-15:00, 20:00-22:00 (Mar, Mié, Jue)
-// Instagram: 11:00-13:00, 19:00-22:00 (Mié, Vie)
-// Facebook: 10:00-13:00, 18:00-20:00 (Mar-Jue)
+// El sistema elige al azar de estos slots
+// After 3-4 weeks, the system learns which slots perform best
 
-const SCHEDULE: Record<string, { hours: number[]; days: number[]; label: string }> = {
-  tiktok: {
-    hours: [16, 17, 23, 0], // 13-15h, 20-22h ARG = UTC-3
-    days: [2, 3, 4], // Mar, Mié, Jue
-    label: "TikTok (entretenimiento, hooks rápidos)",
-  },
-  instagram: {
-    hours: [14, 15, 22, 23], // 11-13h, 19-22h ARG = UTC-3
-    days: [3, 5], // Mié, Vie
-    label: "Instagram (Reels, prueba social)",
-  },
-  facebook: {
-    hours: [13, 14, 15, 21, 22], // 10-13h, 18-20h ARG = UTC-3
-    days: [2, 3, 4], // Mar-Jue
-    label: "Facebook (comunidad, información)",
-  },
+const TIME_SLOTS_UTC: number[] = [
+  15,   // 12:30 ARG
+  16,   // 13:30 ARG
+  17,   // 14:30 ARG
+  20,   // 17:00 ARG
+  21,   // 18:00 ARG
+  23,   // 20:30 ARG
+  0,    // 21:30 ARG
+  1,    // 22:30 ARG
+];
+
+// Plataformas y sus días activos (Mar-Vie para testing)
+const PLATFORM_DAYS: Record<string, number[]> = {
+  tiktok: [2, 3, 4, 5],    // Mar-Vie
+  instagram: [2, 3, 4, 5], // Mar-Vie
+  facebook: [2, 3, 4, 5],  // Mar-Vie
 };
 
 // Prompts específicos por plataforma
 const PLATFORM_PROMPTS: Record<string, string> = {
   tiktok: `Generá un post para TikTok sobre lotería/quinela.
-ESTILO: Entretenimiento, hooks rápidos, humor, tendencias.
-INCLUYE: Emojis, llamado a la acción directo.
+ESTILO: Entretenimiento, hooks rápidos, humor, tendencias, audios virales.
+INCLUYE: Emojis, llamado a la acción directo, gancho en primera línea.
 Tono: Joven, informal, argentino.
 Máximo 150 caracteres para el hook.`,
   instagram: `Generá un post para Instagram sobre lotería/quinela.
-ESTILO: Prueba social, Reels, carruseles educativos.
-INCLUYE: Capturas de ganadores, paso a paso, sorteos inminentes.
+ESTILO: Prueba social, Reels, carruseles educativos, capturas de ganadores.
+INCLUYE: Paso a paso, sorteos inminentes, comprobantes de pago.
 Tono: Profesional pero cercano, argentino.
 Formato: Carrusel o Reel.`,
   facebook: `Generá un post para Facebook sobre lotería/quinela.
-ESTILO: Comunidad, información oficial, extractos.
-INCLUYE: Pozos acumulados, enlaces directos, recordatorios.
+ESTILO: Comunidad, información oficial, extractos, pozos acumulados.
+INCLUYE: Enlaces directos, recordatorios, datos concretos.
 Tono: Informativo, adulto +35, argentino.
 Formato: Texto largo con enlace.`,
 };
 
-// Imágenes por plataforma
+// Estilos de imagen por plataforma
 const IMAGE_STYLES: Record<string, string[]> = {
   tiktok: [
     "vibrant neon lottery balls floating, dynamic energy, dark background, electric blue and magenta",
@@ -77,43 +76,42 @@ const IMAGE_STYLES: Record<string, string[]> = {
   ],
 };
 
-// Anti-bot: delay aleatorio entre posts
+// Anti-bot: delay aleatorio entre posts (45s - 3min)
 function randomDelay(minMs = 45000, maxMs = 180000): Promise<void> {
   const delay = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
-// Obtener próximo horario óptimo para una plataforma
-function getNextOptimalTime(platform: string): Date {
+// Elegir horario del pool (no fijo)
+function pickTimeSlot(platform: string): Date {
   const now = new Date();
-  const schedule = SCHEDULE[platform];
-  if (!schedule) return new Date(now.getTime() + 3600000); // +1h default
+  const day = now.getUTCDay();
+  const days = PLATFORM_DAYS[platform] || [2, 3, 4, 5];
 
-  const currentDay = now.getUTCDay();
-  const currentHour = now.getUTCHours();
-
-  // Buscar el próximo horario óptimo
-  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
-    const checkDay = (currentDay + dayOffset) % 7;
-    if (!schedule.days.includes(checkDay)) continue;
-
-    for (const hour of schedule.hours) {
-      const targetTime = new Date(now);
-      targetTime.setUTCHours(hour, Math.floor(Math.random() * 30), 0, 0);
-      targetTime.setUTCDate(targetTime.getUTCDate() + dayOffset);
-
-      if (targetTime > now) {
-        return targetTime;
-      }
-    }
+  // Si hoy no es día activo, buscar próximo día
+  let dayOffset = 0;
+  while (!days.includes((day + dayOffset) % 7)) {
+    dayOffset++;
+    if (dayOffset > 7) break;
   }
 
-  // Fallback: +1 hora
-  return new Date(now.getTime() + 3600000);
+  // Elegir slot aleatorio del pool
+  const slot = TIME_SLOTS_UTC[Math.floor(Math.random() * TIME_SLOTS_UTC.length)];
+
+  const target = new Date(now);
+  target.setUTCDate(target.getUTCDate() + dayOffset);
+  target.setUTCHours(slot, Math.floor(Math.random() * 30), 0, 0);
+
+  // Si el horario ya pasó hoy, mañana
+  if (target <= now) {
+    target.setUTCDate(target.getUTCDate() + 1);
+  }
+
+  return target;
 }
 
-// Generar imagen única por plataforma y contenido
-async function generatePlatformImage(platform: string, content: { hook: string; body: string }): Promise<string> {
+// Generar imagen única por plataforma
+async function generatePlatformImage(platform: string): Promise<string> {
   const styles = IMAGE_STYLES[platform] || IMAGE_STYLES.instagram;
   const style = styles[Math.floor(Math.random() * styles.length)];
   const prompt = `Social media post for lottery, ${style}, professional marketing, high quality, no text`;
@@ -122,7 +120,6 @@ async function generatePlatformImage(platform: string, content: { hook: string; 
     const image = await generateImageWithFallback(prompt, "1:1");
     return image.url;
   } catch {
-    // Fallback a imagen estática
     const fallback = [
       "quiniela-matematica.png",
       "quiniela-patron.png",
@@ -219,12 +216,12 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
           result.details.push(`[${platform}] Contenido: ${content.hook}`);
 
           // Generate platform-specific image
-          const imageUrl = await generatePlatformImage(platform, content);
+          const imageUrl = await generatePlatformImage(platform);
           result.imagesGenerated++;
           result.details.push(`[${platform}] Imagen generada`);
 
-          // Get optimal schedule time
-          const scheduledTime = getNextOptimalTime(platform);
+          // Pick random time from pool
+          const scheduledTime = pickTimeSlot(platform);
           const scheduledAt = Math.floor(scheduledTime.getTime() / 1000).toString();
 
           // Build text
@@ -247,7 +244,7 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
             await new Promise((resolve) => setTimeout(resolve, delayMs));
           }
 
-          // Create post in Buffer with scheduling
+          // Create post in Buffer
           const post = await createBufferPost({
             channelId: channel.id,
             text,
@@ -268,7 +265,7 @@ Generá EXACTAMENTE en este formato JSON (sin texto adicional):
             `[${platform}] Publicado: ${post.id} | Programado: ${scheduledTime.toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}`
           );
 
-          // Save to Supabase
+          // Save to Supabase with engagement tracking fields
           const { data: cp } = await supabase.from("content_pieces").insert({
             campaign_id: campaign.id,
             title: content.hook,
