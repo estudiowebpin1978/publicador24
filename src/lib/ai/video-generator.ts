@@ -1,10 +1,9 @@
-import { generateImage, type ImageGenerationResult } from "./pollinations";
-import { textToSpeech, type TTSResult } from "./freetts";
+import { generateVideoFrames } from "./multi-image";
 
 export interface VideoScene {
   id: number;
   text: string;
-  image: ImageGenerationResult;
+  imageUrl: string;
   duration: number;
   transition: "fade" | "slide" | "zoom";
 }
@@ -13,7 +12,6 @@ export interface VideoScript {
   title: string;
   scenes: VideoScene[];
   totalDuration: number;
-  narration?: TTSResult;
 }
 
 export interface VideoGenerationInput {
@@ -22,7 +20,6 @@ export interface VideoGenerationInput {
   cta: string;
   platform: string;
   style?: string;
-  voice?: string;
 }
 
 function splitIntoScenes(content: string, maxScenes: number = 5): string[] {
@@ -68,7 +65,6 @@ function getScenePrompt(
   ];
 
   const sceneDesc = scenePrompts[sceneIndex % scenePrompts.length];
-
   return `${sceneDesc}, ${styleDesc}, ${sceneText.slice(0, 100)}, social media content, high quality, professional photography, ${aspectRatio} composition`;
 }
 
@@ -79,11 +75,60 @@ function estimateDuration(text: string): number {
   return Math.max(3, Math.min(10, Math.ceil(seconds)));
 }
 
-const TRANSITIONS: Array<"fade" | "slide" | "zoom"> = [
-  "fade",
-  "slide",
-  "zoom",
-];
+const TRANSITIONS: Array<"fade" | "slide" | "zoom"> = ["fade", "slide", "zoom"];
+
+export async function generateVideoReel(
+  prompt: string,
+  duration: number = 5
+): Promise<{ url: string; type: "video" }> {
+  const encodedPrompt = encodeURIComponent(prompt);
+  const pollinationsUrl = `https://video.pollinations.ai/prompt/${encodedPrompt}?model=fast-svd&duration=${duration}`;
+
+  try {
+    const response = await fetch(pollinationsUrl, {
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (response.ok) {
+      return { url: pollinationsUrl, type: "video" };
+    }
+  } catch {
+    // Pollinations video not available, fall back to image-based
+  }
+
+  const frameCount = Math.max(5, Math.min(8, duration));
+  const frames = await generateVideoFrames(prompt, frameCount);
+
+  if (frames.length > 0) {
+    return { url: frames[0], type: "video" };
+  }
+
+  return {
+    url: `https://placehold.co/1280x720/7c3aed/ffffff?text=${encodeURIComponent(prompt.slice(0, 20))}`,
+    type: "video",
+  };
+}
+
+export async function generateVideoForPlatform(
+  platform: string,
+  hook: string,
+  body: string
+): Promise<{ url: string }> {
+  const platformConfig: Record<string, { duration: number; aspectRatio: string }> = {
+    tiktok: { duration: 5, aspectRatio: "9:16" },
+    instagram: { duration: 5, aspectRatio: "9:16" },
+    facebook: { duration: 10, aspectRatio: "1:1" },
+    youtube: { duration: 15, aspectRatio: "16:9" },
+    twitter: { duration: 10, aspectRatio: "16:9" },
+    linkedin: { duration: 10, aspectRatio: "16:9" },
+  };
+
+  const config = platformConfig[platform] || platformConfig.facebook;
+  const fullPrompt = `${hook}. ${body}`;
+
+  const result = await generateVideoReel(fullPrompt, config.duration);
+  return { url: result.url };
+}
 
 export async function generateVideoAssets(
   input: VideoGenerationInput
@@ -91,33 +136,26 @@ export async function generateVideoAssets(
   const scenes = splitIntoScenes(input.content, 5);
   const videoScenes: VideoScene[] = [];
 
+  const prompts = scenes.map((sceneText, i) =>
+    getScenePrompt(sceneText, input.platform, input.style || "profesional", i)
+  );
+
+  const images = await generateVideoFrames(
+    prompts.join(". "),
+    scenes.length
+  );
+
   for (let i = 0; i < scenes.length; i++) {
     const sceneText = scenes[i];
-    const prompt = getScenePrompt(
-      sceneText,
-      input.platform,
-      input.style || "profesional",
-      i
-    );
-
-    const image = await generateImage(prompt, "9:16", i * 1000 + 42);
     const duration = estimateDuration(sceneText);
 
     videoScenes.push({
       id: i,
       text: sceneText,
-      image,
+      imageUrl: images[i] || `https://placehold.co/1280x720/7c3aed/ffffff?text=Scene+${i + 1}`,
       duration,
       transition: TRANSITIONS[i % TRANSITIONS.length],
     });
-  }
-
-  const narrationText = [input.hook, ...scenes, input.cta].join(". ");
-  let narration: TTSResult | undefined;
-  try {
-    narration = await textToSpeech(narrationText, input.voice || "es-AR-Standard-A");
-  } catch {
-    // TTS not available, continue without narration
   }
 
   const totalDuration = videoScenes.reduce((sum, s) => sum + s.duration, 0);
@@ -126,6 +164,5 @@ export async function generateVideoAssets(
     title: input.hook,
     scenes: videoScenes,
     totalDuration,
-    narration,
   };
 }

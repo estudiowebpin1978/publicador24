@@ -1,6 +1,3 @@
-// Multi-provider image generation with fallback
-// Priority: Pollinations (primary) → Cloudflare Workers AI (fallback)
-
 interface ImageResult {
   url: string;
   width: number;
@@ -36,9 +33,6 @@ async function cloudflareImage(
   width: number,
   height: number
 ): Promise<ImageResult> {
-  // Cloudflare Workers AI - FLUX.1 Schnell
-  // Note: This requires a Cloudflare account and worker
-  // For now, we'll use a public Hugging Face endpoint as fallback
   const encodedPrompt = encodeURIComponent(prompt);
   const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${Math.floor(Math.random() * 999999)}&nologo=true&model=flux`;
 
@@ -53,7 +47,6 @@ async function freePlaceholdr(
   width: number,
   height: number
 ): Promise<ImageResult> {
-  // placeholdr.dev - free AI placeholder images
   const encodedPrompt = encodeURIComponent(prompt);
   const url = `https://placeholdr.dev/${width}x${height}?prompt=${encodedPrompt}`;
 
@@ -71,28 +64,24 @@ export async function generateImageWithFallback(
   const dims = ASPECT_RATIOS[aspectRatio] || ASPECT_RATIOS["1:1"];
   const randomSeed = seed || Math.floor(Math.random() * 999999);
 
-  // Provider 1: Pollinations (primary)
   try {
     return await pollinationsImage(prompt, dims.width, dims.height, randomSeed);
   } catch (error) {
     console.warn(`Pollinations failed: ${error instanceof Error ? error.message : "unknown"}`);
   }
 
-  // Provider 2: Pollinations with Flux model (fallback)
   try {
     return await cloudflareImage(prompt, dims.width, dims.height);
   } catch (error) {
     console.warn(`Flux fallback failed: ${error instanceof Error ? error.message : "unknown"}`);
   }
 
-  // Provider 3: Placeholdr (last resort)
   try {
     return await freePlaceholdr(prompt, dims.width, dims.height);
   } catch (error) {
     console.warn(`Placeholdr failed: ${error instanceof Error ? error.message : "unknown"}`);
   }
 
-  // Final fallback: Return a placeholder URL
   return {
     url: `https://placehold.co/${dims.width}x${dims.height}/7c3aed/ffffff?text=${encodeURIComponent(prompt.substring(0, 20))}`,
     width: dims.width,
@@ -112,6 +101,48 @@ export async function generateImagePack(
     const stylePrompt = `${basePrompt}, ${styles[i]} style`;
     const result = await generateImageWithFallback(stylePrompt, aspectRatio, i * 1000);
     results.push(result);
+  }
+
+  return results;
+}
+
+export async function generateVideoFrames(
+  prompt: string,
+  count: number = 6
+): Promise<string[]> {
+  const dims = ASPECT_RATIOS["16:9"];
+  const results: string[] = [];
+
+  const variations = [
+    `${prompt}, cinematic wide shot`,
+    `${prompt}, close-up detail`,
+    `${prompt}, aerial view`,
+    `${prompt}, action shot`,
+    `${prompt}, dramatic angle`,
+    `${prompt}, soft focus portrait`,
+    `${prompt}, environmental context`,
+    `${prompt}, dynamic composition`,
+  ];
+
+  const selectedVariations = variations.slice(0, count);
+
+  for (let i = 0; i < selectedVariations.length; i++) {
+    const seed = i * 1000 + 42;
+    const encodedPrompt = encodeURIComponent(selectedVariations[i]);
+    const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${dims.width}&height=${dims.height}&seed=${seed}&nologo=true`;
+
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+      if (response.ok) {
+        results.push(url);
+      } else {
+        const fallback = await generateImageWithFallback(selectedVariations[i], "16:9", seed);
+        results.push(fallback.url);
+      }
+    } catch {
+      const fallback = await generateImageWithFallback(selectedVariations[i], "16:9", seed);
+      results.push(fallback.url);
+    }
   }
 
   return results;
