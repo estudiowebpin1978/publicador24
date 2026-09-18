@@ -44,20 +44,11 @@ async function fetchChannelsWithPosts(organizationId: string) {
             createdAt: string;
             sentAt?: string;
             channelId: string;
-            metrics?: {
-              impressions?: number;
-              reach?: number;
-              likes?: number;
-              comments?: number;
-              shares?: number;
-              clicks?: number;
-              views?: number;
-            };
           };
         }[];
       };
     }>(
-      `{ posts(first: 200, input: { organizationId: "${organizationId}", filter: { status: [sent] } }) { edges { node { id text status createdAt sentAt channelId metrics { impressions reach likes comments shares clicks views } } } } }`
+      `{ posts(first: 200, input: { organizationId: "${organizationId}", filter: { status: [sent] } }) { edges { node { id text status createdAt sentAt channelId } } } }`
     ),
   ]);
 
@@ -104,7 +95,7 @@ export async function GET(request: NextRequest) {
     for (const channel of channels) {
       for (const edge of channel.posts.edges) {
         const post = edge.node;
-        if (!post.sentAt || !post.metrics) continue;
+        if (!post.sentAt) continue;
 
         const sentTimestamp = new Date(post.sentAt).getTime();
         if (sentTimestamp < since) continue;
@@ -124,19 +115,14 @@ export async function GET(request: NextRequest) {
           .single();
 
         const row = {
-          impressions: post.metrics.impressions || 0,
-          reach: post.metrics.reach || 0,
-          likes: post.metrics.likes || 0,
-          comments: post.metrics.comments || 0,
-          shares: post.metrics.shares || 0,
-          clicks: post.metrics.clicks || 0,
-          views: post.metrics.views || 0,
-          engagement_rate:
-            (post.metrics.impressions || 0) > 0
-              ? (((post.metrics.likes || 0) + (post.metrics.comments || 0) + (post.metrics.shares || 0)) /
-                  (post.metrics.impressions || 1)) *
-                100
-              : 0,
+          impressions: 0,
+          reach: 0,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          clicks: 0,
+          views: 0,
+          engagement_rate: 0,
         };
 
         if (existing) {
