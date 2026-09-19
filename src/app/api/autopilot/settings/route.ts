@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 
 const DEFAULT_SETTINGS = {
-  enabled: false,
-  frequency: "daily",
-  platforms: ["instagram", "tiktok", "facebook"],
-  contentTypes: ["educational", "capture", "conversion"],
-  tone: "profesional",
-  autoPublish: false,
+  level: "assisted",
+  platformFrequencies: { instagram: "daily", x: "daily", facebook: "daily", linkedin: "daily", tiktok: "daily" },
+  topics: "",
+  contentPillars: "",
+  topicsToAvoid: "",
+  timeZone: "America/Argentina/Buenos_Aires",
+  preferredTimeSlots: "optimal",
+  excludedDays: [],
+  contentGuidelines: "",
+  approvalRequirements: "review",
 }
 
 export async function GET() {

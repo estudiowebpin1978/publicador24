@@ -43,9 +43,17 @@ export default function AutopilotPage() {
         const res = await fetch("/api/autopilot/settings")
         if (res.ok) {
           const data = await res.json()
-          if (data.settings) setSettings(data.settings)
+          if (data.settings && data.settings.level) {
+            setSettings(data.settings)
+          } else {
+            const saved = localStorage.getItem("autopilot_settings")
+            if (saved) setSettings(JSON.parse(saved))
+          }
         }
-      } catch { /* use defaults */ }
+      } catch {
+        const saved = localStorage.getItem("autopilot_settings")
+        if (saved) setSettings(JSON.parse(saved))
+      }
       finally { setLoading(false) }
     }
     load()
@@ -53,6 +61,7 @@ export default function AutopilotPage() {
 
   const handleSave = async () => {
     try {
+      localStorage.setItem("autopilot_settings", JSON.stringify(settings))
       await fetch("/api/autopilot/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
