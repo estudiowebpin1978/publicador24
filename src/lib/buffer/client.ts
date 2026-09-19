@@ -138,3 +138,12 @@ export async function getBufferPosts(channelId: string, first: number = 10): Pro
   );
   return data.posts.edges.map((e) => e.node);
 }
+
+export async function deleteBufferPost(postId: string): Promise<boolean> {
+  try {
+    await bufferGraphQL(`mutation { deletePost(input: { id: "${postId}" }) { __typename } }`);
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateTextWithFallback } from "@/lib/ai/multi-provider";
 import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { getBufferAccount, getBufferChannels, createBufferPost, type BufferChannel } from "@/lib/buffer/client";
+import { getBufferAccount, getBufferChannels, createBufferPost, getBufferPosts, type BufferChannel } from "@/lib/buffer/client";
 
 interface LoopResult {
   timestamp: number;
@@ -189,7 +189,22 @@ Generá EXACTAMENTE en este formato JSON:
           );
 
           let content;
-          try {
+        try {
+          // Check if channel has available slots (skip if full - Buffer limit 10)
+          const existingPosts = await Promise.all(
+            channels.map(async (ch) => {
+              try {
+                const posts = await getBufferPosts(ch.id, 10);
+                return { channelId: ch.id, count: posts.length, full: posts.length >= 10 };
+              } catch { return { channelId: ch.id, count: 999, full: true }; }
+            })
+          );
+          
+          // Skip full channels for this run (will retry when space opens)
+          if (existingPosts.find(p => p.channelId === channel.id && p.full)) {
+            result.details.push(`[${platform}] Canal bloqueado (límite de 10 posts). Se salta.`);
+            continue;
+          }
             const jsonMatch = response.text.match(/\{[\s\S]*\}/);
             content = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
           } catch {
