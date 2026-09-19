@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,10 +8,10 @@ import {
   Plus,
   Sparkles,
   BarChart3,
-  Calendar,
   Eye,
   Trash2,
-  MoreHorizontal,
+  Pencil,
+  Loader2,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -29,11 +28,25 @@ interface Campaign {
   created_at: number
 }
 
+const STATUS_COLORS: Record<string, string> = {
+  DRAFT: "bg-gray-100 text-gray-800",
+  ACTIVE: "bg-green-100 text-green-800",
+  PAUSED: "bg-yellow-100 text-yellow-800",
+  COMPLETED: "bg-blue-100 text-blue-800",
+  ARCHIVED: "bg-gray-100 text-gray-500",
+  draft: "bg-gray-100 text-gray-800",
+  active: "bg-green-100 text-green-800",
+  paused: "bg-yellow-100 text-yellow-800",
+  completed: "bg-blue-100 text-blue-800",
+  archived: "bg-gray-100 text-gray-500",
+}
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = React.useState<Campaign[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [deletingId, setDeletingId] = React.useState<string | null>(null)
 
-  React.useEffect(() => {
+  const fetchCampaigns = () => {
     fetch("/api/campaigns")
       .then((r) => r.json())
       .then((data) => {
@@ -41,14 +54,25 @@ export default function CampaignsPage() {
         setLoading(false)
       })
       .catch(() => setLoading(false))
+  }
+
+  React.useEffect(() => {
+    fetchCampaigns()
   }, [])
 
-  const statusColors: Record<string, string> = {
-    DRAFT: "bg-gray-100 text-gray-800",
-    ACTIVE: "bg-green-100 text-green-800",
-    PAUSED: "bg-yellow-100 text-yellow-800",
-    COMPLETED: "bg-blue-100 text-blue-800",
-    ARCHIVED: "bg-gray-100 text-gray-500",
+  const handleDelete = async (id: string) => {
+    if (!confirm("¿Eliminar esta campaña y todo su contenido?")) return
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/campaigns/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setCampaigns((prev) => prev.filter((c) => c.id !== id))
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   if (loading) {
@@ -62,7 +86,9 @@ export default function CampaignsPage() {
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <Card key={i}><CardContent className="h-48 animate-pulse bg-muted" /></Card>
+            <Card key={i}>
+              <CardContent className="h-48 animate-pulse bg-muted" />
+            </Card>
           ))}
         </div>
       </div>
@@ -74,9 +100,7 @@ export default function CampaignsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Campañas</h1>
-          <p className="text-muted-foreground">
-            Administrá tus campañas de contenido
-          </p>
+          <p className="text-muted-foreground">Administrá tus campañas de contenido</p>
         </div>
         <Link href="/campaigns/new">
           <Button>
@@ -109,7 +133,7 @@ export default function CampaignsPage() {
                     {campaign.description || campaign.idea || "Sin descripción"}
                   </CardDescription>
                 </div>
-                <Badge className={statusColors[campaign.status] || "bg-gray-100"}>
+                <Badge className={STATUS_COLORS[campaign.status] || "bg-gray-100"}>
                   {campaign.status}
                 </Badge>
               </div>
@@ -143,12 +167,35 @@ export default function CampaignsPage() {
                       Ver
                     </Button>
                   </Link>
+                  <Link href={`/campaigns/${campaign.id}`} className="flex-1">
+                    <Button variant="outline" size="sm" className="w-full">
+                      <Pencil className="size-4 mr-1" />
+                      Editar
+                    </Button>
+                  </Link>
                   <Link href={`/analytics?campaign=${campaign.id}`} className="flex-1">
                     <Button variant="outline" size="sm" className="w-full">
                       <BarChart3 className="size-4 mr-1" />
                       Métricas
                     </Button>
                   </Link>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => handleDelete(campaign.id)}
+                    disabled={deletingId === campaign.id}
+                  >
+                    {deletingId === campaign.id ? (
+                      <Loader2 className="size-4 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="size-4 mr-1" />
+                    )}
+                    Eliminar
+                  </Button>
                 </div>
               </div>
             </CardContent>

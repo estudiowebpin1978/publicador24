@@ -141,7 +141,7 @@ export async function POST(request?: NextRequest) {
     const { data: campaigns } = await supabase
       .from("campaigns")
       .select("*")
-      .eq("status", "active")
+      .eq("status", "ACTIVE")
       .limit(3);
 
     if (!campaigns || campaigns.length === 0) {

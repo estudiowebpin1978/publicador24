@@ -4,15 +4,46 @@ import { getSupabaseAdmin } from "@/lib/supabase/server"
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin()
-    const { data, error } = await supabase
+    const { data: campaigns, error } = await supabase
       .from("campaigns")
       .select("*")
       .order("created_at", { ascending: false })
 
-    if (error) throw error
-    return NextResponse.json({ campaigns: data || [] })
+    if (error) {
+      const msg = error.message || ""
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ campaigns: [] })
+      }
+      throw error
+    }
+
+    const enriched = await Promise.all(
+      (campaigns || []).map(async (campaign) => {
+        const { count: totalCount } = await supabase
+          .from("content_pieces")
+          .select("*", { count: "exact", head: true })
+          .eq("campaign_id", campaign.id)
+
+        const { count: publishedCount } = await supabase
+          .from("content_pieces")
+          .select("*", { count: "exact", head: true })
+          .eq("campaign_id", campaign.id)
+          .eq("status", "PUBLISHED")
+
+        return {
+          ...campaign,
+          content_count: totalCount || 0,
+          published_count: publishedCount || 0,
+        }
+      })
+    )
+
+    return NextResponse.json({ campaigns: enriched })
   } catch (error) {
-    return NextResponse.json({ error: "Error al obtener campañas" }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Error al obtener campañas" },
+      { status: 500 }
+    )
   }
 }
 
@@ -27,15 +58,18 @@ export async function POST(request: NextRequest) {
       idea: body.idea || "",
       objective: body.objective || "",
       target_audience: body.target_audience || "",
+      pain_points: body.pain_points || "",
+      desires: body.desires || "",
+      value_proposition: body.value_proposition || "",
+      funnel_stage: body.funnel_stage || "",
       platforms: body.platforms || [],
       style: body.style || "profesional",
       offer: body.offer || "",
       url: body.url || "",
       status: body.status || "DRAFT",
-      content_count: body.content_count || 0,
-      published_count: body.published_count || 0,
-    };
-    if (body.project_id) insertData.project_id = body.project_id;
+      autopilot_level: body.autopilot_level || "MANUAL",
+    }
+    if (body.project_id) insertData.project_id = body.project_id
 
     const { data, error } = await supabase
       .from("campaigns")
@@ -43,9 +77,18 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      const msg = error.message || ""
+      if (msg.includes("does not exist") || msg.includes("relation")) {
+        return NextResponse.json({ error: "Tabla no disponible" }, { status: 500 })
+      }
+      throw error
+    }
     return NextResponse.json({ campaign: data })
   } catch (error) {
-    return NextResponse.json({ error: "Error al crear campaña" }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Error al crear campaña" },
+      { status: 500 }
+    )
   }
 }
