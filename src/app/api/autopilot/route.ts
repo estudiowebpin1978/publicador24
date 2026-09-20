@@ -164,6 +164,11 @@ export async function POST(request?: NextRequest) {
       return NextResponse.json({ ...result, errors: [...result.errors, "No hay canales de Buffer conectados"] });
     }
 
+    // Auto-clean Buffer queue before posting (free space automatically)
+    try {
+      await fetch("https://autopublicador-zeta.vercel.app/api/admin/cleanup-buffer", { method: "POST" });
+    } catch {}
+
     for (const campaign of campaigns) {
       for (const channel of channels) {
         const platform = channel.service;
