@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
   }
   
   // Initiate auth
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com&redirect_uri=https://wazkylxgqckjfkcmfotl.supabase.co/auth/v1/callback&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline`;
+  // Generate state for CSRF protection
+  const state = Math.random().toString(36).substring(2, 15);
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com&redirect_uri=https://autopublicador-zeta.vercel.app/api/auth/youtube/callback&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline&state=${state}`;
   return NextResponse.redirect(authUrl);
 }
