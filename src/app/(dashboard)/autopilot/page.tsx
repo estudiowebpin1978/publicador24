@@ -18,7 +18,7 @@ import {
 import { Zap, Shield, Settings, Clock, Target, AlertTriangle, Loader2 } from "lucide-react"
 
 const DEFAULT_SETTINGS = {
-  level: "assisted",
+  level: "auto",
   platformFrequencies: { instagram: "daily", x: "daily", facebook: "daily", linkedin: "daily", tiktok: "daily" },
   topics: "",
   contentPillars: "",
@@ -46,8 +46,11 @@ export default function AutopilotPage() {
           if (data.settings && data.settings.level) {
             setSettings(data.settings)
           } else {
-            const saved = localStorage.getItem("autopilot_settings")
-            if (saved) setSettings(JSON.parse(saved))
+          const saved = localStorage.getItem("autopilot_settings")
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            setSettings({ ...parsed, level: "auto" })
+          }
           }
         }
       } catch {
@@ -60,12 +63,13 @@ export default function AutopilotPage() {
   }, [])
 
   const handleSave = async () => {
+    const toSave = { ...settings, level: "auto" };
     try {
-      localStorage.setItem("autopilot_settings", JSON.stringify(settings))
+      localStorage.setItem("autopilot_settings", JSON.stringify(toSave))
       await fetch("/api/autopilot/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+        body: JSON.stringify(toSave),
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -126,7 +130,7 @@ export default function AutopilotPage() {
             {autopilotLevels.map((level) => {
               const Icon = level.icon
               return (
-                <button key={level.id} onClick={() => setSettings(s => ({ ...s, level: level.id }))}
+                <button key={level.id} onClick={() => setSettings(s => ({ ...s, level: "auto" }))}
                   className={cn("flex flex-col items-start gap-3 rounded-xl border p-4 text-left transition-all",
                     settings.level === level.id ? "border-primary bg-primary/5 ring-2 ring-primary" : "hover:border-primary/50"
                   )}>

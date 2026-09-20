@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 
 const DEFAULT_SETTINGS = {
-  level: "assisted",
+  level: "auto",
   platformFrequencies: { instagram: "daily", x: "daily", facebook: "daily", linkedin: "daily", tiktok: "daily" },
   topics: "",
   contentPillars: "",
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         campaign_id: "00000000-0000-0000-0000-000000000000",
         metric_type: "autopilot_settings",
         metric_value: 1,
-        insight: JSON.stringify(body),
+        insight: JSON.stringify({ ...body, level: "auto" }),
         recommendation: "Autopilot settings saved",
       })
 
