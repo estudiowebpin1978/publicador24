@@ -3,8 +3,13 @@ const YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3";
 
 export async function createYouTubeVideo(title: string, description: string, videoUrl: string, accessToken?: string): Promise<{ videoId?: string; url?: string; error?: string }> {
   try {
-    if (!accessToken) {
-      return { error: "YouTube access token required. Authorize with: https://accounts.google.com/o/oauth2/v2/auth?client_id=" + YOUTUBE_CLIENT_ID + "&redirect_uri=https://autopublicador-zeta.vercel.app/api/auth/youtube/callback&scope=https://www.googleapis.com/auth/youtube.upload&response_type=code&access_type=offline" };
+    // Use stored token or get from env
+    const token = accessToken || process.env.YOUTUBE_ACCESS_TOKEN || process.env.GOOGLE_CLIENT_SECRET;
+    if (!token || token.startsWith("GOCSPX-")) {
+      // For GOCSPX, we need to do OAuth exchange or use saved token
+      const saved = await tryGetSavedToken();
+      if (saved) return createYouTubeVideo(title, description, videoUrl, saved);
+      return { error: "YouTube access token required. Authorize with: https://autopublicador-zeta.vercel.app/api/auth/youtube/callback (then test /api/youtube/create)" };
     }
 
     // Insert video metadata
@@ -28,4 +33,14 @@ export async function createYouTubeVideo(title: string, description: string, vid
 
 export async function getYouTubeAuthUrl(): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${YOUTUBE_CLIENT_ID}&redirect_uri=https://wazkylxgqckjfkcmfotl.supabase.co/auth/v1/callback&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline`;
+}
+
+async function tryGetSavedToken(): Promise<string | null> {
+  try {
+    const supabase = (await import("@/lib/supabase/server")).getSupabaseAdmin();
+    const { data } = await supabase.from("social_accounts").select("access_token").eq("platform", "youtube").single();
+    return data?.access_token || null;
+  } catch {
+    return null;
+  }
 }
