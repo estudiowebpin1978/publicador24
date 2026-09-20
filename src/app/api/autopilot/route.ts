@@ -42,25 +42,25 @@ Formato: Texto largo con enlace.`,
 
 const IMAGE_STYLES: Record<string, string[]> = {
   tiktok: [
-    "Close-up of hands holding a printed lottery ticket with numbers, store counter background, realistic photo, warm lighting, Argentine quiniela ticket",
-    "Person holding Argentine peso bills in front of a colorful lottery results board, quiniela locale, realistic photo, vibrant colors",
-    "Mobile phone screen showing lottery predictions app with numbers and emojis, dark theme, modern UI, purple and pink accents, realistic mockup",
-    "Lottery balls with numbers 0-9 falling into a glass bowl, dramatic lighting, neon purple and magenta glow, cinematic photo",
-    "Stack of Argentine peso bills next to a lottery ticket on a wooden table, coffee shop setting, warm tones, realistic photo",
+    "Photorealistic close-up of hands holding an Argentine quiniela lottery ticket with printed numbers, store counter background, warm yellow lighting, real photo style, no text",
+    "Hand holding Argentine peso bills in front of a colorful quiniela results board with red yellow green signage, Argentine lottery locale, realistic photo, high detail",
+    "Mobile phone displaying Quiniela IA predictions app interface with numbers and emojis, dark purple theme, modern UI, realistic mockup, clean design",
+    "Stack of printed quiniela lottery tickets next to peso bills on wooden table, coffee shop setting, warm tones, professional photography",
+    "Person holding winning quiniela ticket with excited expression, confetti in foreground, celebration moment, realistic photo",
   ],
   instagram: [
-    "Elegant lottery ticket with gold foil details on dark background, premium feel, luxury design, close-up macro photo",
-    "Smartphone showing quiniela predictions app interface, dark theme with purple gradients, modern UI design, realistic mockup",
-    "Person celebrating with lottery ticket in hand, confetti falling, joy expression, party atmosphere, professional photo",
-    "Lottery results board with glowing numbers, neon lights, night atmosphere, Argentine quiniela locale, cinematic photo",
-    "Flat lay of lottery ticket, Argentine pesos, lucky charm, and phone with predictions app, dark background, professional photo",
+    "Elegant Argentine quiniela lottery ticket close-up on dark background, premium design, gold and white details, macro photography, luxury feel",
+    "Smartphone showcasing Quiniela IA app with predicted numbers and fire emojis, dark purple gradient background, professional mockup, clean UI",
+    "Winner holding quiniela ticket with voucher, happy celebration, confetti falling, professional lifestyle photo, warm lighting",
+    "Quiniela results board with glowing numbers 5829 6135, neon lights, night atmosphere, Argentine locale, cinematic photo",
+    "Flat lay of Argentine quiniela ticket, peso bills, phone app mockup, and lucky charm on dark surface, professional product photo",
   ],
   facebook: [
-    "Official lottery results display board with colorful numbers, clean typography, Argentine quiniela results, professional photo",
-    "Group of friends checking lottery results on phone, happy expressions, community feel, warm lighting, lifestyle photo",
-    "Lottery jackpot counter showing big winning numbers, attention-grabbing display, red and gold colors, dramatic photo",
-    "Person pointing at winning lottery numbers on screen, excited expression, celebration moment, professional photo",
-    "Lottery ticket close-up with highlighted winning numbers, dramatic lighting, focus on ticket details, professional photo",
+    "Official quiniela results display with colorful numbers 5829 6135, clean typography, Argentine lottery board, professional photo",
+    "Friends looking at quiniela results on smartphone, happy expressions, community atmosphere, warm indoor lighting, lifestyle photo",
+    "Lottery jackpot numbers displayed prominently with red and gold colors, dramatic lighting, attention grabbing, professional photo",
+    "Person pointing excitedly at winning quiniela numbers on phone screen, celebration moment, professional photography",
+    "Close-up of quiniela ticket with highlighted winning numbers, dramatic side lighting, focus on paper details, professional photo",
   ],
 };
 
@@ -108,7 +108,7 @@ function pickTimeSlot(platform: string): Date {
 async function generatePlatformImage(platform: string): Promise<string> {
   const styles = IMAGE_STYLES[platform] || IMAGE_STYLES.instagram;
   const style = styles[Math.floor(Math.random() * styles.length)];
-  const prompt = `Argentine quiniela lottery, ${style}, photorealistic, high quality, detailed, no text overlay, no words, no letters`;
+  const prompt = `Photorealistic Argentine quiniela lottery image matching these references: hands holding printed quiniela ticket, peso bills in front of quiniela result board, Quiniela IA mobile app interface with predictions, or win celebration. Style: real photography, no text overlays, high detail, warm yellow and red tones, Argentine locale. No words, no letters.`;
 
   try {
     const image = await generateImageWithFallback(prompt, "1:1");
