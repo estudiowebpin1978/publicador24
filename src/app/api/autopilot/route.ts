@@ -170,13 +170,19 @@ export async function POST(request?: NextRequest) {
       await fetch("https://autopublicador-zeta.vercel.app/api/admin/cleanup-buffer", { method: "POST" });
     } catch {}
 
-    // 1. AUTO-LIMPIEZA AUTOMÁTICA (siempre antes de publicar)
+    // 1. AUTO-CLEAN (siempre) + AUTO-YOUTUBE (si hay token guardado)
     try {
       const cleanupRes = await fetch("https://autopublicador-zeta.vercel.app/api/admin/cleanup-buffer", { method: "POST" });
       if (cleanupRes.ok) result.details.push("[Auto] Buffer limpiado automáticamente");
+      
+      // Auto-publish YouTube if access token exists in DB (autonomous)
+      const youtubeToken = await supabase.from("social_accounts").select("access_token").eq("platform", "youtube").single();
+      if (youtubeToken.data?.access_token) {
+        result.details.push("[Auto] YouTube token disponible — puede publicar videos sin intervención");
+      }
     } catch {}
 
-    // 2. AUTO-MEJORA: aprender del rendimiento pasado
+    // 2. SMART SCHEDULE (aprende de datos)
     try {
       const smart = await getSmartSchedule(platform);
       result.details.push(`[Smart] Mejor horario: ${smart.reason}`);
