@@ -22,6 +22,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect("https://autopublicador-zeta.vercel.app/autopilot?youtube=connected&token_ready=true");
   }
 
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com&redirect_uri=https://wazkylxgqckjfkcmfotl.supabase.co/auth/v1/callback&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline`;
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com&redirect_uri=https://wazkylxgqckjfkcmfotl.supabase.co/auth/v1/callback&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline&state=dev`;
   return NextResponse.redirect(authUrl);
 }
