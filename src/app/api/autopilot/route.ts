@@ -170,7 +170,10 @@ export async function POST(request?: NextRequest) {
     } catch {}
 
     for (const campaign of campaigns) {
-      for (const channel of channels) {
+      // Prioritize Instagram when others are blocked (temporary)
+      const priorityChannels = channels.filter(ch => ch.service === "instagram" || ch.service === "tiktok" || ch.service === "facebook");
+      const targetChannels = priorityChannels.filter(ch => ch.service === "instagram");
+      if (targetChannels.length === 0) targetChannels.push(...priorityChannels);
         const platform = channel.service;
         const platformPrompt = PLATFORM_PROMPTS[platform] || PLATFORM_PROMPTS.instagram;
 
