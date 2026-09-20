@@ -13,11 +13,10 @@ export async function POST() {
 
     for (const ch of targetChannels) {
       const posts = await getBufferPosts(ch.id, 20);
+      // Delete ALL posts (scheduled and sent) to fully clear the queue
       for (const post of posts) {
-        if (post.status === "sent" || post.status === "published") {
-          const ok = await deleteBufferPost(post.id);
-          if (ok) cleaned++;
-        }
+        const ok = await deleteBufferPost(post.id);
+        if (ok) cleaned++;
       }
     }
 
