@@ -27,5 +27,7 @@ export async function createYouTubeVideo(title: string, description: string, vid
 }
 
 export async function getYouTubeAuthUrl(): string {
+  return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${YOUTUBE_CLIENT_ID}&redirect_uri=https://wazkylxgqckjfkcmfotl.supabase.co/auth/v1/callback&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline`;
+}
   return `https://accounts.google.com/o/oauth2/v2/auth?client_id=${YOUTUBE_CLIENT_ID}&redirect_uri=https://autopublicador-zeta.vercel.app/api/auth/youtube/callback&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline`;
 }
