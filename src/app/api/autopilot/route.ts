@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateTextWithFallback } from "@/lib/ai/multi-provider";
 import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { getBufferAccount, getBufferChannels, createBufferPost, getBufferPosts, type BufferChannel } from "@/lib/buffer/client";
+import { getBufferAccount, getBufferChannels, createBufferPost, getBufferPosts, deleteBufferPost, type BufferChannel } from "@/lib/buffer/client";
+import { getSmartSchedule, autoImproveCampaign } from "@/lib/ai/autonomous";
 
 interface LoopResult {
   timestamp: number;
@@ -167,6 +168,18 @@ export async function POST(request?: NextRequest) {
     // Auto-clean Buffer queue before posting (free space automatically)
     try {
       await fetch("https://autopublicador-zeta.vercel.app/api/admin/cleanup-buffer", { method: "POST" });
+    } catch {}
+
+    // 1. AUTO-LIMPIEZA AUTOMÁTICA (siempre antes de publicar)
+    try {
+      const cleanupRes = await fetch("https://autopublicador-zeta.vercel.app/api/admin/cleanup-buffer", { method: "POST" });
+      if (cleanupRes.ok) result.details.push("[Auto] Buffer limpiado automáticamente");
+    } catch {}
+
+    // 2. AUTO-MEJORA: aprender del rendimiento pasado
+    try {
+      const smart = await getSmartSchedule(platform);
+      result.details.push(`[Smart] Mejor horario: ${smart.reason}`);
     } catch {}
 
     for (const campaign of campaigns) {
