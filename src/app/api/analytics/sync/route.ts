@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-
-const BUFFER_API_URL = "https://api.buffer.com";
+import { getBufferAccount, getBufferChannels } from "@/lib/buffer/client";
 
 async function bufferGraphQL<T>(query: string): Promise<T> {
   const apiKey = process.env.BUFFER_API_KEY;
   if (!apiKey) throw new Error("BUFFER_API_KEY not configured");
 
-  const res = await fetch(BUFFER_API_URL, {
+  const res = await fetch("https://api.buffer.com", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ query }),
+    cache: "no-store",
   });
 
   const json = await res.json();
@@ -24,33 +24,23 @@ async function bufferGraphQL<T>(query: string): Promise<T> {
 }
 
 async function fetchChannelsWithPosts(organizationId: string) {
-  const [channelsData, postsData] = await Promise.all([
-    bufferGraphQL<{
-      channels: {
-        id: string;
-        service: string;
-        name: string;
+  const channels = await getBufferChannels(organizationId);
+  const postsData = await bufferGraphQL<{
+    posts: {
+      edges: {
+        node: {
+          id: string;
+          text: string;
+          status: string;
+          createdAt: string;
+          sentAt?: string;
+          channelId: string;
+        };
       }[];
-    }>(
-      `{ channels(input: { organizationId: "${organizationId}" }) { id service name } }`
-    ),
-    bufferGraphQL<{
-      posts: {
-        edges: {
-          node: {
-            id: string;
-            text: string;
-            status: string;
-            createdAt: string;
-            sentAt?: string;
-            channelId: string;
-          };
-        }[];
-      };
-    }>(
-      `{ posts(first: 100, input: { organizationId: "${organizationId}", filter: { status: [sent] } }) { edges { node { id text status createdAt sentAt channelId } } } }`
-    ),
-  ]);
+    };
+  }>(
+    `{ posts(first: 100, input: { organizationId: "${organizationId}", filter: { status: [sent] } }) { edges { node { id text status createdAt sentAt channelId } } } }`
+  );
 
   const postsByChannel = new Map<string, typeof postsData.posts.edges>();
   for (const edge of postsData.posts.edges) {
@@ -60,7 +50,7 @@ async function fetchChannelsWithPosts(organizationId: string) {
     postsByChannel.set(cid, list);
   }
 
-  return channelsData.channels.map((ch) => ({
+  return channels.map((ch) => ({
     id: ch.id,
     service: ch.service,
     name: ch.name,
@@ -75,9 +65,7 @@ export async function GET(request: NextRequest) {
     const daysParam = parseInt(searchParams.get("days") || "7", 10);
     const days = Math.min(Math.max(daysParam, 1), 90);
 
-    const accountRes = await bufferGraphQL<{
-      account: { organizations: { id: string }[] };
-    }>(`{ account { organizations { id } } }`);
+    const accountRes = await getBufferAccount();
     const orgId = accountRes.account.organizations[0]?.id;
 
     if (!orgId) {
@@ -186,9 +174,11 @@ export async function GET(request: NextRequest) {
       count: daily.length,
     });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    const isRate = /too many requests/i.test(msg);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error", synced: 0, summary: null },
-      { status: 500 }
+      { error: msg, synced: 0, summary: null },
+      { status: isRate ? 200 : 500 }
     );
   }
 }

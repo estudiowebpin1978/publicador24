@@ -82,29 +82,35 @@ export async function generateVideoReel(
   duration: number = 5
 ): Promise<{ url: string; type: "video" }> {
   const encodedPrompt = encodeURIComponent(prompt);
-  const pollinationsUrl = `https://video.pollinations.ai/prompt/${encodedPrompt}?model=fast-svd&duration=${duration}`;
 
+  // Try Pollinations video API
   try {
+    const pollinationsUrl = `https://video.pollinations.ai/prompt/${encodedPrompt}?model=fast-svd&duration=${duration}`;
     const response = await fetch(pollinationsUrl, {
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(90000),
     });
 
     if (response.ok) {
-      return { url: pollinationsUrl, type: "video" };
+      const contentType = response.headers.get("content-type");
+      if (contentType && (contentType.includes("video") || contentType.includes("octet-stream"))) {
+        return { url: pollinationsUrl, type: "video" };
+      }
     }
   } catch {
-    // Pollinations video not available, fall back to image-based
+    // Pollinations video not available
   }
 
-  const frameCount = Math.max(5, Math.min(8, duration));
+  // Fallback: generate multiple frames for a slideshow-style reel
+  const frameCount = Math.max(4, Math.min(6, duration));
   const frames = await generateVideoFrames(prompt, frameCount);
 
   if (frames.length > 0) {
+    // Return the best frame as a static image (platforms handle this as a photo post)
     return { url: frames[0], type: "video" };
   }
 
   return {
-    url: `https://placehold.co/1280x720/7c3aed/ffffff?text=${encodeURIComponent(prompt.slice(0, 20))}`,
+    url: `https://placehold.co/1080x1920/7c3aed/ffffff?text=${encodeURIComponent(prompt.slice(0, 30))}`,
     type: "video",
   };
 }

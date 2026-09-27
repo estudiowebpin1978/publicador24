@@ -34,6 +34,7 @@ export default function AutopilotPage() {
   const [settings, setSettings] = React.useState(DEFAULT_SETTINGS)
   const [loading, setLoading] = React.useState(true)
   const [saved, setSaved] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
   const [running, setRunning] = React.useState(false)
   const [lastRun, setLastRun] = React.useState<string | null>(null)
 
@@ -45,35 +46,44 @@ export default function AutopilotPage() {
           const data = await res.json()
           if (data.settings && data.settings.level) {
             setSettings(data.settings)
-          } else {
-          const saved = localStorage.getItem("autopilot_settings")
-          if (saved) {
-            const parsed = JSON.parse(saved)
-            setSettings({ ...parsed, level: "auto" })
-          }
+            localStorage.setItem("autopilot_settings", JSON.stringify(data.settings))
+            setLoading(false)
+            return
           }
         }
-      } catch {
-        const saved = localStorage.getItem("autopilot_settings")
-        if (saved) setSettings(JSON.parse(saved))
+      } catch {}
+      // Fallback to localStorage
+      const saved = localStorage.getItem("autopilot_settings")
+      if (saved) {
+        try { setSettings({ ...JSON.parse(saved), level: "auto" }) } catch {}
       }
-      finally { setLoading(false) }
+      setLoading(false)
     }
     load()
   }, [])
 
   const handleSave = async () => {
     const toSave = { ...settings, level: "auto" };
+    setSaveError(null);
     try {
       localStorage.setItem("autopilot_settings", JSON.stringify(toSave))
-      await fetch("/api/autopilot/settings", {
+      const res = await fetch("/api/autopilot/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(toSave),
       })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
-    } catch { /* ignore */ }
+      const data = await res.json()
+      if (data.success) {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2000)
+      } else {
+        setSaveError(data.error || "Error al guardar")
+        setTimeout(() => setSaveError(null), 4000)
+      }
+    } catch (e) {
+      setSaveError("Error de conexión")
+      setTimeout(() => setSaveError(null), 4000)
+    }
   }
 
   const handleRunNow = async () => {
@@ -177,6 +187,7 @@ export default function AutopilotPage() {
 
       <div className="flex justify-end gap-3">
         <Button variant="outline" onClick={() => setSettings(DEFAULT_SETTINGS)}>Restablecer</Button>
+        {saveError && <span className="text-sm text-red-500 self-center">{saveError}</span>}
         <Button onClick={handleSave}>{saved ? "Guardado!" : "Guardar Configuración"}</Button>
       </div>
     </div>

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBufferAccount, getBufferChannels } from "@/lib/buffer/client";
+import { getBufferAccount, getBufferChannels, isBufferRateLimited } from "@/lib/buffer/client";
 
 export async function GET() {
+  if (await isBufferRateLimited()) {
+    return NextResponse.json({ accounts: [], error: "Buffer rate limited — retry later" });
+  }
   try {
     const account = await getBufferAccount();
     const orgId = account.account.organizations[0]?.id;
@@ -24,9 +27,11 @@ export async function GET() {
 
     return NextResponse.json({ accounts });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    const isRate = /too many requests/i.test(msg);
     return NextResponse.json(
-      { accounts: [], error: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      { accounts: [], error: msg },
+      { status: isRate ? 200 : 500 }
     );
   }
 }

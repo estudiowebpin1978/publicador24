@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { POST as autopilotPOST } from "@/app/api/autopilot/route";
 
-export async function GET(request: NextRequest) {
+async function runAutopilot(request: NextRequest) {
+  // Check auth: header OR query param
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  const { searchParams } = new URL(request.url);
+  const secretParam = searchParams.get("secret");
+  
+  const validSecret = process.env.CRON_SECRET;
+  const isAuthorized = authHeader === `Bearer ${validSecret}` || secretParam === validSecret;
+
+  if (!isAuthorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -16,4 +23,12 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function GET(request: NextRequest) {
+  return runAutopilot(request);
+}
+
+export async function POST(request: NextRequest) {
+  return runAutopilot(request);
 }

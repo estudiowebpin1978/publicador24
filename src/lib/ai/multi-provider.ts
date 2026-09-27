@@ -6,6 +6,7 @@ interface AIProviderConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  models?: string[];
   maxTokens?: number;
 }
 
@@ -21,23 +22,40 @@ function getProviders(): AIProviderConfig[] {
 
   // 1. Groq (free, fast, we have the key)
   if (process.env.GROQ_API_KEY) {
+    const groqModel = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
     providers.push({
       name: "groq",
       baseUrl: "https://api.groq.com/openai/v1",
       apiKey: process.env.GROQ_API_KEY,
-      model: process.env.GROQ_MODEL || "openai/gpt-oss-120b",
-      maxTokens: 800,
+      model: groqModel,
+      models: unique([groqModel, "openai/gpt-oss-20b", "openai/gpt-oss-120b"]),
+      maxTokens: 1800,
     });
   }
 
   // 2. OpenRouter (fallback)
   if (process.env.OPENROUTER_API_KEY) {
+    const orModel = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
     providers.push({
       name: "openrouter",
       baseUrl: "https://openrouter.ai/api/v1",
       apiKey: process.env.OPENROUTER_API_KEY,
-      model: process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash",
+      model: orModel,
+      models: unique([orModel, "google/gemini-2.5-flash"]),
       maxTokens: 800,
+    });
+  }
+
+  // 4. Google Studio (AI Studio / Gemini) - OpenAI-compatible endpoint
+  if (process.env.GOOGLE_STUDIO_API_KEY) {
+    const gsModel = process.env.GOOGLE_STUDIO_MODEL || "gemini-3.8-flash";
+    providers.push({
+      name: "google-studio",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      apiKey: process.env.GOOGLE_STUDIO_API_KEY,
+      model: gsModel,
+      models: unique([gsModel, "gemini-3.8-flash", "gemini-3-flash-preview", "gemma-4-26b-a4b-it"]),
+      maxTokens: 1800,
     });
   }
 
@@ -48,6 +66,7 @@ function getProviders(): AIProviderConfig[] {
       baseUrl: "https://api.free.ai/v1",
       apiKey: process.env.FREEAI_API_KEY,
       model: "qwen7b",
+      models: ["qwen7b"],
       maxTokens: 2000,
     });
   }
@@ -55,9 +74,24 @@ function getProviders(): AIProviderConfig[] {
   return providers;
 }
 
+function unique(list: string[]): string[] {
+  return Array.from(new Set(list.filter(Boolean)));
+}
+
+function isTransient(error: Error): boolean {
+  return /503|502|429|rate[_ ]limit|UNAVAILABLE|high demand|overloaded|timed? ?out/i.test(
+    error.message
+  );
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function callProvider(
   config: AIProviderConfig,
-  messages: Array<{ role: string; content: string }>
+  messages: Array<{ role: string; content: string }>,
+  model: string = config.model
 ): Promise<TextResult> {
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: "POST",
@@ -66,7 +100,7 @@ async function callProvider(
       Authorization: `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify({
-      model: config.model,
+      model,
       messages,
       temperature: 0.7,
       max_tokens: config.maxTokens || 2000,
@@ -85,7 +119,7 @@ async function callProvider(
   return {
     text,
     tokens_used: tokens,
-    model: config.model,
+    model,
     provider: config.name,
   };
 }
@@ -102,22 +136,38 @@ export async function generateTextWithFallback(
   }
   messages.push({ role: "user", content: prompt });
 
-  let lastError: Error | null = null;
+  const failures: string[] = [];
 
   for (const provider of providers) {
-    try {
-      console.log(`Trying ${provider.name}...`);
-      const result = await callProvider(provider, messages);
-      console.log(`Success with ${provider.name}`);
-      return result;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      console.warn(`Failed ${provider.name}: ${lastError.message}`);
-      continue;
+    const models = provider.models?.length ? provider.models : [provider.model];
+
+    for (const model of models) {
+      const maxAttempts = 2;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          console.log(`Trying ${provider.name} (${model}) attempt ${attempt}...`);
+          const result = await callProvider(provider, messages, model);
+          console.log(`Success with ${provider.name}`);
+          return result;
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          failures.push(`${provider.name}/${model}: ${err.message.slice(0, 160)}`);
+          console.warn(`Failed ${provider.name}/${model}: ${err.message}`);
+
+          if (isTransient(err) && attempt < maxAttempts) {
+            await sleep(1500 * attempt);
+            continue;
+          }
+          break;
+        }
+      }
     }
   }
 
-  throw lastError || new Error("All AI providers failed");
+  throw new Error(
+    `All AI providers failed → ${failures.slice(-4).join(" | ")}`
+  );
 }
 
 export async function generateContentForPlatform(

@@ -1,5 +1,46 @@
 const BUFFER_API_URL = "https://api.buffer.com";
 
+const CACHE_TTL = 120_000;
+const cache = new Map<string, { data: unknown; expires: number }>();
+
+import { isRateLimited, markRateLimited, clearRateLimit, refreshRemoteState } from "./rate-limit";
+
+export async function isBufferRateLimited(): Promise<boolean> {
+  await refreshRemoteState();
+  return isRateLimited();
+}
+
+function markRL() {
+  markRateLimited();
+}
+
+function clearRL() {
+  clearRateLimit();
+}
+
+async function cachedGraphQL<T>(key: string, query: string): Promise<T> {
+  if (isRateLimited()) {
+    throw new Error("Buffer rate limited — skipping");
+  }
+  const hit = cache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.data as T;
+  try {
+    const data = await bufferGraphQL<T>(query);
+    cache.set(key, { data, expires: Date.now() + CACHE_TTL });
+    clearRL();
+    return data;
+  } catch (e) {
+    if (e instanceof Error && /too many requests|429/i.test(e.message)) {
+      markRL();
+    }
+    throw e;
+  }
+}
+
+export function invalidateBufferCache() {
+  cache.clear();
+}
+
 export interface BufferChannel {
   id: string;
   name: string;
@@ -31,21 +72,31 @@ async function bufferGraphQL<T>(query: string, variables?: Record<string, unknow
     body: JSON.stringify({ query, variables }),
   });
 
+  if (res.status === 429) {
+    markRL();
+    throw new Error("Too many requests from this client");
+  }
+
   const json = await res.json();
   if (json.errors) {
-    throw new Error(json.errors[0]?.message || "Buffer API error");
+    const msg = json.errors[0]?.message || "Buffer API error";
+    if (/too many requests/i.test(msg)) markRL();
+    throw new Error(msg);
   }
+  clearRL();
   return json.data;
 }
 
 export async function getBufferAccount() {
-  return bufferGraphQL<{ account: { id: string; email: string; organizations: { id: string; name: string }[] } }>(
+  return cachedGraphQL<{ account: { id: string; email: string; organizations: { id: string; name: string }[] } }>(
+    "account",
     `{ account { id email organizations { id name } } }`
   );
 }
 
 export async function getBufferChannels(organizationId: string): Promise<BufferChannel[]> {
-  const data = await bufferGraphQL<{ channels: BufferChannel[] }>(
+  const data = await cachedGraphQL<{ channels: BufferChannel[] }>(
+    `channels:${organizationId}`,
     `{ channels(input: { organizationId: "${organizationId}" }) { id name service displayName avatar isDisconnected } }`
   );
   return data.channels;
@@ -123,17 +174,18 @@ export async function createBufferPost(input: {
     throw new Error(data.createPost.message);
   }
 
+  invalidateBufferCache();
   return data.createPost.post!;
 }
 
 export async function getBufferPosts(channelId: string, first: number = 10): Promise<BufferPost[]> {
-  const accountRes = await bufferGraphQL<{ account: { organizations: { id: string }[] } }>(
-    `{ account { organizations { id } } }`
-  );
+  const accountRes = await getBufferAccount();
   const orgId = accountRes.account.organizations[0]?.id;
   if (!orgId) return [];
 
-  const data = await bufferGraphQL<{ posts: { edges: { node: BufferPost }[] } }>(
+  const key = `posts:${channelId}:${first}`;
+  const data = await cachedGraphQL<{ posts: { edges: { node: BufferPost }[] } }>(
+    key,
     `{ posts(first: ${first}, input: { organizationId: "${orgId}", filter: { channelIds: ["${channelId}"] } }) { edges { node { id text status createdAt sentAt } } } }`
   );
   return data.posts.edges.map((e) => e.node);
@@ -142,6 +194,7 @@ export async function getBufferPosts(channelId: string, first: number = 10): Pro
 export async function deleteBufferPost(postId: string): Promise<boolean> {
   try {
     await bufferGraphQL(`mutation { deletePost(input: { id: "${postId}" }) { __typename } }`);
+    invalidateBufferCache();
     return true;
   } catch {
     return false;
