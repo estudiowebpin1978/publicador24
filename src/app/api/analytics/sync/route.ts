@@ -175,9 +175,11 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
-    const isRate = /too many requests/i.test(msg);
+    // Un rate limit de Buffer no es un error del servidor: responde 200 para
+    // que el dashboard pueda seguir mostrando los datos que ya tenía.
+    const isRate = /rate limited|too many requests|\b429\b/i.test(msg);
     return NextResponse.json(
-      { error: msg, synced: 0, summary: null },
+      { error: msg, degraded: isRate, synced: 0, summary: null },
       { status: isRate ? 200 : 500 }
     );
   }

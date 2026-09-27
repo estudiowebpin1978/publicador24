@@ -13,7 +13,13 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      // El error de Supabase no es un Error: hacer `throw` perdía el mensaje.
+      return NextResponse.json(
+        { error: error.message || "Error al leer brand_profiles" },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(data || []);
   } catch (error) {
     return NextResponse.json(
@@ -53,7 +59,12 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      return NextResponse.json(
+        { error: error.message || "Error al crear brand profile" },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(data, { status: 201 });
   } catch (error) {
     return NextResponse.json(
@@ -85,7 +96,12 @@ export async function PUT(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      return NextResponse.json(
+        { error: error.message || "Error al actualizar brand profile" },
+        { status: 400 }
+      );
+    }
     return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(

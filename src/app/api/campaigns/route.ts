@@ -50,6 +50,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    if (!body?.name || typeof body.name !== "string" || !body.name.trim()) {
+      return NextResponse.json({ error: "name es requerido" }, { status: 400 })
+    }
     const supabase = getSupabaseAdmin()
 
     const insertData: Record<string, unknown> = {
@@ -79,10 +82,13 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       const msg = error.message || ""
-      if (msg.includes("does not exist") || msg.includes("relation")) {
-        return NextResponse.json({ error: "Tabla no disponible" }, { status: 500 })
+      // "relation" solo si la tabla realmente no existe: el mismo string
+      // aparece en los errores NOT NULL ("column ... of relation ... violates")
+      // y esos son de validación, no de esquema.
+      if (msg.includes("does not exist") || msg.includes("Could not find the table") || msg.includes("schema cache")) {
+        return NextResponse.json({ error: "Tabla no disponible" }, { status: 503 })
       }
-      throw error
+      return NextResponse.json({ error: msg }, { status: 400 })
     }
     return NextResponse.json({ campaign: data })
   } catch (error) {

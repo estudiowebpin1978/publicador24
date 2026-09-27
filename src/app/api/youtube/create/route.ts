@@ -62,12 +62,31 @@ export async function POST(request: NextRequest) {
 
     // 4. Create video
     const videoUrl = body.videoUrl || body.assetUrl || "";
+    if (!videoUrl) {
+      return NextResponse.json(
+        {
+          error:
+            "Falta videoUrl: esta ruta sube un video que ya existe. Para video automático usá /api/autopilot (cola de renders con Shotstack).",
+          authorized: true,
+          channel: channelName,
+        },
+        { status: 400 }
+      );
+    }
+
     const result = await createYouTubeVideo(
       body.title || "Quiniela IA - Predicciones de la quiniela nacional",
       body.description || "Aumentá tus chances de ganar con datos reales. Visita https://quiniela-ia-two.vercel.app/",
       videoUrl,
       accessToken
     );
+
+    if (result.error || !result.videoId) {
+      return NextResponse.json(
+        { ...result, authorized: true, channel: channelName },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({
       ...result,

@@ -106,7 +106,13 @@ export default function CampaignDetailPage() {
 
   const handleRegenerate = async (pieceId: string) => {
     try {
-      await fetch(`/api/content-pieces/${pieceId}/regenerate`, { method: "POST" })
+      const res = await fetch(`/api/content-pieces/${pieceId}/regenerate`, {
+        method: "POST",
+      })
+      if (res.ok) {
+        // Recargamos para que se vea el contenido nuevo de la IA
+        window.location.reload()
+      }
     } catch {
       /* ignore */
     }

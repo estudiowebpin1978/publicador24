@@ -14,6 +14,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // El ensamblado necesita el binario de ffmpeg; sin él el endpoint moría en
+    // un 500 genérico. Avisamos con 503 para que el caller use la cola de
+    // renders de Shotstack (autopilot) o suba el .mp4 a mano.
+    const { checkFFmpeg } = await import("@/lib/video/ffmpeg-generator");
+    if (!(await checkFFmpeg())) {
+      return NextResponse.json(
+        {
+          error:
+            "ffmpeg no disponible en este entorno: el video automático usa la cola de Shotstack (/api/autopilot). También podés subir un .mp4 en /api/youtube/create.",
+        },
+        { status: 503 }
+      );
+    }
+
     // Generate scene assets
     const assets = await generateVideoAssets({
       content,
@@ -28,11 +42,11 @@ export async function POST(request: NextRequest) {
     const isVertical = platform === "tiktok" || platform === "instagram";
     const videoUrl = await assembleVideo({
       scenes: assets.scenes.map((s) => ({
-        imageUrl: s.image.url,
+        imageUrl: s.imageUrl,
         text: s.text,
         duration: s.duration,
       })),
-      audioUrl: assets.narration?.audioUrl || undefined,
+      audioUrl: undefined,
       outputWidth: isVertical ? 720 : 1280,
       outputHeight: isVertical ? 1280 : 720,
       fps: 30,
@@ -46,12 +60,12 @@ export async function POST(request: NextRequest) {
         scenes: assets.scenes.map((s) => ({
           id: s.id,
           text: s.text,
-          imageUrl: s.image.url,
+          imageUrl: s.imageUrl,
           duration: s.duration,
           transition: s.transition,
         })),
         totalDuration: assets.totalDuration,
-        narrationUrl: assets.narration?.audioUrl || null,
+        narrationUrl: null,
         format: isVertical ? "9:16" : "16:9",
         platform,
       },

@@ -7,6 +7,8 @@ import { getSmartSchedule, autoImproveCampaign } from "@/lib/ai/autonomous";
 import { tryGetSavedToken } from "@/lib/youtube";
 import { publishWithRotation, getProviderStatus } from "@/lib/publisher/rotation";
 import { humanDelay, humanizeText, pickHumanTimeSlot, checkDailyQuota } from "@/lib/anti-bot";
+import { POST as cleanupBufferRoute } from "@/app/api/admin/cleanup-buffer/route";
+import { POST as cleanupBulkPublishRoute } from "@/app/api/admin/cleanup-bulkpublish/route";
 import {
   getPublishBlock,
   markPublishFailure,
@@ -203,26 +205,8 @@ export async function POST(request?: NextRequest) {
           else if (posts.length >= 8) result.details.push(`[${ch.service}] ${posts.length}/10 posts (cerca del límite)`);
         } catch {}
       }
-
-      // Auto-clean Buffer before posting
-      try {
-        const cleanupRes = await fetch("https://autopublicador-zeta.vercel.app/api/admin/cleanup-buffer", { method: "POST" });
-        if (cleanupRes.ok) {
-          const data = await cleanupRes.json();
-          result.details.push(`[Auto] Buffer limpiado: ${data.cleaned} posts`);
-        }
-      } catch {}
       await humanDelay("before_buffer");
     }
-
-    // Auto-clean BulkPublish before posting
-    try {
-      const bpCleanup = await fetch("https://autopublicador-zeta.vercel.app/api/admin/cleanup-bulkpublish", { method: "POST" });
-      if (bpCleanup.ok) {
-        const data = await bpCleanup.json();
-        result.details.push(`[Auto] BulkPublish limpiado: ${data.cleaned} posts`);
-      }
-    } catch {}
     await humanDelay("before_bulkpublish");
 
     for (const campaign of campaigns) {
@@ -604,6 +588,33 @@ Generá EXACTAMENTE en este formato JSON:
       }
     } catch (e) {
       result.errors.push(`[youtube] ${e instanceof Error ? e.message : "error"}`);
+    }
+
+    // LIMPIEZA AUTOMÁTICA (al final: primero se publica, después se libera
+    // espacio). Se ejecuta en proceso (sin HTTP interno) y cada ruta aplica su
+    // propio throttling, así que casi nunca consume cuota de API.
+    try {
+      const res = await cleanupBufferRoute();
+      const data = await res.json();
+      result.details.push(
+        data.skipped
+          ? `[Auto] Buffer: ${data.message}`
+          : `[Auto] Buffer limpiado: ${data.cleaned} posts`
+      );
+    } catch (e) {
+      result.details.push(`[Auto] Buffer cleanup: ${e instanceof Error ? e.message : "error"}`);
+    }
+
+    try {
+      const res = await cleanupBulkPublishRoute();
+      const data = await res.json();
+      result.details.push(
+        data.skipped
+          ? `[Auto] BulkPublish: ${data.message}`
+          : `[Auto] BulkPublish limpiado: ${data.cleaned} posts`
+      );
+    } catch (e) {
+      result.details.push(`[Auto] BulkPublish cleanup: ${e instanceof Error ? e.message : "error"}`);
     }
 
     await supabase.from("notifications").insert({

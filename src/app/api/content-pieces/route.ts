@@ -35,6 +35,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    if (!body?.title && !body?.hook && !body?.body) {
+      return NextResponse.json(
+        { error: "Debe venir title, hook o body" },
+        { status: 400 }
+      )
+    }
     const supabase = getSupabaseAdmin()
 
     const { data, error } = await supabase
@@ -42,7 +48,7 @@ export async function POST(request: NextRequest) {
       .insert({
         content_pack_id: body.content_pack_id || null,
         campaign_id: body.campaign_id,
-        title: body.title || "",
+        title: body.title || body.hook || "",
         hook: body.hook || "",
         body: body.body || "",
         cta: body.cta || "",
@@ -58,10 +64,10 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       const msg = error.message || ""
-      if (msg.includes("does not exist") || msg.includes("relation")) {
-        return NextResponse.json({ piece: null })
+      if (msg.includes("does not exist") || msg.includes("Could not find the table")) {
+        return NextResponse.json({ piece: null }, { status: 503 })
       }
-      throw error
+      return NextResponse.json({ error: msg }, { status: 400 })
     }
     return NextResponse.json({ piece: data })
   } catch (error) {

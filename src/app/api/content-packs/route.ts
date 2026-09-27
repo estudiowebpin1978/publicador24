@@ -4,6 +4,9 @@ import { getSupabaseAdmin } from "@/lib/supabase/server"
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    if (!body?.campaign_id) {
+      return NextResponse.json({ error: "campaign_id es requerido" }, { status: 400 })
+    }
     const supabase = getSupabaseAdmin()
 
     const { data, error } = await supabase
@@ -20,10 +23,10 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       const msg = error.message || ""
-      if (msg.includes("does not exist") || msg.includes("relation")) {
-        return NextResponse.json({ pack: null })
+      if (msg.includes("does not exist") || msg.includes("Could not find the table")) {
+        return NextResponse.json({ pack: null }, { status: 503 })
       }
-      throw error
+      return NextResponse.json({ error: msg }, { status: 400 })
     }
     return NextResponse.json({ pack: data })
   } catch (error) {
