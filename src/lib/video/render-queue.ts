@@ -299,6 +299,7 @@ async function processLocalRender(
       title: piece.title,
       audioText: `${piece.title}. ${piece.body || ""}`,
       secondsPerImage: 3,
+      vertical: true,
     })
 
     let upload: { videoId?: string; url?: string; error?: string }

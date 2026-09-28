@@ -211,8 +211,10 @@ export async function POST(request?: NextRequest) {
       for (const ch of channels) {
         try {
           const posts = await getBufferPosts(ch.id, 10);
-          if (posts.length >= 10) fullChannels.add(ch.id);
-          else if (posts.length >= 8) result.details.push(`[${ch.service}] ${posts.length}/10 posts (cerca del límite)`);
+          // Solo la cola real cuenta: los "sent" (historial) no ocupan lugar.
+          const active = posts.filter((p) => !["sent", "error", "failed"].includes(p.status));
+          if (active.length >= 10) fullChannels.add(ch.id);
+          else if (active.length >= 8) result.details.push(`[${ch.service}] ${active.length}/10 posts (cerca del límite)`);
         } catch {}
       }
       await humanDelay("before_buffer");
@@ -522,14 +524,18 @@ Generá EXACTAMENTE en este formato JSON:
 
             const ytPrompt = `Generá contenido para YouTube sobre: ${campaign.name}
 Nichos: ${campaign.industry || "lotería/quinela"}
-Público: ${campaign.target_audience || "argentino general"}
+Público: ${campaign.target_audience || "gana-ganar a la quiniela de la ciudad (ex nacional)"}
+
+Objetivo: promocionar la app https://quiniela-ia-two.vercel.app/ — incluila como CTA en la descripción.
+Estilo: natural y realista (persona real, sin estética publicitaria forzada), formato reel/short.
+Cada video debe usar un enfoque distinto al anterior (tema, hook y encuadre siempre nuevos).
 
 Generá EXACTAMENTE en este formato JSON:
 {
-  "title": "Título llamativo para YouTube (max 100 caracteres, con emojis)",
-  "description": "Descripción completa con timestamps y enlaces (min 200 caracteres)",
+  "title": "Título llamativo para YouTube (max 100 caracteres, con emojis, termina con #Shorts)",
+  "description": "Descripción completa con timestamps y el enlace https://quiniela-ia-two.vercel.app/ (min 200 caracteres)",
   "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"],
-  "thumbnail_prompt": "Descripción de la imagen thumbnail para YouTube (estilo clickbait, colores llamativos)"
+  "thumbnail_prompt": "Descripción de la imagen thumbnail para YouTube (natural, realista, relacionada a quiniela/app)"
 }`;
 
             try {

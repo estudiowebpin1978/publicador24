@@ -11,6 +11,8 @@ export interface LocalVideoInput {
   secondsPerImage?: number;
   /** Si se pasa, intenta generar voz (best effort). Si falla, video mudo. */
   audioText?: string;
+  /** Reel/Short vertical 1080x1920 (default). false → 1280x720 horizontal. */
+  vertical?: boolean;
 }
 
 export interface LocalVideoResult {
@@ -68,7 +70,8 @@ async function generateTTS(text: string): Promise<string | null> {
 }
 
 /**
- * Render local (sin Shotstack): imágenes + voz opcional → mp4 1280x720.
+ * Render local (sin Shotstack): imágenes + voz opcional → mp4.
+ * Por defecto vertical 1080x1920 (reel/Short). `vertical: false` → 1280x720.
  * Pensado para Vercel: preset veryfast y duración corta para que entre en 60s.
  */
 export async function renderLocalVideo(input: LocalVideoInput): Promise<LocalVideoResult> {
@@ -111,8 +114,11 @@ export async function renderLocalVideo(input: LocalVideoInput): Promise<LocalVid
     const outputPath = join(tempDir, "output.mp4");
 
     const vf =
-      "scale=1280:720:force_original_aspect_ratio=decrease," +
-      "pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p";
+      input.vertical === false
+        ? "scale=1280:720:force_original_aspect_ratio=decrease," +
+          "pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p"
+        : "scale=1080:1920:force_original_aspect_ratio=increase," +
+          "crop=1080:1920,format=yuv420p";
 
     const args = ["-y", "-f", "concat", "-safe", "0", "-i", concatFile];
     if (withAudio && audioPath) args.push("-i", audioPath);

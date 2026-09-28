@@ -39,17 +39,19 @@ export async function POST() {
     // Process one channel at a time with minimal API calls
     for (const ch of targetChannels) {
       try {
-        // Single API call to get posts
+        // Single API call to get posts. Solo la cola real: los "sent" del
+        // historial no ocupan lugar y no deben contarse como llenos.
         const posts = await getBufferPosts(ch.id, 10);
+        const active = posts.filter((p) => !["sent", "error", "failed"].includes(p.status));
 
         // If under limit, skip
-        if (posts.length < 8) {
-          details.push(`${ch.service}: ${posts.length} posts (ok)`);
+        if (active.length < 8) {
+          details.push(`${ch.service}: ${active.length} posts en cola (ok)`);
           continue;
         }
 
-        // Delete oldest posts to get to 5
-        const toDelete = posts.slice(5);
+        // Delete oldest queued posts to get to 5
+        const toDelete = active.slice(5);
         for (const post of toDelete) {
           const ok = await deleteBufferPost(post.id);
           if (ok) {
@@ -64,7 +66,7 @@ export async function POST() {
           }
         }
 
-        details.push(`${ch.service}: ${toDelete.length} eliminados, ${posts.length - toDelete.length} restantes`);
+        details.push(`${ch.service}: ${toDelete.length} eliminados, ${active.length - toDelete.length} restantes`);
       } catch (e) {
         details.push(`${ch.service}: ${e instanceof Error ? e.message : "error"}`);
       }
