@@ -27,7 +27,14 @@ export async function GET(request: NextRequest) {
 
       if (tokenData.access_token) {
         const supabase = getSupabaseAdmin();
-        await supabase.from("social_accounts").upsert({
+        // No hay constraint único en (user_id, platform): limpiar filas viejas
+        // para que tryGetSavedToken().single() no falle con "multiple rows".
+        await supabase
+          .from("social_accounts")
+          .delete()
+          .eq("platform", "youtube")
+          .eq("user_id", "00000000-0000-0000-0000-000000000000");
+        await supabase.from("social_accounts").insert({
           user_id: "00000000-0000-0000-0000-000000000000",
           platform: "youtube",
           channel_name: "quiniela_ia_youtube",
@@ -35,6 +42,7 @@ export async function GET(request: NextRequest) {
           refresh_token: tokenData.refresh_token || "",
           status: "active",
           updated_at: Date.now(),
+          connected_at: Date.now(),
         });
 
         return NextResponse.redirect(
