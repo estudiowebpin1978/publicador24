@@ -3,7 +3,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -21,6 +21,8 @@ import {
   Pencil,
   X,
   Check,
+  Image as ImageIcon,
+  Upload,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -38,6 +40,7 @@ interface Campaign {
   target_audience?: string
   value_proposition?: string
   communication_angle?: string
+  images?: string[]
 }
 
 interface ContentPiece {
@@ -75,6 +78,10 @@ export default function CampaignDetailPage() {
   const [editing, setEditing] = React.useState(false)
   const [editForm, setEditForm] = React.useState<Partial<Campaign>>({})
   const [saving, setSaving] = React.useState(false)
+  const [images, setImages] = React.useState<string[]>([])
+  const [uploading, setUploading] = React.useState(false)
+  const [urlInput, setUrlInput] = React.useState("")
+  const [imageError, setImageError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     async function load() {
@@ -83,6 +90,7 @@ export default function CampaignDetailPage() {
         if (res.ok) {
           const data = await res.json()
           setCampaign(data.campaign)
+          setImages(Array.isArray(data.campaign?.images) ? data.campaign.images : [])
         }
         const piecesRes = await fetch(`/api/content-pieces?campaign_id=${campaignId}`)
         if (piecesRes.ok) {
@@ -160,6 +168,57 @@ export default function CampaignDetailPage() {
     if (selectedFilter === "all") return true
     return piece.content_type === selectedFilter
   })
+
+  const persistImages = async (next: string[]) => {
+    setImages(next)
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images: next }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setCampaign(data.campaign)
+        setImageError(null)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        setImageError(data.error || "No se pudieron guardar las imágenes")
+      }
+    } catch {
+      setImageError("Error de conexión al guardar")
+    }
+  }
+
+  const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    setUploading(true)
+    setImageError(null)
+    const uploaded: string[] = []
+    try {
+      for (const file of files) {
+        const fd = new FormData()
+        fd.append("file", file)
+        const res = await fetch("/api/upload", { method: "POST", body: fd })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data.url) uploaded.push(data.url)
+        else setImageError(data.error || `No se pudo subir ${file.name}`)
+      }
+    } catch {
+      setImageError("Error de conexión al subir")
+    }
+    setUploading(false)
+    e.target.value = ""
+    if (uploaded.length > 0) await persistImages([...images, ...uploaded])
+  }
+
+  const addImageUrl = async () => {
+    const url = urlInput.trim()
+    if (!url) return
+    setUrlInput("")
+    await persistImages([...images, url])
+  }
 
   if (loading) {
     return (
@@ -244,6 +303,77 @@ export default function CampaignDetailPage() {
           </Button>
         )}
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg">Imágenes de la campaña</CardTitle>
+          <CardDescription>
+            Se usan en las publicaciones de Instagram y TikTok, y en los videos de YouTube.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {images.map((url, i) => (
+              <div
+                key={`${url}-${i}`}
+                className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => persistImages(images.filter((_, j) => j !== i))}
+                  className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100"
+                  title="Quitar imagen"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
+            <label className="flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed text-muted-foreground transition hover:bg-muted/50">
+              {uploading ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : (
+                <Upload className="size-5" />
+              )}
+              <span className="text-xs">{uploading ? "Subiendo..." : "Subir"}</span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={handleFiles}
+                disabled={uploading}
+              />
+            </label>
+          </div>
+
+          <div className="flex gap-2">
+            <Input
+              placeholder="https://ejemplo.com/imagen.jpg"
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  void addImageUrl()
+                }
+              }}
+            />
+            <Button variant="outline" onClick={() => void addImageUrl()} disabled={!urlInput.trim()}>
+              <ImageIcon className="size-4 mr-1" />
+              Agregar
+            </Button>
+          </div>
+
+          {imageError && <p className="text-sm text-destructive">{imageError}</p>}
+          {images.length === 0 && !imageError && (
+            <p className="text-xs text-muted-foreground">
+              Sin imágenes propias: las publicaciones usarán imágenes generadas por IA.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {editing && (
         <Card>

@@ -15,7 +15,9 @@ import {
   clearPublishFailure,
 } from "@/lib/publisher/failure-backoff";
 import { hostImagePublicly } from "@/lib/media-hosting";
+import { getAllCampaignImages, pickCampaignImage } from "@/lib/campaign-images";
 import { processPendingRenders, startYouTubeRender, isVideoRenderBlocked } from "@/lib/video/render-queue";
+import { checkFFmpeg } from "@/lib/video/ffmpeg";
 
 interface LoopResult {
   timestamp: number;
@@ -168,6 +170,10 @@ export async function POST(request?: NextRequest) {
       return NextResponse.json({ ...result, details: ["No hay campañas activas"] });
     }
 
+    // Imágenes propias de cada campaña: se usan antes de generar con IA.
+    const campaignImages = await getAllCampaignImages();
+    const imagesFor = (campaignId: string): string[] => campaignImages[campaignId] || [];
+
     let channels: BufferChannel[] = [];
     let orgId = "";
     let bufferSkipped = false;
@@ -183,7 +189,11 @@ export async function POST(request?: NextRequest) {
         const account = await getBufferAccount();
         orgId = account.account.organizations[0]?.id || "";
         if (orgId) {
-          channels = await getBufferChannels(orgId);
+          channels = (await getBufferChannels(orgId)).filter(
+            // Facebook deshabilitado a pedido del usuario (permiso #240 no
+            // disponible). Para reactivar: quitar este filter.
+            (ch) => ch.service !== "facebook"
+          );
         }
       }
     } catch (e) {
@@ -280,8 +290,12 @@ Generá EXACTAMENTE en este formato JSON:
           result.contentGenerated++;
           result.details.push(`[${platform}] Contenido: ${content.hook}`);
 
-          const imageUrl = await generatePlatformImage(platform);
-          result.imagesGenerated++;
+          const ownImage = pickCampaignImage(imagesFor(campaign.id));
+          const imageUrl = ownImage || (await generatePlatformImage(platform));
+          if (!ownImage) result.imagesGenerated++;
+          result.details.push(
+            `[${platform}] Imagen: ${ownImage ? "de la campaña" : "generada con IA"}`
+          );
 
           // Anti-bot: human time slot + humanized text
           const scheduledTime = pickHumanTimeSlot(platform);
@@ -364,7 +378,10 @@ Generá EXACTAMENTE en este formato JSON:
     // FALLBACK: Rotation (Meta/BulkPublish) for platforms not handled by Buffer
     if (bufferSkipped || result.contentPublished === 0) {
       for (const campaign of campaigns) {
-        for (const platform of ["facebook", "instagram", "tiktok"]) {
+        // Facebook queda fuera a pedido del usuario: no consigue el permiso
+        // pages_manage_posts (#240) y no vale la pena gastar IA en fallos.
+        // Para reactivarlo: agregar "facebook" a esta lista.
+        for (const platform of ["instagram", "tiktok"]) {
           if (channels.find((c) => c.service === platform)) continue;
 
           // Sin proveedor libre no tiene sentido generar contenido: se gastaría
@@ -423,7 +440,9 @@ Generá EXACTAMENTE en este formato JSON:
               continue;
             }
 
-            const imageUrl = await generatePlatformImage(platform);
+            const ownImage = pickCampaignImage(imagesFor(campaign.id));
+            const imageUrl = ownImage || (await generatePlatformImage(platform));
+            if (!ownImage) result.imagesGenerated++;
             const humanText = humanizeText(
               `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${(content.hashtags || []).join(" ")}`
             );
@@ -487,9 +506,9 @@ Generá EXACTAMENTE en este formato JSON:
           result.details.push(
             `[youtube] ${resumed.pending} render(s) en curso — se retoma en el próximo ciclo`
           );
-        } else if (await isVideoRenderBlocked(supabase)) {
+        } else if ((await isVideoRenderBlocked(supabase)) && !(await checkFFmpeg())) {
           result.details.push(
-            `[youtube] Video automático pausado (Shotstack sin créditos) — se reintenta solo`
+            `[youtube] Video automático pausado (Shotstack sin créditos y sin ffmpeg local) — se reintenta solo`
           );
         } else {
           const quotaOk = await checkDailyQuota("youtube", supabase);
@@ -536,16 +555,20 @@ Generá EXACTAMENTE en este formato JSON:
               result.contentGenerated++;
               result.details.push(`[youtube] Contenido: ${ytContent.title}`);
 
-              let thumbnailUrl = "";
-              try {
-                const thumb = await generateImageWithFallback(
-                  ytContent.thumbnail_prompt ||
-                    "YouTube thumbnail: quiniela lottery winning numbers with AI predictions, dramatic lighting, bold colors",
-                  "16:9"
-                );
-                thumbnailUrl = await hostImagePublicly(thumb.url, "youtube");
-                result.imagesGenerated++;
-              } catch {}
+              // Imágenes propias de la campaña primero (posts + frames del video).
+              const ytOwnImages = imagesFor(campaign.id);
+              let thumbnailUrl = ytOwnImages[0] || "";
+              if (!thumbnailUrl) {
+                try {
+                  const thumb = await generateImageWithFallback(
+                    ytContent.thumbnail_prompt ||
+                      "YouTube thumbnail: quiniela lottery winning numbers with AI predictions, dramatic lighting, bold colors",
+                    "16:9"
+                  );
+                  thumbnailUrl = await hostImagePublicly(thumb.url, "youtube");
+                  result.imagesGenerated++;
+                } catch {}
+              }
 
               const started = await startYouTubeRender(supabase, {
                 campaignId: campaign.id,
@@ -554,11 +577,17 @@ Generá EXACTAMENTE en este formato JSON:
                   ytContent.description + "\n\n" + (ytContent.tags || []).join(", "),
                 tags: ytContent.tags || [],
                 thumbnailUrl: thumbnailUrl || undefined,
+                images: ytOwnImages,
               });
 
-              if (started.renderId) {
+              if (started.renderId || started.pieceId) {
                 startedThisCycle++;
-                result.details.push(`[youtube] Render iniciado: ${started.renderId}`);
+                const isLocal = (started.renderId || "").startsWith("local:");
+                result.details.push(
+                  isLocal
+                    ? `[youtube] Render local encolado (ffmpeg): ${started.renderId}`
+                    : `[youtube] Render iniciado: ${started.renderId}`
+                );
               } else {
                 result.details.push(
                   `[youtube] No se pudo iniciar render: ${started.error || "sin detalle"}`

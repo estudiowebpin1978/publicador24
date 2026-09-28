@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/server"
+import { getCampaignImages, setCampaignImages } from "@/lib/campaign-images"
 
 export async function GET(
   _request: NextRequest,
@@ -21,7 +22,9 @@ export async function GET(
       }
       return NextResponse.json({ campaign: null })
     }
-    return NextResponse.json({ campaign: data })
+
+    const images = await getCampaignImages(id)
+    return NextResponse.json({ campaign: { ...data, images } })
   } catch {
     return NextResponse.json({ campaign: null })
   }
@@ -64,25 +67,47 @@ export async function PUT(
       }
     }
 
-    if (Object.keys(updates).length === 0) {
+    // Las imágenes se guardan aparte (no hay columna en campaigns).
+    const imagesUpdate =
+      body.images !== undefined && Array.isArray(body.images) ? body.images : null
+
+    if (Object.keys(updates).length === 0 && imagesUpdate === null) {
       return NextResponse.json({ error: "No hay campos para actualizar" }, { status: 400 })
     }
 
-    const { data, error } = await supabase
-      .from("campaigns")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single()
+    let data: Record<string, unknown> | null = null
 
-    if (error) {
-      const msg = error.message || ""
-      if (msg.includes("does not exist") || msg.includes("relation")) {
-        return NextResponse.json({ error: "Tabla no disponible" }, { status: 500 })
+    if (Object.keys(updates).length > 0) {
+      const res = await supabase
+        .from("campaigns")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single()
+
+      if (res.error) {
+        const msg = res.error.message || ""
+        if (msg.includes("does not exist") || msg.includes("relation")) {
+          return NextResponse.json({ error: "Tabla no disponible" }, { status: 500 })
+        }
+        throw res.error
       }
-      throw error
+      data = res.data as Record<string, unknown>
+    } else {
+      const res = await supabase.from("campaigns").select("*").eq("id", id).single()
+      data = res.data as Record<string, unknown>
     }
-    return NextResponse.json({ campaign: data })
+
+    if (imagesUpdate !== null) {
+      await setCampaignImages(id, imagesUpdate)
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "Campaña no encontrada" }, { status: 404 })
+    }
+
+    const images = await getCampaignImages(id)
+    return NextResponse.json({ campaign: { ...data, images } })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Error al actualizar" },

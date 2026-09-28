@@ -32,7 +32,10 @@ export async function publishWithRotation(input: PublishInput): Promise<PublishR
     attempts.push({ name: "meta", fn: async () => publishViaMeta(input) });
   }
 
-  if (!isBulkPublishRateLimited()) {
+  // BulkPublish solo para TikTok: su plan gratis son 30 requests/día y Facebook/
+  // Instagram los agotaban reintentando cuando Meta falla (error #240). TikTok no
+  // tiene otra vía gratis, así que esa cuota queda reservada para él.
+  if (input.platform === "tiktok" && !isBulkPublishRateLimited()) {
     attempts.push({ name: "bulkpublish", fn: async () => publishViaBulkPublish(input) });
   }
 

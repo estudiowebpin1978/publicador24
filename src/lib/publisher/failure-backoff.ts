@@ -8,10 +8,20 @@ type Failures = Record<string, { until: number; reason: string; count: number }>
 const DEFAULT_BLOCK_MS = 30 * 60_000;
 const PERMANENT_ERROR_BLOCK_MS = 2 * 60 * 60_000;
 
+/** Milisegundos hasta la medianoche UTC (cuando BulkPublish resetea su cuota). */
+function msUntilUtcMidnight(): number {
+  const now = new Date();
+  const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.max(60_000, next - now.getTime());
+}
+
 function blockMsFor(reason: string): number {
   // Errores de permisos/quotea: reintentar en seguida no cambia nada y solo
   // gasta IA, así que espaciamos el reintento.
   if (/#?\s*200\b|#?\s*240\b|too many requests|\b429\b|rate limit|quota|not allowed|insufficient|permission/i.test(reason)) {
+    // La cuota de BulkPublish se libera a medianoche UTC: esperar menos solo
+    // hace fallar el reintento y subir el contador de backoff.
+    if (/bulkpublish/i.test(reason)) return msUntilUtcMidnight();
     return PERMANENT_ERROR_BLOCK_MS;
   }
   return DEFAULT_BLOCK_MS;
@@ -87,9 +97,16 @@ export async function markPublishFailure(platform: string, reason: string): Prom
   const previous = failures[platform];
   const now = Date.now();
   const count = (previous?.count || 0) + 1;
-  const base = blockMsFor(reason);
-  // Cada repetición duplica la espera (30min → 1h → 2h → 4h, tope 6h).
-  const backoff = Math.min(base * Math.pow(2, Math.max(0, count - 1)), 6 * 60 * 60_000);
+
+  let backoff: number;
+  if (/bulkpublish/i.test(reason)) {
+    // La cuota de BulkPublish vuelve a medianoche UTC: ningún tope de 6h.
+    backoff = msUntilUtcMidnight();
+  } else {
+    const base = blockMsFor(reason);
+    // Cada repetición duplica la espera (30min → 1h → 2h → 4h, tope 6h).
+    backoff = Math.min(base * Math.pow(2, Math.max(0, count - 1)), 6 * 60 * 60_000);
+  }
 
   failures[platform] = {
     until: now + backoff,

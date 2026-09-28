@@ -127,20 +127,82 @@ export interface BulkPublishChannel {
 }
 
 let channelsCache: { at: number; channels: BulkPublishChannel[] } | null = null;
+// Las instancias serverless son volátiles: sin cache remota cada cold start
+// gastaba 1 de los 30 requests diarios solo por listar canales.
 const CHANNELS_CACHE_MS = 30 * 60_000;
+const CHANNELS_REMOTE_TTL_MS = 6 * 60 * 60_000;
+const CHANNELS_KEY = "bulkpublish_channels";
+
+async function loadRemoteChannels(): Promise<BulkPublishChannel[] | null> {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data } = await supabase
+      .from("social_accounts")
+      .select("access_token")
+      .eq("platform", CHANNELS_KEY)
+      .eq("user_id", "00000000-0000-0000-0000-000000000000")
+      .limit(1);
+    const parsed = JSON.parse(data?.[0]?.access_token || "{}");
+    if (
+      typeof parsed?.at === "number" &&
+      Date.now() - parsed.at < CHANNELS_REMOTE_TTL_MS &&
+      Array.isArray(parsed.channels) &&
+      parsed.channels.length > 0
+    ) {
+      return parsed.channels as BulkPublishChannel[];
+    }
+  } catch {}
+  return null;
+}
+
+async function saveRemoteChannels(channels: BulkPublishChannel[]): Promise<void> {
+  try {
+    const supabase = getSupabaseAdmin();
+    await supabase
+      .from("social_accounts")
+      .delete()
+      .eq("platform", CHANNELS_KEY)
+      .eq("user_id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("social_accounts").insert({
+      platform: CHANNELS_KEY,
+      user_id: "00000000-0000-0000-0000-000000000000",
+      channel_name: "BulkPublish channels cache",
+      access_token: JSON.stringify({ at: Date.now(), channels }),
+      status: "active",
+      connected_at: Date.now(),
+      updated_at: Date.now(),
+    });
+  } catch {}
+}
 
 export async function getChannels(): Promise<BulkPublishChannel[]> {
   if (channelsCache && Date.now() - channelsCache.at < CHANNELS_CACHE_MS) {
     return channelsCache.channels;
   }
+
+  const remote = await loadRemoteChannels();
+  if (remote) {
+    channelsCache = { at: Date.now(), channels: remote };
+    return remote;
+  }
+
   const data = await bpFetch<{ channels: BulkPublishChannel[] }>("/api/channels");
   const channels = data.channels || [];
   channelsCache = { at: Date.now(), channels };
+  if (channels.length > 0) void saveRemoteChannels(channels);
   return channels;
 }
 
 export function invalidateChannelsCache() {
   channelsCache = null;
+  try {
+    const supabase = getSupabaseAdmin();
+    void supabase
+      .from("social_accounts")
+      .delete()
+      .eq("platform", CHANNELS_KEY)
+      .eq("user_id", "00000000-0000-0000-0000-000000000000");
+  } catch {}
 }
 
 export async function createPost(input: {

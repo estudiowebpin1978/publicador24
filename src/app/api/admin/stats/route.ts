@@ -45,10 +45,26 @@ export async function GET() {
       } catch {}
     }
 
+    // Diagnóstico del runtime (ffmpeg para el render local de YouTube).
+    let ffmpeg: { path: string; exists: boolean; ok: boolean; error?: string } = {
+      path: "",
+      exists: false,
+      ok: false,
+    };
+    try {
+      const { existsSync } = await import("fs");
+      const { ffmpegPath, checkFFmpeg } = await import("@/lib/video/ffmpeg");
+      const p = ffmpegPath();
+      ffmpeg = { path: p, exists: existsSync(p), ok: await checkFFmpeg() };
+    } catch (e) {
+      ffmpeg.error = e instanceof Error ? e.message : "error";
+    }
+
     return NextResponse.json({
       success: true,
       data: { users: { list } },
       total: list.length,
+      runtime: { ffmpeg, node: process.version },
     });
   } catch (e) {
     return NextResponse.json(

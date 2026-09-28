@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { checkShotstackStatus, isShotstackConfigured, renderVideoWithShotstack } from "@/lib/video/shotstack"
-import { uploadVideoUrlToYouTube } from "@/lib/youtube"
+import { DEFAULT_RENDER_IMAGES } from "@/lib/video/shotstack"
+import { renderLocalVideo } from "@/lib/video/local-render"
+import { uploadVideoToYouTube, uploadVideoUrlToYouTube } from "@/lib/youtube"
+import { readFileSync, rmSync } from "fs"
+import { dirname } from "path"
 
 const RENDER_STALE_MS = 45 * 60 * 1000
 const STATUS_KEY = "shotstack_status"
@@ -102,28 +106,18 @@ export async function startYouTubeRender(
     tags?: string[]
     thumbnailUrl?: string
     duration?: number
+    /** Imágenes propias de la campaña: se usan como frames del video. */
+    images?: string[]
   }
 ): Promise<RenderStartResult> {
-  if (!isShotstackConfigured()) {
-    return { error: "SHOTSTACK_API_KEY no configurado" }
-  }
-
-  const blocked = await isVideoRenderBlocked(supabase)
-  if (blocked) {
-    return { error: `Video automático pausado: ${blocked}` }
-  }
-
-  try {
-    const { renderId } = await renderVideoWithShotstack({
-      title: input.title,
-      description: input.description,
-      thumbnailUrl: input.thumbnailUrl,
-      images: input.thumbnailUrl
+  const mediaUrls =
+    input.images && input.images.length > 0
+      ? input.images.slice(0, 6)
+      : input.thumbnailUrl
         ? [input.thumbnailUrl]
-        : undefined,
-      duration: input.duration || 15,
-    })
+        : []
 
+  const insertRendering = async (externalId: string): Promise<RenderStartResult> => {
     const { data, error } = await supabase
       .from("content_pieces")
       .insert({
@@ -134,18 +128,48 @@ export async function startYouTubeRender(
         hashtags: input.tags || [],
         status: "RENDERING",
         platform: "youtube",
-        media_urls: input.thumbnailUrl ? [input.thumbnailUrl] : [],
-        external_post_id: `render:${renderId}`,
+        media_urls: mediaUrls,
+        external_post_id: externalId,
         published_at: null,
       })
       .select("id")
       .single()
 
     if (error) {
-      return { renderId, error: `Guardado falló: ${error.message}` }
+      return { error: `Guardado falló: ${error.message}` }
     }
+    return { pieceId: data.id, renderId: externalId.startsWith("local:") ? externalId : undefined }
+  }
 
-    return { renderId, pieceId: data.id }
+  // Sin créditos de Shotstack (o sin key): render local con ffmpeg. Así YouTube
+  // sigue publicando solo aunque el plan gratuito de Shotstack se agote.
+  const blocked = await isVideoRenderBlocked(supabase)
+  if (!isShotstackConfigured() || blocked) {
+    try {
+      const { checkFFmpeg } = await import("@/lib/video/ffmpeg")
+      if (!(await checkFFmpeg())) {
+        return {
+          error: blocked
+            ? `Video automático pausado: ${blocked} (y sin ffmpeg local)`
+            : "SHOTSTACK_API_KEY no configurado y sin ffmpeg local",
+        }
+      }
+      return await insertRendering(`local:${Date.now()}`)
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : "render local no disponible" }
+    }
+  }
+
+  try {
+    const { renderId } = await renderVideoWithShotstack({
+      title: input.title,
+      description: input.description,
+      thumbnailUrl: input.thumbnailUrl,
+      images: mediaUrls.length > 0 ? mediaUrls : undefined,
+      duration: input.duration || 15,
+    })
+
+    return insertRendering(`render:${renderId}`)
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Render start failed" }
   }
@@ -161,14 +185,35 @@ export async function processPendingRenders(
 ): Promise<RenderProcessResult> {
   const result: RenderProcessResult = { checked: 0, uploaded: 0, details: [], pending: 0 }
 
-  if (!isShotstackConfigured()) {
-    return result
-  }
-
   const pending = await listPendingRenders(supabase)
   if (pending.length === 0) return result
 
+  // Los renders locales (ffmpeg) tardan: máximo 1 por ciclo para no agotar el
+  // timeout de 60s de la función.
+  let localBudget = 1
+
   for (const piece of pending) {
+    const rawId = (piece.external_post_id || "").trim()
+
+    if (rawId.startsWith("local:")) {
+      if (localBudget <= 0) {
+        result.pending++
+        continue
+      }
+      localBudget--
+
+      const outcome = await processLocalRender(supabase, accessToken, piece)
+      if (outcome.uploaded) result.uploaded++
+      else if (outcome.pending) result.pending++
+      if (outcome.detail) result.details.push(outcome.detail)
+      continue
+    }
+
+    if (!isShotstackConfigured()) {
+      result.pending++
+      continue
+    }
+
     const renderId = extractRenderId(piece)
     if (!renderId) {
       await supabase.from("content_pieces").update({ status: "FAILED" }).eq("id", piece.id)
@@ -237,4 +282,57 @@ export async function processPendingRenders(
   }
 
   return result
+}
+
+/** Render local con ffmpeg: fallback cuando Shotstack se queda sin créditos. */
+async function processLocalRender(
+  supabase: SupabaseClient,
+  accessToken: string,
+  piece: PendingRender
+): Promise<{ uploaded?: boolean; pending?: boolean; detail?: string }> {
+  const ownImages = (piece.media_urls || []).filter((u) => /^https?:\/\//.test(u))
+  const images = (ownImages.length > 0 ? ownImages : DEFAULT_RENDER_IMAGES).slice(0, 4)
+
+  try {
+    const { videoPath } = await renderLocalVideo({
+      images,
+      title: piece.title,
+      audioText: `${piece.title}. ${piece.body || ""}`,
+      secondsPerImage: 3,
+    })
+
+    let upload: { videoId?: string; url?: string; error?: string }
+    try {
+      const bytes = readFileSync(videoPath)
+      const blob = new Blob([new Uint8Array(bytes)], { type: "video/mp4" })
+      upload = await uploadVideoToYouTube(accessToken, blob, piece.title, piece.body || "")
+    } finally {
+      try {
+        rmSync(dirname(videoPath), { recursive: true, force: true })
+      } catch {}
+    }
+
+    if (upload.videoId) {
+      await supabase
+        .from("content_pieces")
+        .update({
+          status: "PUBLISHED",
+          external_post_id: `youtube-${upload.videoId}`,
+          published_at: Date.now(),
+        })
+        .eq("id", piece.id)
+
+      return {
+        uploaded: true,
+        detail: `[youtube] Render local publicado: ${upload.url || upload.videoId}`,
+      }
+    }
+
+    await supabase.from("content_pieces").update({ status: "READY" }).eq("id", piece.id)
+    return { detail: `[youtube] Upload local falló: ${upload.error || "sin detalle"}` }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "error"
+    await supabase.from("content_pieces").update({ status: "READY" }).eq("id", piece.id)
+    return { detail: `[youtube] Render local falló: ${msg.slice(0, 160)}` }
+  }
 }

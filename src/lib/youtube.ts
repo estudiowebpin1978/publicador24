@@ -75,14 +75,14 @@ export async function tryGetSavedToken(): Promise<string | null> {
   }
 }
 
-async function uploadVideoToYouTube(
+export async function uploadVideoToYouTube(
   accessToken: string,
   videoBlob: Blob,
   title: string,
   description: string
 ): Promise<{ videoId?: string; url?: string; error?: string }> {
   const initRes = await fetch(
-    `https://www.googleapis.com/youtube/v3/uploads?part=snippet,status&uploadType=resumable`,
+    `https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType=resumable`,
     {
       method: "POST",
       headers: {
@@ -213,7 +213,7 @@ export async function createYouTubeVideo(
 
     if (isVideoFile) {
       const initRes = await fetch(
-        `https://www.googleapis.com/youtube/v3/uploads?part=snippet,status&uploadType=resumable`,
+        `https://www.googleapis.com/upload/youtube/v3/videos?part=snippet,status&uploadType=resumable`,
         {
           method: "POST",
           headers: {
