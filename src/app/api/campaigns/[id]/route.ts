@@ -26,7 +26,23 @@ export async function GET(
     const images = await getCampaignImages(id)
     return NextResponse.json({ campaign: { ...data, images } })
   } catch {
-    return NextResponse.json({ campaign: null })
+    return NextResponse.json({ error: "No autorizado o no encontrado" }, { status: 403 })
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = getSupabaseAdmin();
+    const { error } = await supabase.from("campaigns").delete().eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await setCampaignImages(id, []);
+    return NextResponse.json({ success: true, deleted: id });
+  } catch {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 })
   }
 }
 
@@ -116,43 +132,4 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const supabase = getSupabaseAdmin()
 
-    const { error } = await supabase
-      .from("content_pieces")
-      .delete()
-      .eq("campaign_id", id)
-
-    if (error) {
-      const msg = error.message || ""
-      if (!msg.includes("does not exist") && !msg.includes("relation")) {
-        throw error
-      }
-    }
-
-    const { error: deleteError } = await supabase
-      .from("campaigns")
-      .delete()
-      .eq("id", id)
-
-    if (deleteError) {
-      const msg = deleteError.message || ""
-      if (msg.includes("does not exist") || msg.includes("relation")) {
-        return NextResponse.json({ success: false })
-      }
-      throw deleteError
-    }
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Error al eliminar" },
-      { status: 500 }
-    )
-  }
-}

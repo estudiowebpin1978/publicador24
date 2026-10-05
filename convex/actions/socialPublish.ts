@@ -6,6 +6,11 @@ import { v } from "convex/values";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
+/** Resultado unificado de cualquier operación de publicación. */
+type PublishResult =
+  | { success: true; platformPostId: string; platformPostUrl: string }
+  | { success: false; error: string };
+
 async function publishToTikTokLogic(
   ctx: ActionCtx,
   args: {
@@ -14,7 +19,7 @@ async function publishToTikTokLogic(
     caption: string;
     mediaUrls: string[];
   }
-) {
+): Promise<PublishResult> {
   const account = await ctx.runQuery(api.socialAccounts.get, {
     id: args.socialAccountId,
   });
@@ -65,7 +70,7 @@ async function publishToInstagramLogic(
     mediaUrls: string[];
     mediaType: string;
   }
-) {
+): Promise<PublishResult> {
   const account = await ctx.runQuery(api.socialAccounts.get, {
     id: args.socialAccountId,
   });
@@ -116,7 +121,7 @@ async function publishToFacebookLogic(
     mediaUrls?: string[];
     link?: string;
   }
-) {
+): Promise<PublishResult> {
   const account = await ctx.runQuery(api.socialAccounts.get, {
     id: args.socialAccountId,
   });
@@ -166,7 +171,7 @@ async function publishToXLogic(
     text: string;
     mediaUrls?: string[];
   }
-) {
+): Promise<PublishResult> {
   const account = await ctx.runQuery(api.socialAccounts.get, {
     id: args.socialAccountId,
   });
@@ -219,7 +224,7 @@ async function publishToYouTubeLogic(
     tags?: string[];
     categoryId?: string;
   }
-) {
+): Promise<PublishResult> {
   const account = await ctx.runQuery(api.socialAccounts.get, {
     id: args.socialAccountId,
   });
@@ -272,7 +277,7 @@ async function publishToLinkedInLogic(
     linkTitle?: string;
     linkDescription?: string;
   }
-) {
+): Promise<PublishResult> {
   const account = await ctx.runQuery(api.socialAccounts.get, {
     id: args.socialAccountId,
   });
@@ -319,7 +324,7 @@ function handleError(
   error: unknown,
   platform: string,
   scheduledPostId: Id<"scheduledPosts">
-) {
+): Promise<PublishResult> {
   const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
   return Promise.all([
@@ -343,7 +348,7 @@ export const publishToTikTok = action({
     caption: v.string(),
     mediaUrls: v.array(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PublishResult> => {
     try {
       return await publishToTikTokLogic(ctx, args);
     } catch (error) {
@@ -360,7 +365,7 @@ export const publishToInstagram = action({
     mediaUrls: v.array(v.string()),
     mediaType: v.string(),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PublishResult> => {
     try {
       return await publishToInstagramLogic(ctx, args);
     } catch (error) {
@@ -377,7 +382,7 @@ export const publishToFacebook = action({
     mediaUrls: v.optional(v.array(v.string())),
     link: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PublishResult> => {
     try {
       return await publishToFacebookLogic(ctx, args);
     } catch (error) {
@@ -393,7 +398,7 @@ export const publishToX = action({
     text: v.string(),
     mediaUrls: v.optional(v.array(v.string())),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PublishResult> => {
     try {
       return await publishToXLogic(ctx, args);
     } catch (error) {
@@ -412,7 +417,7 @@ export const publishToYouTube = action({
     tags: v.optional(v.array(v.string())),
     categoryId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PublishResult> => {
     try {
       return await publishToYouTubeLogic(ctx, args);
     } catch (error) {
@@ -431,7 +436,7 @@ export const publishToLinkedIn = action({
     linkTitle: v.optional(v.string()),
     linkDescription: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PublishResult> => {
     try {
       return await publishToLinkedInLogic(ctx, args);
     } catch (error) {
@@ -444,18 +449,19 @@ export const publishByPlatform = action({
   args: {
     scheduledPostId: v.id("scheduledPosts"),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<PublishResult> => {
     const post = await ctx.runQuery(api.scheduledPosts.get, {
       id: args.scheduledPostId,
     });
     if (!post) throw new Error("Scheduled post not found");
 
+    if (!post.contentId) throw new Error("Scheduled post has no contentId");
     const content = await ctx.runQuery(api.content.get, {
       id: post.contentId,
     });
     if (!content) throw new Error("Content not found");
 
-    let platformVariant: { caption?: string; hashtags?: string[] } | undefined = undefined;
+    let platformVariant: { caption?: string; hashtags?: string[] } | null = null;
     if (post.platformVariantId) {
       platformVariant = await ctx.runQuery(
         api.contentPlatformVariants.get,

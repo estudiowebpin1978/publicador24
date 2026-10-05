@@ -16,7 +16,21 @@ async function runAutopilot(request: NextRequest) {
 
   try {
     const result = await autopilotPOST();
-    return result;
+    const raw = await result.json().catch(() => null);
+    const payload =
+      raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+
+    // Bucle de aprendizaje: toma las métricas de lo publicado y ajusta la
+    // estrategia. Best-effort: si falla, no afecta el resultado del autopilot.
+    let learning: unknown = { skipped: true };
+    try {
+      const { runLearningLoop } = await import("@/lib/ai/learning-loop");
+      learning = await runLearningLoop();
+    } catch (error) {
+      learning = { error: error instanceof Error ? error.message : "unknown" };
+    }
+
+    return NextResponse.json({ ...payload, learning }, { status: result.status });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unknown error" },

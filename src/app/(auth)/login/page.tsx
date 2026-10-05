@@ -34,7 +34,7 @@ export default function LoginPage() {
         }))
       }
 
-      router.push("/dashboard")
+      router.push("/campaigns")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al iniciar sesión"
       setError(message)

@@ -17,35 +17,31 @@ import {
   Send,
   CheckCircle2,
   RefreshCw,
-  Eye,
   Zap,
   Target,
-  Users,
   Palette,
   Calendar,
-  BarChart3,
   Lightbulb,
   Megaphone,
   TrendingUp,
   BookOpen,
   MessageSquare,
   Shield,
-  Image as ImageIcon,
   Clock,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
+// 3 pasos de configuración. Después de "Generar" el flujo entra en la fase
+// de resultados (revisar → publicar), que se maneja aparte del stepper.
 const STEPS = [
   { id: "idea", label: "Idea", icon: Lightbulb },
-  { id: "objective", label: "Objetivo", icon: Target },
-  { id: "audience", label: "Público", icon: Users },
-  { id: "style", label: "Estilo", icon: Palette },
+  { id: "style", label: "Estilo y plataformas", icon: Palette },
   { id: "generate", label: "Generar", icon: Sparkles },
-  { id: "review", label: "Revisar", icon: Eye },
-  { id: "schedule", label: "Programar", icon: Calendar },
-  { id: "publish", label: "Publicar", icon: Send },
 ] as const
+
+// 3 = revisar, 4 = publicar (fase de resultados, fuera del stepper)
+const MAX_STEP = 4
 
 interface CampaignWizardState {
   currentStep: number
@@ -123,7 +119,7 @@ export default function CampaignWizardPage() {
   const [state, setState] = React.useState<CampaignWizardState>(initialState)
 
   const setStep = (step: number) =>
-    setState((prev) => ({ ...prev, currentStep: Math.max(0, Math.min(step, STEPS.length - 1)) }))
+    setState((prev) => ({ ...prev, currentStep: Math.max(0, Math.min(step, MAX_STEP)) }))
 
   const handleGenerate = async () => {
     setState((prev) => ({ ...prev, isGenerating: true }))
@@ -154,7 +150,7 @@ export default function CampaignWizardPage() {
         ...prev,
         generatedCampaign: campaign,
         selectedPieces: pieces.map((p: any, i: number) => String(p.generatedContent?.hook || `piece-${i}`)),
-        currentStep: 5,
+        currentStep: 3,
         isGenerating: false,
       }))
     } catch (error) {
@@ -225,7 +221,7 @@ export default function CampaignWizardPage() {
         ...prev,
         campaignId: campaignId,
         isPersisting: false,
-        currentStep: 6,
+        currentStep: 4,
       }))
     } catch (error) {
       console.error("Failed to persist campaign:", error)
@@ -247,7 +243,7 @@ export default function CampaignWizardPage() {
         ...prev,
         isScheduling: false,
         scheduledCount: result.scheduled || 0,
-        currentStep: 7,
+        currentStep: 4,
       }))
     } catch (error) {
       console.error("Failed to schedule:", error)
@@ -296,10 +292,8 @@ export default function CampaignWizardPage() {
 
   const canGoNext = () => {
     switch (state.currentStep) {
-      case 0: return state.idea.length > 10
-      case 1: return state.objective.length > 5
-      case 2: return true
-      case 3: return state.platforms.length > 0
+      case 0: return state.idea.length > 10 && state.objective.length > 5
+      case 1: return state.platforms.length > 0
       default: return false
     }
   }
@@ -379,7 +373,7 @@ export default function CampaignWizardPage() {
                 ¿Qué querés promocionar?
               </CardTitle>
               <CardDescription>
-                Escribí tu idea. La IA va a encargarse de todo lo demás.
+                Tu idea, el objetivo y el público. La IA se encarga del resto.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -420,22 +414,9 @@ export default function CampaignWizardPage() {
                   onChange={(e) => setState((prev) => ({ ...prev, url: e.target.value }))}
                 />
               </div>
-            </CardContent>
-          </Card>
-        )}
 
-        {state.currentStep === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="size-5 text-green-500" />
-                Objetivo de la campaña
-              </CardTitle>
-              <CardDescription>
-                ¿Qué querés lograr con esta campaña?
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              <Separator />
+
               <div className="space-y-2">
                 <Label htmlFor="objective">Objetivo principal *</Label>
                 <Textarea
@@ -446,22 +427,7 @@ export default function CampaignWizardPage() {
                   className="min-h-[80px]"
                 />
               </div>
-            </CardContent>
-          </Card>
-        )}
 
-        {state.currentStep === 2 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="size-5 text-blue-500" />
-                Público objetivo
-              </CardTitle>
-              <CardDescription>
-                ¿A quién le querés llegar? La IA puede inferir esto si no lo sabés.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="audience">Público objetivo (opcional)</Label>
                 <Textarea
@@ -479,7 +445,7 @@ export default function CampaignWizardPage() {
           </Card>
         )}
 
-        {state.currentStep === 3 && (
+        {state.currentStep === 1 && (
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -570,7 +536,7 @@ export default function CampaignWizardPage() {
           </div>
         )}
 
-        {state.currentStep === 4 && (
+        {state.currentStep === 2 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -610,7 +576,7 @@ export default function CampaignWizardPage() {
           </Card>
         )}
 
-        {state.currentStep === 5 && state.generatedCampaign && (
+        {state.currentStep === 3 && state.generatedCampaign && (
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -710,7 +676,7 @@ export default function CampaignWizardPage() {
           </div>
         )}
 
-        {state.currentStep === 6 && (
+        {state.currentStep === 4 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -757,7 +723,7 @@ export default function CampaignWizardPage() {
           </Card>
         )}
 
-        {state.currentStep === 7 && (
+        {state.currentStep === 4 && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -831,14 +797,14 @@ export default function CampaignWizardPage() {
         </Button>
 
         <div className="flex gap-2">
-          {state.currentStep < 4 && (
+          {state.currentStep < 2 && (
             <Button onClick={() => setStep(state.currentStep + 1)} disabled={!canGoNext()}>
               Siguiente
               <ArrowRight className="size-4" />
             </Button>
           )}
 
-          {state.currentStep === 4 && (
+          {state.currentStep === 2 && (
             <Button onClick={handleGenerate} disabled={state.isGenerating} size="lg">
               {state.isGenerating ? (
                 <>
@@ -854,7 +820,7 @@ export default function CampaignWizardPage() {
             </Button>
           )}
 
-          {state.currentStep === 5 && (
+          {state.currentStep === 3 && (
             <Button onClick={handlePersistAndSchedule} disabled={state.isPersisting || state.selectedPieces.length === 0}>
               {state.isPersisting ? (
                 <>
@@ -870,7 +836,7 @@ export default function CampaignWizardPage() {
             </Button>
           )}
 
-          {state.currentStep === 6 && (
+          {state.currentStep === 4 && (
             <Button onClick={handleAutoSchedule} disabled={state.isScheduling || !state.campaignId}>
               {state.isScheduling ? (
                 <>

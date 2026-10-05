@@ -179,7 +179,7 @@ export default function AIControlCenterPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {(integrations.ai as Record<string, unknown>)?.provider || "none"} • {(integrations.ai as Record<string, unknown>)?.model || ""}
+              {String((integrations.ai as Record<string, unknown>)?.provider || "none")} • {String((integrations.ai as Record<string, unknown>)?.model || "")}
             </p>
           </CardContent>
         </Card>
@@ -228,7 +228,7 @@ export default function AIControlCenterPage() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Nivel: {autopilotSettings?.level || "OFF"}
+              Nivel: {String(autopilotSettings?.level || "OFF")}
             </p>
           </CardContent>
         </Card>

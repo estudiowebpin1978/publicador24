@@ -32,7 +32,7 @@ async function main() {
     console.log(`  Text: ${result.text.substring(0, 150)}`);
     console.log(`  Tokens: ${result.tokens_used}`);
   } catch (error) {
-    console.log(`  Error: ${error.message}`);
+    console.log(`  Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   // Test 2: Image generation
@@ -46,7 +46,7 @@ async function main() {
     console.log(`  URL: ${result.url.substring(0, 80)}...`);
     console.log(`  Size: ${result.width}x${result.height}`);
   } catch (error) {
-    console.log(`  Error: ${error.message}`);
+    console.log(`  Error: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   console.log("\n=== TEST COMPLETE ===");

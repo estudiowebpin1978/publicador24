@@ -94,7 +94,7 @@ export const getGlobalHealth = action({
 
     for (const campaign of campaigns) {
       try {
-        const report = await ctx.runAction(api.campaignHealth.getCampaignHealth, {
+        const report = await ctx.runAction(api.actions.campaignHealth.getCampaignHealth, {
           campaignId: campaign._id,
         });
         reports.push(report);
@@ -192,11 +192,20 @@ export const setGlobalKillSwitch = action({
     const settings = await ctx.runQuery(api.autopilot.getSettings);
 
     if (settings) {
-      await ctx.runMutation(api.autopilot.updateSettings, {
+      await ctx.runMutation(api.autopilot.saveSettings, {
         level: args.paused ? "STOPPED" : "FULL",
+        platformFrequencies: settings.platformFrequencies,
+        topics: settings.topics,
+        contentPillars: settings.contentPillars,
+        topicsToAvoid: settings.topicsToAvoid,
+        timeZone: settings.timeZone,
+        preferredTimeSlots: settings.preferredTimeSlots,
+        excludedDays: settings.excludedDays,
+        contentGuidelines: settings.contentGuidelines,
+        approvalRequirements: settings.approvalRequirements,
       });
     } else {
-      await ctx.runMutation(api.autopilot.updateSettings, {
+      await ctx.runMutation(api.autopilot.saveSettings, {
         level: args.paused ? "STOPPED" : "FULL",
         platformFrequencies: {
           instagram: "3-5x por semana",
@@ -222,9 +231,21 @@ export const setGlobalKillSwitch = action({
 
 export const getAutomationStatus = action({
   args: {},
-  handler: async (ctx) => {
-    const settings = await ctx.runQuery(api.autopilot.getSettings);
-    const costStatus = await ctx.runAction(api.campaignHealth.checkCostLimits, {});
+  handler: async (
+    ctx
+  ): Promise<{
+    isRunning: boolean;
+    level: string;
+    costStatus: {
+      costUsd: number;
+      costLimit: number;
+      tokensUsed: number;
+      tokensLimit: number;
+      withinLimits: boolean;
+    };
+  }> => {
+    const settings: { level?: string } | null = await ctx.runQuery(api.autopilot.getSettings);
+    const costStatus = await ctx.runAction(api.actions.campaignHealth.checkCostLimits, {});
 
     return {
       isRunning: settings?.level !== "STOPPED",

@@ -27,8 +27,13 @@ interface CalendarSlot {
   visualStyle: string;
 }
 
-function generateTemplateCalendar(input: CampaignInput): CalendarSlot[] {
-  const days = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
+/** Slot del calendario + contenido generado + resultado de safety */
+interface GeneratedPiece extends CalendarSlot {
+  generatedContent: { hook: string; caption: string; hashtags: string[]; cta: string };
+  safetyCheck: { approved: boolean; score: number; reason?: string };
+}
+
+function generateTemplateCalendar(input: CampaignInput): CalendarSlot[] {  const days = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
   const hookTemplates = [
     `¿Sabías que el ${80}% de los negocios pierden clientes por no tener presencia en redes?`,
     `Te voy a revelar el método que uso para atraer clientes con contenido auténtico`,
@@ -126,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
 
     let aiAvailable = false;
-    let provider = null;
+    let provider: ReturnType<typeof getAIProvider> | null = null;
     try {
       const baseProvider = getAIProvider();
       provider = wrapProviderWithCostTracking(baseProvider, "openrouter");
@@ -150,7 +155,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const pieces = [];
+    const pieces: GeneratedPiece[] = [];
     const safetyResults: Array<{ pieceIndex: number; approved: boolean; reason?: string }> = [];
     const existingFingerprints: string[] = [];
 
@@ -166,7 +171,7 @@ export async function POST(request: NextRequest) {
         safetyCheck: { approved: safetyResult.approved, score: safetyResult.safetyScore, reason: safetyResult.reason },
       });
 
-      existingFingerprints.push(`${slot.platform}:${slot.hook.split(" ").slice(0, 5).join(":")}`);
+      existingFingerprints.push(`${slot.hook} ${slot.copy}`);
     }
 
     const costSummary = getTodayCost();

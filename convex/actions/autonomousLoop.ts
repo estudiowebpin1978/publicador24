@@ -3,6 +3,7 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
+import type { Doc, Id } from "../_generated/dataModel";
 
 // ============================================
 // AUTONOMOUS LOOP
@@ -23,11 +24,21 @@ interface LoopResult {
   nextRunAt: number;
 }
 
+/**
+ * La lógica del loop accede a `scheduledAt` y `contentId` sobre las piezas
+ * (campos que en runtime pueden venir de `metadata`). Se declaran como
+ * opcionales para describir esa expectativa sin ocultar errores con `any`.
+ */
+type LoopPiece = Doc<"contentPieces"> & {
+  scheduledAt?: number;
+  contentId?: Id<"contentPieces">;
+};
+
 export const runAutonomousLoop = action({
   args: {
     forceRun: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<LoopResult> => {
     const startTime = Date.now();
     const errors: string[] = [];
 
@@ -52,24 +63,31 @@ export const runAutonomousLoop = action({
     let safetyChecks = 0;
     let metricsCollected = 0;
 
-    const campaigns = await ctx.runQuery(api.campaigns.list, { status: "ACTIVE" });
+    const campaigns: Array<{
+      _id: Id<"campaigns">;
+      name: string;
+      autopilotLevel?: string;
+      queueMinimum?: number;
+      brandProfileId?: Id<"brandProfiles">;
+    }> = await ctx.runQuery(api.campaigns.list, { status: "ACTIVE" });
 
     for (const campaign of campaigns) {
       try {
         if (campaign.autopilotLevel === "MANUAL") continue;
 
-        const pieces = await ctx.runQuery(api.contentPieces.getByCampaign, {
-          campaignId: campaign._id,
-        });
+        const pieces: LoopPiece[] = await ctx.runQuery(
+          api.contentPieces.getByCampaign,
+          { campaignId: campaign._id }
+        );
 
         const queueMinimum = campaign.queueMinimum || 7;
-        const generated = pieces.filter((p) => p.status === "GENERATED");
-        const scheduled = pieces.filter((p) => p.status === "SCHEDULED");
+        const generated = pieces.filter((p: LoopPiece) => p.status === "GENERATED");
+        const scheduled = pieces.filter((p: LoopPiece) => p.status === "SCHEDULED");
 
         // Auto-refill if queue is low
         if (generated.length < queueMinimum) {
           try {
-            const result = await ctx.runAction(api.autoRefill.checkAndRefill, {
+            const result = await ctx.runAction(api.actions.autoRefill.checkAndRefill, {
               campaignId: campaign._id,
             });
             contentGenerated += result.totalGenerated;
@@ -80,13 +98,14 @@ export const runAutonomousLoop = action({
 
         // Schedule unscheduled content
         const unscheduled = generated.filter(
-          (p) => !scheduled.some((s) => s.contentId === p._id)
+          (p: LoopPiece) =>
+            !scheduled.some((s: LoopPiece) => s.contentId === p._id)
         );
 
         if (unscheduled.length > 0) {
           for (const piece of unscheduled.slice(0, 3)) {
             try {
-              const safetyResult = await ctx.runAction(api.safetyCheck.checkPublicationSafety, {
+              const safetyResult = await ctx.runAction(api.actions.safetyCheck.checkPublicationSafety, {
                 contentPieceId: piece._id,
                 platform: piece.platform,
               });
@@ -103,17 +122,24 @@ export const runAutonomousLoop = action({
 
         // Publish ready content
         const readyToPublish = scheduled.filter(
-          (p) => p.status === "SCHEDULED" && (!p.scheduledAt || p.scheduledAt <= Date.now())
+          (p: LoopPiece) =>
+            p.status === "SCHEDULED" && (!p.scheduledAt || p.scheduledAt <= Date.now())
         );
 
         if (readyToPublish.length > 0 && campaign.autopilotLevel === "AUTONOMOUS") {
           for (const piece of readyToPublish.slice(0, 2)) {
             try {
               if (piece._id) {
-                await ctx.runAction(api.socialPublish.publishByPlatform, {
-                  scheduledPostId: piece._id,
-                });
-                contentPublished++;
+                const scheduledPost = await ctx.runQuery(
+                  api.scheduledPosts.getByContentPiece,
+                  { contentPieceId: piece._id }
+                );
+                if (scheduledPost) {
+                  await ctx.runAction(api.actions.socialPublish.publishByPlatform, {
+                    scheduledPostId: scheduledPost._id,
+                  });
+                  contentPublished++;
+                }
               }
             } catch (error) {
               const msg = error instanceof Error ? error.message : "Publish failed";
@@ -123,11 +149,11 @@ export const runAutonomousLoop = action({
         }
 
         // Collect metrics
-        const published = pieces.filter((p) => p.status === "PUBLISHED");
+        const published = pieces.filter((p: LoopPiece) => p.status === "PUBLISHED");
         if (published.length > 0) {
           try {
             const today = new Date().toISOString().split("T")[0];
-            await ctx.runAction(api.collectAnalytics.collectAllAnalytics, { date: today });
+            await ctx.runAction(api.actions.collectAnalytics.collectAllAnalytics, { date: today });
             metricsCollected++;
           } catch (e) {
             errors.push(`Analytics: ${e instanceof Error ? e.message : "failed"}`);

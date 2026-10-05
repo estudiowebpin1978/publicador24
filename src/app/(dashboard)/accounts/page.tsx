@@ -137,8 +137,8 @@ export default function AccountsPage() {
             <AccountCard
               key={account._id}
               platform={account.platform}
-              name={account.displayName || account.username}
-              username={account.username}
+              name={account.displayName || account.username || "Cuenta"}
+              username={account.username || ""}
               avatar={account.avatarUrl}
               status={account.status as "connected" | "disconnected" | "error"}
               tokenStatus={account.tokenStatus as "valid" | "expiring" | "expired"}

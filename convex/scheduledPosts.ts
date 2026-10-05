@@ -49,6 +49,18 @@ export const get = query({
   },
 });
 
+export const getByContentPiece = query({
+  args: { contentPieceId: v.id("contentPieces") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("scheduledPosts")
+      .withIndex("by_content_piece", (q) =>
+        q.eq("contentPieceId", args.contentPieceId)
+      )
+      .first();
+  },
+});
+
 export const create = mutation({
   args: {
     contentId: v.optional(v.id("content")),

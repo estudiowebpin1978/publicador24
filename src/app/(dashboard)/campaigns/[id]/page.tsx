@@ -3,6 +3,7 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -78,6 +79,16 @@ export default function CampaignDetailPage() {
   const [editing, setEditing] = React.useState(false)
   const [editForm, setEditForm] = React.useState<Partial<Campaign>>({})
   const [saving, setSaving] = React.useState(false)
+  const router = useRouter();
+  const deleteCampaign = async () => {
+    if (!confirm("¿Eliminar esta campaña?")) return;
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}`, { method: "DELETE" });
+      if (res.ok) router.push("/campaigns");
+      else alert("No se pudo eliminar");
+    } catch { alert("Error al eliminar"); }
+  };
+
   const [images, setImages] = React.useState<string[]>([])
   const [uploading, setUploading] = React.useState(false)
   const [urlInput, setUrlInput] = React.useState("")

@@ -24,7 +24,7 @@ async function publishSinglePost(ctx: ActionCtx, postId: Id<"scheduledPosts">) {
   }
   if (!content) throw new Error("Content not found");
 
-  let platformVariant: { caption?: string; hashtags?: string[] } | undefined = undefined;
+  let platformVariant: { caption?: string; hashtags?: string[] } | null = null;
   if (post.platformVariantId) {
     platformVariant = await ctx.runQuery(
       api.contentPlatformVariants.get,

@@ -4,6 +4,17 @@ import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
 import type { ActionCtx } from "../_generated/server";
+import type { Doc, Id } from "../_generated/dataModel";
+
+/** Resultado de la acción generateCampaign. */
+interface GenerateCampaignResult {
+  campaignId: Id<"campaigns">;
+  packId: Id<"contentPacks">;
+  strategy: CampaignStrategy;
+  pieces: Array<ContentPieceInput & { id: string | Id<"contentPieces"> }>;
+  totalGenerated: number;
+  durationMs: number;
+}
 
 interface CampaignStrategy {
   campaignName: string;
@@ -407,7 +418,7 @@ export const generateCampaign = action({
     referenceImages: v.optional(v.array(v.string())),
     contentCount: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<GenerateCampaignResult> => {
     const startTime = Date.now();
 
     try {
@@ -437,9 +448,6 @@ export const generateCampaign = action({
         offer: args.offer,
         url: args.url,
         referenceImages: args.referenceImages,
-        status: "DRAFT",
-        contentCount: 0,
-        publishedCount: 0,
       });
 
       const contentCount = args.contentCount || 30;
@@ -543,10 +551,10 @@ export const regenerateContentPiece = action({
     direction: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const piece = await ctx.runQuery(api.contentPieces.get, { id: args.pieceId });
+    const piece = await ctx.runQuery(api.contentPieces.getById, { id: args.pieceId });
     if (!piece) throw new Error("Content piece not found");
 
-    const campaign = await ctx.runQuery(api.campaigns.get, { id: piece.campaignId });
+    const campaign = await ctx.runQuery(api.campaigns.getById, { id: piece.campaignId });
     if (!campaign) throw new Error("Campaign not found");
 
     const hasApiKey = !!process.env.AI_API_KEY;
@@ -644,15 +652,22 @@ export const getContentPack = action({
   args: {
     packId: v.id("contentPacks"),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    pack: Doc<"contentPacks">;
+    pieces: Doc<"contentPieces">[];
+    campaign: Doc<"campaigns"> | null;
+  }> => {
     const pack = await ctx.runQuery(api.contentPacks.get, { id: args.packId });
     if (!pack) throw new Error("Content pack not found");
 
     const pieces = await ctx.runQuery(api.contentPieces.getByPack, {
-      packId: args.packId,
+      contentPackId: args.packId,
     });
 
-    const campaign = await ctx.runQuery(api.campaigns.get, { id: pack.campaignId });
+    const campaign = await ctx.runQuery(api.campaigns.getById, { id: pack.campaignId });
 
     return {
       pack,

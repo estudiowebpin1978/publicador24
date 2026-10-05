@@ -3,6 +3,7 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
+import type { Doc } from "../_generated/dataModel";
 
 interface CalendarSlot {
   date: string;
@@ -76,11 +77,11 @@ export const generateContentCalendar = action({
     weeks: v.optional(v.number()),
     startDate: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
-    const campaign = await ctx.runQuery(api.campaigns.get, { id: args.campaignId });
+  handler: async (ctx, args): Promise<CalendarResult> => {
+    const campaign = await ctx.runQuery(api.campaigns.getById, { id: args.campaignId });
     if (!campaign) throw new Error("Campaign not found");
 
-    const pieces = await ctx.runQuery(api.contentPieces.getByCampaign, {
+    const pieces: Doc<"contentPieces">[] = await ctx.runQuery(api.contentPieces.getByCampaign, {
       campaignId: args.campaignId,
     });
 

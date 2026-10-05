@@ -3,6 +3,8 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
+import { maxSimilarityVs } from "../../shared/text-similarity";
+import { findProhibitedClaims } from "../../shared/prohibited-claims";
 
 interface SafetyCheck {
   name: string;
@@ -20,20 +22,10 @@ interface SafetyResult {
 }
 
 function checkDuplication(text: string, existingTexts: string[]): SafetyCheck {
-  const normalized = text.toLowerCase().trim();
-  let maxSimilarity = 0;
+  // Único algoritmo del sistema (compartido con src/): shared/text-similarity.ts
+  const { similarity: maxSimilarity, isDuplicate } = maxSimilarityVs(text, existingTexts);
 
-  for (const existing of existingTexts) {
-    const normalizedExisting = existing.toLowerCase().trim();
-    const words1 = new Set(normalized.split(/\s+/));
-    const words2 = new Set(normalizedExisting.split(/\s+/));
-    const intersection = new Set([...words1].filter((w) => words2.has(w)));
-    const union = new Set([...words1, ...words2]);
-    const similarity = union.size === 0 ? 0 : intersection.size / union.size;
-    maxSimilarity = Math.max(maxSimilarity, similarity);
-  }
-
-  const passed = maxSimilarity < 0.8;
+  const passed = !isDuplicate;
   const score = Math.round((1 - maxSimilarity) * 100);
 
   return {
@@ -195,6 +187,25 @@ function checkCTA(cta: string): SafetyCheck {
   };
 }
 
+/**
+ * Promesas prohibidas (ganancia garantizada, estadísticas de ganancias
+ * inventadas). Compartido con src/ via shared/prohibited-claims.ts.
+ * NO ponderado por score: si falla, el contenido queda bloqueado igual.
+ */
+function checkProhibitedClaims(text: string): SafetyCheck {
+  const found = findProhibitedClaims(text);
+  const passed = found.length === 0;
+
+  return {
+    name: "Promesas",
+    passed,
+    score: passed ? 100 : 0,
+    reason: passed
+      ? "Sin promesas prohibidas"
+      : `Promesa prohibida: ${found.join(", ")}`,
+  };
+}
+
 function calculateOverallLevel(score: number): SafetyResult["level"] {
   if (score >= 90) return "safe";
   if (score >= 75) return "low_risk";
@@ -209,7 +220,7 @@ export const checkPublicationSafety = action({
     platform: v.string(),
   },
   handler: async (ctx, args) => {
-    const piece = await ctx.runQuery(api.contentPieces.get, { id: args.contentPieceId });
+    const piece = await ctx.runQuery(api.contentPieces.getById, { id: args.contentPieceId });
     if (!piece) throw new Error("Content piece not found");
 
     const existingPieces = await ctx.runQuery(api.contentPieces.getByCampaign, {
@@ -222,6 +233,8 @@ export const checkPublicationSafety = action({
 
     const fullText = `${piece.hook}\n\n${piece.body}\n\n${piece.cta}`;
 
+    const claimsCheck = checkProhibitedClaims(fullText);
+
     const checks: SafetyCheck[] = [
       checkDuplication(fullText, existingTexts),
       checkFrequency(args.platform, 2, 8),
@@ -229,6 +242,7 @@ export const checkPublicationSafety = action({
       checkLength(piece.body, args.platform),
       checkHashtags(piece.hashtags, args.platform),
       checkCTA(piece.cta),
+      claimsCheck,
     ];
 
     const overallScore = Math.round(
@@ -236,7 +250,8 @@ export const checkPublicationSafety = action({
     );
 
     const level = calculateOverallLevel(overallScore);
-    const approved = level === "safe" || level === "low_risk";
+    // Una promesa prohibida bloquea aunque el promedio general esté alto.
+    const approved = claimsCheck.passed && (level === "safe" || level === "low_risk");
 
     const result: SafetyResult = {
       overallScore,
@@ -245,7 +260,9 @@ export const checkPublicationSafety = action({
       approved,
       reason: approved
         ? "Contenido aprobado para publicación"
-        : `Requiere revisión: nivel ${level}`,
+        : !claimsCheck.passed
+          ? claimsCheck.reason
+          : `Requiere revisión: nivel ${level}`,
     };
 
     await ctx.runMutation(api.publicationSafety.create, {

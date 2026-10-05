@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 export interface AntiBotDelay {
   minMs: number;
   maxMs: number;
@@ -99,7 +101,7 @@ export function getDailyPostLimit(platform: string, direct = false): number {
 
 export async function checkDailyQuota(
   platform: string,
-  supabase: { from: (t: string) => Record<string, unknown> },
+  supabase: SupabaseClient,
   opts: { direct?: boolean } = {}
 ): Promise<boolean> {
   try {

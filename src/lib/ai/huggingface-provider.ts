@@ -1,4 +1,18 @@
-import type { AIProvider, AITextInput, AITextResult } from './types';
+import type {
+  AIProvider,
+  AITextInput,
+  AITextResult,
+  AIAnalysisInput,
+  AIAnalysisResult,
+  HashtagInput,
+  HashtagResult,
+  TrendInput,
+  TrendResult,
+  VariantInput,
+  VariantResult,
+  ScoreInput,
+  ScoreResult,
+} from './types';
 
 export class HuggingFaceProvider implements AIProvider {
   private apiKey: string;
@@ -51,23 +65,23 @@ export class HuggingFaceProvider implements AIProvider {
     };
   }
 
-  async analyzeContent(input: { content: string; platform?: string; language?: string; audience?: string }): Promise<{ topic: string; intent: string; audience: string; tone: string; emotions: string[]; keywords: string[]; entities: string[]; language: string; sentiment: number }> {
+  async analyzeContent(input: AIAnalysisInput): Promise<AIAnalysisResult> {
     throw new Error('Not implemented');
   }
 
-  async generateHashtags(input: { content: string; count?: number; platform?: string; language?: string; country?: string }): Promise<{ hashtags: Array<{ tag: string; category: string; relevance: number; popularity: number; competition: number; trend: number; final_score: number; is_estimated: boolean }> }> {
+  async generateHashtags(input: HashtagInput): Promise<HashtagResult> {
     throw new Error('Not implemented');
   }
 
-  async analyzeTrend(input: { keywords: string[]; platform?: string; country?: string; language?: string }): Promise<{ trends: Array<{ keyword: string; direction: string; score: number; growth_rate: number; related_hashtags: string[] }> }> {
+  async analyzeTrend(input: TrendInput): Promise<TrendResult> {
     throw new Error('Not implemented');
   }
 
-  async generateVariants(input: { content: string; platform?: string; variant_count?: number; preserve_meaning?: boolean }): Promise<{ variants: Array<{ label: string; hook: string; caption: string; hashtags: string[]; cta: string; score: number }> }> {
+  async generateVariants(input: VariantInput): Promise<VariantResult> {
     throw new Error('Not implemented');
   }
 
-  async scoreContent(input: { content: string; hook?: string; hashtags?: string[]; cta?: string; platform?: string }): Promise<{ overall: number; breakdown: { hook: number; relevance: number; clarity: number; emotion: number; trend: number; hashtags: number; platform_fit: number; cta: number }; explanation: string; suggestions: string[] }> {
+  async scoreContent(input: ScoreInput): Promise<ScoreResult> {
     throw new Error('Not implemented');
   }
 }

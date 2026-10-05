@@ -3,6 +3,7 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
+import type { Doc, Id } from "../_generated/dataModel";
 
 // ============================================
 // AUTO-REFILL ENGINE
@@ -17,8 +18,24 @@ export const checkAndRefill = action({
   args: {
     campaignId: v.optional(v.id("campaigns")),
   },
-  handler: async (ctx, args) => {
-    const campaigns = args.campaignId
+  handler: async (ctx, args): Promise<{ totalGenerated: number }> => {
+    const campaigns: Array<{
+      _id: Id<"campaigns">;
+      name: string;
+      autopilotLevel?: string;
+      queueMinimum?: number;
+      brandProfileId?: Id<"brandProfiles">;
+      platforms: string[];
+      objective?: string;
+      targetAudience?: string;
+      painPoints?: string;
+      desires?: string;
+      valueProposition?: string;
+      funnelStage?: string;
+      communicationAngle?: string;
+      style?: string;
+      offer?: string;
+    } | null> = args.campaignId
       ? [await ctx.runQuery(api.campaigns.getById, { id: args.campaignId })]
       : await ctx.runQuery(api.campaigns.list, { status: "ACTIVE" });
 
@@ -27,12 +44,12 @@ export const checkAndRefill = action({
     for (const campaign of campaigns) {
       if (!campaign || campaign.autopilotLevel === "MANUAL") continue;
 
-      const pieces = await ctx.runQuery(api.contentPieces.getByCampaign, {
+      const pieces: Doc<"contentPieces">[] = await ctx.runQuery(api.contentPieces.getByCampaign, {
         campaignId: campaign._id,
       });
 
       const queueMinimum = campaign.queueMinimum || DEFAULT_MIN_QUEUE;
-      const available = pieces.filter((p) => p.status === "GENERATED").length;
+      const available = pieces.filter((p: Doc<"contentPieces">) => p.status === "GENERATED").length;
       const needed = queueMinimum - available;
 
       if (needed <= 0) continue;
@@ -61,7 +78,7 @@ export const checkAndRefill = action({
 
       for (const piece of pieces_gen) {
         await ctx.runMutation(api.contentPieces.create, {
-          contentPackId: pack._id,
+          contentPackId: pack,
           campaignId: campaign._id,
           title: piece.title,
           hook: piece.hook,
@@ -85,10 +102,9 @@ export const checkAndRefill = action({
       }
 
       await ctx.runMutation(api.contentPacks.update, {
-        id: pack._id,
+        id: pack,
         generatedPieces: count,
         status: "READY",
-        generatedAt: Date.now(),
       });
 
       await ctx.runMutation(api.campaigns.update, {

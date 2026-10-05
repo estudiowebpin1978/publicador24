@@ -393,16 +393,24 @@ export default function CreateContentPage() {
         parsed = JSON.parse(match ? match[1] : text)
       } catch { parsed = null }
       if (parsed?.score) {
+        const s = parsed.score
         setState((prev) => ({
           ...prev,
           score: {
-            overall: parsed.score.overall || 80,
-            hookStrength: parsed.score.hookStrength || 80,
-            captionQuality: parsed.score.captionQuality || 80,
-            ctaEffectiveness: parsed.score.ctaEffectiveness || 80,
-            hashtagRelevance: parsed.score.hashtagRelevance || 80,
-            platformFit: parsed.score.platformFit || 80,
-            feedback: parsed.feedback || [],
+            overall: Number(s.overall) || 80,
+            breakdown: {
+              hook: Number(s.hookStrength) || 80,
+              relevance: Number(s.captionQuality) || 80,
+              clarity: Number(s.captionQuality) || 80,
+              emotion: Number(s.platformFit) || 80,
+              trend: Number(s.platformFit) || 80,
+              hashtags: Number(s.hashtagRelevance) || 80,
+              platform_fit: Number(s.platformFit) || 80,
+              cta: Number(s.ctaEffectiveness) || 80,
+            },
+            spamRisk: "LOW",
+            platformValidation: [],
+            explanation: (parsed.feedback || []).join(" "),
             suggestions: parsed.suggestions || [],
           },
           currentStep: 4,

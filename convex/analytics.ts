@@ -46,17 +46,15 @@ export const getSummary = query({
     endDate: v.string(),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db.query("analyticsDaily");
-
-    if (args.socialAccountId) {
-      query = query.withIndex("by_account_date", (q) =>
-        q.eq("socialAccountId", args.socialAccountId!)
-      );
-    } else {
-      query = query.withIndex("by_date");
-    }
-
-    const daily = await query.collect();
+    const daily = await (
+      args.socialAccountId
+        ? ctx.db
+            .query("analyticsDaily")
+            .withIndex("by_account_date", (q) =>
+              q.eq("socialAccountId", args.socialAccountId!)
+            )
+        : ctx.db.query("analyticsDaily").withIndex("by_date")
+    ).collect();
 
     const range = daily.filter(
       (a) => a.date >= args.startDate && a.date <= args.endDate

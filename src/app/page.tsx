@@ -2,6 +2,40 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Sparkles, ArrowRight, Zap, Calendar, BarChart3 } from "lucide-react"
 
+// Ejemplos de salida del motor, con el mismo formato real que genera la app
+// (gancho + caption + hashtags + CTA). Son ilustrativos: no son métricas ni
+// resultados de campañas reales.
+const EXAMPLES = [
+  {
+    niche: "Servicios locales",
+    platform: "Instagram",
+    hook: "¿Tu pileta se puelve verde cada febrero? No es mala suerte.",
+    caption:
+      "La mayoría de los problemas algales arrancan con un filtro desbalanceado.\nTres controles semanales y el agua se mantiene clara todo el verano.",
+    hashtags: ["#pileta", "#verano", "#mantenimiento"],
+    cta: "tusitio.com/pileta",
+  },
+  {
+    niche: "Datos y estadística",
+    platform: "TikTok",
+    hook: "Mirá el histórico completo antes de jugar.",
+    caption:
+      "Cargué todos los sorteos y comparé la frecuencia real de cada número contra lo esperado.\nAhí se ven los que salen seguido y los que conviene dejar pasar.",
+    hashtags: ["#datos", "#estadisticas", "#analisis"],
+    cta: "quiniela-ia-two.vercel.app",
+    disclaimer: "+18 · Análisis estadístico. No garantiza resultados.",
+  },
+  {
+    niche: "E-commerce",
+    platform: "Reels",
+    hook: "Dejé de publicar a ciegas y empecé a mirar esto.",
+    caption:
+      "Un solo dato cambió todo: a qué hora entra tu audiencia.\nAhora programo los posts ahí y llego a más gente sin publicar más.",
+    hashtags: ["#marketing", "#emprendedores", "#redessociales"],
+    cta: "tusitio.com/tienda",
+  },
+]
+
 export default function HomePage() {
   return (
     <div className="flex flex-col min-h-screen">
@@ -90,6 +124,64 @@ export default function HomePage() {
                 insights potenciados por IA.
               </p>
             </div>
+          </div>
+        </section>
+
+        {/* Ejemplos de contenido generado */}
+        <section className="border-t">
+          <div className="container mx-auto px-4 py-16">
+            <div className="mx-auto max-w-2xl text-center">
+              <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                Así se ve el contenido que genera
+              </h2>
+              <p className="mt-3 text-muted-foreground">
+                Cada pieza sale con gancho, caption, hashtags y CTA, y pasa por control de
+                seguridad y anti-duplicados antes de programarse.
+              </p>
+            </div>
+
+            <div className="mt-10 grid gap-6 md:grid-cols-3">
+              {EXAMPLES.map((example) => (
+                <article
+                  key={example.niche}
+                  className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-sm"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="rounded-full bg-violet-100 px-3 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                      {example.niche}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{example.platform}</span>
+                  </div>
+
+                  <p className="text-base font-semibold leading-snug">{example.hook}</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-line">
+                    {example.caption}
+                  </p>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {example.hashtags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-md border px-2 py-0.5 text-xs text-muted-foreground"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p className="mt-auto pt-2 text-xs font-medium text-violet-600">
+                    CTA → {example.cta}
+                  </p>
+                  {example.disclaimer && (
+                    <p className="text-[11px] text-muted-foreground">{example.disclaimer}</p>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <p className="mt-6 text-center text-xs text-muted-foreground">
+              Ejemplos de formato generado. Los resultados varían según cada campaña.
+            </p>
           </div>
         </section>
       </main>

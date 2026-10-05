@@ -79,6 +79,21 @@ export const setGlobalKillSwitch = mutation({
     } else {
       await ctx.db.insert("autopilotSettings", {
         level: args.paused ? "STOPPED" : "AUTO",
+        platformFrequencies: {
+          instagram: "daily",
+          x: "daily",
+          facebook: "daily",
+          linkedin: "daily",
+          tiktok: "daily",
+        },
+        topics: "Marketing, Technology, AI",
+        contentPillars: "Industry insights\nTips and tutorials\nProduct updates\nCompany news",
+        topicsToAvoid: "Politics",
+        timeZone: "est",
+        preferredTimeSlots: "optimal",
+        excludedDays: [],
+        contentGuidelines: "Always include a call to action\nUse brand hashtags\nKeep tone professional\nInclude relevant emojis",
+        approvalRequirements: "review",
       });
     }
     return { success: true };

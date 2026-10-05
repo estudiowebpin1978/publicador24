@@ -4,6 +4,12 @@ import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
 import type { ActionCtx } from "../_generated/server";
+import type { Doc, Id } from "../_generated/dataModel";
+
+/** La lógica accede a `contentId` sobre las piezas (puede venir de metadata). */
+type OrchestratorPiece = Doc<"contentPieces"> & {
+  contentId?: Id<"contentPieces">;
+};
 
 // ============================================
 // CAMPAIGN ORCHESTRATOR
@@ -99,12 +105,12 @@ export const runOrchestrator = action({
       try {
         if (campaign.autopilotLevel === "MANUAL") continue;
 
-        const pieces = await ctx.runQuery(api.contentPieces.getByCampaign, {
+        const pieces: OrchestratorPiece[] = await ctx.runQuery(api.contentPieces.getByCampaign, {
           campaignId: campaign._id,
         });
 
-        const generated = pieces.filter((p) => p.status === "GENERATED");
-        const scheduled = pieces.filter((p) => p.status === "SCHEDULED");
+        const generated = pieces.filter((p: OrchestratorPiece) => p.status === "GENERATED");
+        const scheduled = pieces.filter((p: OrchestratorPiece) => p.status === "SCHEDULED");
         const queueMinimum = campaign.queueMinimum || MIN_QUEUE_SIZE;
 
         if (generated.length < queueMinimum && campaign.autopilotLevel !== "MANUAL") {
@@ -113,8 +119,8 @@ export const runOrchestrator = action({
           jobsCreated++;
         }
 
-        const unscheduled = generated.filter((p) => {
-          return !scheduled.some((s) => s.contentId === p._id);
+        const unscheduled = generated.filter((p: OrchestratorPiece) => {
+          return !scheduled.some((s: OrchestratorPiece) => s.contentId === p._id);
         });
 
         if (unscheduled.length > 0 && scheduled.length < MAX_CONCURRENT_JOBS) {
@@ -124,7 +130,8 @@ export const runOrchestrator = action({
 
         if (campaign.autopilotLevel === "AUTONOMOUS") {
           const unpublished = pieces.filter(
-            (p) => p.status === "SCHEDULED" && !scheduled.some((s) => s.contentId === p._id)
+            (p: OrchestratorPiece) =>
+              p.status === "SCHEDULED" && !scheduled.some((s: OrchestratorPiece) => s.contentId === p._id)
           );
           if (unpublished.length > 0) {
             await createPublishJob(ctx, campaign._id, unpublished.slice(0, 2));
@@ -150,7 +157,7 @@ export const runOrchestrator = action({
 
 async function createContentGenerationJob(
   ctx: ActionCtx,
-  campaignId: string,
+  campaignId: Id<"campaigns">,
   count: number
 ) {
   const idempotencyKey = `gen_content_${campaignId}_${Date.now()}`;
@@ -159,18 +166,15 @@ async function createContentGenerationJob(
     jobType: "generate_content",
     jobKey: `content_${campaignId}`,
     idempotencyKey,
-    status: "PENDING",
     campaignId: campaignId,
     priority: 2,
     payload: { campaignId, count },
-    attempts: 0,
     maxAttempts: 3,
   });
 }
-
 async function createSchedulingJob(
   ctx: ActionCtx,
-  campaignId: string,
+  campaignId: Id<"campaigns">,
   pieces: any[]
 ) {
   const idempotencyKey = `schedule_${campaignId}_${Date.now()}`;
@@ -179,18 +183,16 @@ async function createSchedulingJob(
     jobType: "schedule_content",
     jobKey: `schedule_${campaignId}`,
     idempotencyKey,
-    status: "PENDING",
     campaignId: campaignId,
     priority: 1,
     payload: { campaignId, pieceIds: pieces.map((p) => p._id) },
-    attempts: 0,
     maxAttempts: 3,
   });
 }
 
 async function createPublishJob(
   ctx: ActionCtx,
-  campaignId: string,
+  campaignId: Id<"campaigns">,
   pieces: any[]
 ) {
   const idempotencyKey = `publish_${campaignId}_${Date.now()}`;
@@ -199,11 +201,9 @@ async function createPublishJob(
     jobType: "publish_content",
     jobKey: `publish_${campaignId}`,
     idempotencyKey,
-    status: "PENDING",
     campaignId: campaignId,
     priority: 0,
     payload: { campaignId, pieceIds: pieces.map((p) => p._id) },
-    attempts: 0,
     maxAttempts: 3,
   });
 }
@@ -225,7 +225,7 @@ function calculateHealthScore(
 
 async function updateCampaignHealth(
   ctx: ActionCtx,
-  campaignId: string,
+  campaignId: Id<"campaigns">,
   pieces: any[]
 ) {
   const generated = pieces.filter((p) => p.status === "GENERATED").length;

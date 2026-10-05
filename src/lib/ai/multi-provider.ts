@@ -1,6 +1,8 @@
 // Multi-provider AI with automatic fallback
 // Priority: Groq (free) → OpenRouter → Free.ai
 
+import { getAIProvider } from "./provider";
+
 interface AIProviderConfig {
   name: string;
   baseUrl: string;
@@ -128,6 +130,14 @@ export async function generateTextWithFallback(
   prompt: string,
   systemPrompt?: string
 ): Promise<TextResult> {
+  // DEMO_MODE=true: cero llamadas a proveedores facturables. Se responde con
+  // el mock local (JSON válido cuando el prompt lo pide) para que el pipeline
+  // siga funcionando de punta a punta sin consumir presupuesto.
+  if (process.env.DEMO_MODE === "true") {
+    const mock = await getAIProvider().generateText({ prompt, system_prompt: systemPrompt });
+    return { text: mock.text, tokens_used: 0, model: mock.model, provider: "demo" };
+  }
+
   const providers = getProviders();
   const messages: Array<{ role: string; content: string }> = [];
 

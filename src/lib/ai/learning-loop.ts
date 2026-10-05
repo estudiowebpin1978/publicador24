@@ -1,8 +1,19 @@
 import { ConvexHttpClient } from "convex/browser";
+import type { Id } from "@convex/_generated/dataModel";
 import { getAIProvider } from "./provider";
 import { wrapProviderWithCostTracking } from "./cost-tracker";
 
-const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+// Lazy: el cliente solo se crea al primer uso, así importar este módulo nunca
+// rompe aunque falte NEXT_PUBLIC_CONVEX_URL.
+let convexClient: ConvexHttpClient | null = null;
+function convex(): ConvexHttpClient {
+  if (!convexClient) {
+    const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (!url) throw new Error("NEXT_PUBLIC_CONVEX_URL no configurada");
+    convexClient = new ConvexHttpClient(url);
+  }
+  return convexClient;
+}
 
 interface PostMetrics {
   postId: string;
@@ -83,7 +94,7 @@ export async function collectMetrics(): Promise<LearningResult> {
     const { api } = await import("@convex/_generated/api");
 
     // Get all published posts
-    const publishedPosts = await convex.query(api.publishedPosts.list, {});
+    const publishedPosts = await convex().query(api.publishedPosts.list, {});
     if (!publishedPosts || publishedPosts.length === 0) return result;
 
     // Get Buffer channels
@@ -125,7 +136,7 @@ export async function collectMetrics(): Promise<LearningResult> {
 
           // Save analytics
           try {
-            await convex.mutation(api.analytics.createPostAnalytics, {
+            await convex().mutation(api.analytics.createPostAnalytics, {
               publishedPostId: post._id,
               platform: post.platform,
               metrics,
@@ -159,11 +170,11 @@ export async function updateStrategyScores(): Promise<LearningResult> {
     const { api } = await import("@convex/_generated/api");
 
     // Get all strategy memory entries
-    const memories = await convex.query(api.strategyMemory.list, {});
+    const memories = await convex().query(api.strategyMemory.list, {});
     if (!memories || memories.length === 0) return result;
 
     // Get all analytics
-    const allAnalytics = await convex.query(api.analytics.getSummary, {
+    const allAnalytics = await convex().query(api.analytics.getSummary, {
       startDate: "2020-01-01",
       endDate: new Date().toISOString().split("T")[0],
     });
@@ -171,9 +182,13 @@ export async function updateStrategyScores(): Promise<LearningResult> {
     // Update scores based on real metrics
     for (const memory of memories) {
       try {
-        // Find matching analytics for this content
-        const postAnalytics = await convex.query(api.analytics.getPostAnalytics, {
-          postId: memory.publishedPostId || memory._id,
+        // El esquema guarda publishedPostId como string; el validator de la
+        // query exige Id<"publishedPosts">. Los ids de Convex son strings
+        // opacos, así que validamos que venga y lo pasamos como Id.
+        const rawPostId = memory.publishedPostId;
+        if (!rawPostId) continue;
+        const postAnalytics = await convex().query(api.analytics.getPostAnalytics, {
+          postId: rawPostId as Id<"publishedPosts">,
         });
 
         if (postAnalytics && postAnalytics.length > 0) {
@@ -184,7 +199,7 @@ export async function updateStrategyScores(): Promise<LearningResult> {
             const newScore = calculateEngagementScore(metrics);
 
             // Update strategy memory with real score
-            await convex.mutation(api.strategyMemory.updateScore, {
+            await convex().mutation(api.strategyMemory.updateScore, {
               id: memory._id,
               score: newScore,
               impressions: metrics.impressions,
@@ -216,7 +231,7 @@ export async function updateStrategyScores(): Promise<LearningResult> {
   }
 }
 
-export async function generateInsights(campaignId: string): Promise<LearningInsight[]> {
+export async function generateInsights(campaignId: Id<"campaigns">): Promise<LearningInsight[]> {
   const insights: LearningInsight[] = [];
 
   try {
@@ -224,7 +239,7 @@ export async function generateInsights(campaignId: string): Promise<LearningInsi
     const ai = wrapProviderWithCostTracking(getAIProvider(), "openrouter");
 
     // Get strategy memory for this campaign
-    const memories = await convex.query(api.strategyMemory.getByCampaign, { campaignId });
+    const memories = await convex().query(api.strategyMemory.getByCampaign, { campaignId });
     if (!memories || memories.length < 3) return insights;
 
     // Get analytics summary
@@ -233,7 +248,7 @@ export async function generateInsights(campaignId: string): Promise<LearningInsi
       .split("T")[0];
     const today = new Date().toISOString().split("T")[0];
 
-    const analytics = await convex.query(api.analytics.getSummary, {
+    const analytics = await convex().query(api.analytics.getSummary, {
       startDate: thirtyDaysAgo,
       endDate: today,
     });
@@ -303,7 +318,7 @@ Respondé SOLO con el JSON, sin markdown.`;
   }
 }
 
-export async function runLearningLoop(campaignId?: string): Promise<LearningResult> {
+export async function runLearningLoop(campaignId?: Id<"campaigns">): Promise<LearningResult> {
   const result: LearningResult = {
     metricsCollected: 0,
     scoresUpdated: 0,

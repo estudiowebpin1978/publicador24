@@ -20,6 +20,8 @@ export interface VideoGenerationInput {
   cta: string;
   platform: string;
   style?: string;
+  /** Voz TTS elegida por el caller (el ensamblado puede ignorarla si no hay audio). */
+  voice?: string;
 }
 
 function splitIntoScenes(content: string, maxScenes: number = 5): string[] {

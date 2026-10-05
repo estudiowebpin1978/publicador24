@@ -39,7 +39,7 @@ export default function RegisterPage() {
         }))
       }
 
-      router.push("/dashboard")
+      router.push("/campaigns")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error al crear cuenta"
       setError(message)

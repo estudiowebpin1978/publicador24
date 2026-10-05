@@ -65,20 +65,114 @@ function generateMockHashtags(content: string, platform: string, count: number):
     .slice(0, count);
 }
 
+/**
+ * Genera la respuesta del "mock" según lo que pide el prompt.
+ * Los engines parsean arrays JSON (`text.match(/\[[\s\S]*\]/)`), así que en
+ * demo devolvemos JSON real: el pipeline se recorre entero sin costo.
+ */
+function extractPromptTopic(prompt: string): string {
+  const patterns = [
+    /for a niche:\s*"([^"]{3,120})"/i,
+    /about:\s*"([^"]{3,120})"/i,
+    /topic:\s*"([^"]{3,120})"/i,
+    /topic:\s*([^\n]{3,80})/i,
+    /niche:\s*"([^"]{3,120})"/i,
+  ];
+  for (const pattern of patterns) {
+    const match = prompt.match(pattern);
+    if (match?.[1]) return match[1].trim();
+  }
+  return 'contenido de valor para tu audiencia';
+}
+
+function mockHookTemplates(topic: string): string[] {
+  return [
+    `Nadie te contó esto sobre ${topic} (y te conviene saberlo)`,
+    `¿Vas a seguir haciendo esto mal en ${topic}?`,
+    `3 errores que todos cometen con ${topic} — el último es caro`,
+    `Probé ${topic} 30 días y esto es lo que descubrí`,
+    `Si recién arrancás con ${topic}, leé esto antes de gastar plata`,
+    `Lo que nadie te dice de ${topic} (y por qué te conviene)`,
+    `Esto es lo que separa a los que ganan de los que solo intentan en ${topic}`,
+    `La regla de ${topic} que te ahorra tiempo y plata`,
+    `Dejá de hacer esto si querés resultados con ${topic}`,
+    `Lo primero que haría si arrancara de cero con ${topic}`,
+  ];
+}
+
+function mockTextForPrompt(prompt: string): string {
+  const topic = extractPromptTopic(prompt);
+  const wantsIdeas = /content ideas for a niche|title, hook, angle, format, platform, pillar/i.test(prompt);
+  const wantsHooks = /engaging hooks|text, type, score/i.test(prompt);
+  const wantsCaptions = /Generate one caption for each style|wordCount, score/i.test(prompt);
+
+  const hooks = mockHookTemplates(topic);
+
+  if (wantsIdeas) {
+    const formats = ['reel', 'carrusel', 'post', 'story', 'short'];
+    const platforms = ['instagram', 'tiktok', 'youtube', 'facebook', 'x'];
+    const pillars = ['educational', 'entertainment', 'promotional', 'inspirational', 'behind_the_scenes'];
+    const ideas = hooks.slice(0, 5).map((hook, i) => ({
+      title: `${topic} — ángulo ${i + 1}`,
+      hook,
+      angle: [
+        'Error común y su corrección',
+        'Comparación honesta de opciones',
+        'Mini tutorial paso a paso',
+        'Mito vs. realidad',
+        'Historia corta con resultado',
+      ][i % 5],
+      format: formats[i % formats.length],
+      platform: platforms[i % platforms.length],
+      pillar: pillars[i % pillars.length],
+      score: 85 - i * 3,
+      description: `Pieza sobre ${topic} con enfoque práctico y cercano.`,
+    }));
+    return JSON.stringify(ideas);
+  }
+
+  if (wantsHooks) {
+    const types = ['curiosity', 'contrarian', 'problem', 'story', 'list', 'surprise', 'question', 'benefit', 'solution', 'fear'];
+    const list = hooks.map((text, i) => ({ text, type: types[i % types.length], score: 90 - i * 4 }));
+    return JSON.stringify(list);
+  }
+
+  if (wantsCaptions) {
+    const styles = ['original', 'short', 'long', 'storytelling', 'educational', 'promotional'];
+    const captions = styles.map((style, i) => {
+      const text = [
+        `Arrancamos simple con ${topic}: primero entendés el problema, después elegís la solución. Sin vueltas y sin promesas mágicas.\n\n¿Ya lo probaste? Contame en los comentarios.`,
+        `${topic}, sin humo. Tres pasos: mirá, compará, decidí.`,
+        `La historia corta: muchos empiezan con ${topic} por presión, pocos lo hacen con método. El que lo hace con datos llega más lejos, porque mide qué funciona y descarta qué no. Cuando dejás de adivinar y empezás a mirar números, todo cambia: menos frustración, mejores decisiones y una rutina que se sostiene sola.`,
+        `Había una vez alguien que probaba todo con ${topic} sin plan. Después anotó lo que hacía, comparó resultados y en dos semanas ya sabía qué funcionaba. Esa es toda la magia.`,
+        `Dato útil sobre ${topic}: si no lo medís, no lo mejorás. Tres claves: constancia, registro y revisión semanal.`,
+        `Si buscás ${topic}, esto te conviene: propuesta clara, sin letra chica y con acompañamiento real.`,
+      ][i % 6];
+      return {
+        text,
+        style,
+        wordCount: text.split(/\s+/).length,
+        score: 88 - i * 2,
+      };
+    });
+    return JSON.stringify(captions);
+  }
+
+  // Respuesta genérica en prosa (los engines tienen fallback por líneas)
+  return [
+    `${topic}: lo importante es arrancar con un ángulo claro y concreto.`,
+    `Contenido sobre ${topic} pensado para una audiencia que valora el detalle.`,
+    `Cada pieza de ${topic} debe terminar con un llamado a la acción concreto.`,
+  ].join('\n\n');
+}
+
 export class MockAIProvider implements AIProvider {
-  async generateText(_input: AITextInput): Promise<AITextResult> {
-    void _input
-    const wordCount = Math.floor(Math.random() * 50) + 30;
-    const words = [
-      'Descubre', 'el', 'secreto', 'para', 'transformar', 'tu', 'contenido',
-      'en', 'publicaciones', 'que', 'generan', 'resultados', 'reales.',
-      'Nuestro', 'motor', 'de', 'inteligencia', 'artificial', 'analiza',
-      'tendencias', 'y', 'crea', 'copies', 'que', 'conectan', 'con',
-      'tu', 'audiencia', 'de', 'manera', 'auténtica.', 'Optimiza',
-      'cada', 'publicación', 'con', 'datos', 'y', 'alcanza', 'más',
-      'personas', 'cada', 'día.',
-    ];
-    const text = words.slice(0, wordCount).join(' ');
+  async generateText(input: AITextInput): Promise<AITextResult> {
+    // Demo mode: sin llamadas externas. Devolvemos JSON válido cuando el
+    // prompt lo pide, así los engines (ideas/hooks/captions) recorren el
+    // pipeline completo igual que con IA real.
+    const text = mockTextForPrompt(input.prompt);
+    const wordCount = text.split(/\s+/).length;
 
     return {
       text,

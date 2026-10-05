@@ -116,8 +116,11 @@ export function Header({ onMenuToggle, className }: HeaderProps) {
               ))
             )}
             <DropdownMenuSeparator className="bg-white/10" />
-            <DropdownMenuItem asChild className="w-full justify-center text-sm text-violet-400 hover:bg-white/5 hover:text-violet-300">
-              <Link href="/notifications">Ver todas las notificaciones</Link>
+            <DropdownMenuItem
+              render={<Link href="/notifications" />}
+              className="w-full justify-center text-sm text-violet-400 hover:bg-white/5 hover:text-violet-300"
+            >
+              Ver todas las notificaciones
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

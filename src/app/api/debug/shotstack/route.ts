@@ -5,10 +5,13 @@ export async function GET() {
   const hasKey = !!process.env.SHOTSTACK_API_KEY;
   const keyLength = process.env.SHOTSTACK_API_KEY?.length || 0;
   
-  let getKeyResult = { success: false, error: null };
+  let getKeyResult: { success: boolean; error: string | null; keyLength?: number } = {
+    success: false,
+    error: null,
+  };
   try {
     const key = getShotstackApiKey();
-    getKeyResult = { success: true, keyLength: key.length };
+    getKeyResult = { success: true, error: null, keyLength: key.length };
   } catch (e) {
     getKeyResult = { success: false, error: e instanceof Error ? e.message : "Unknown" };
   }

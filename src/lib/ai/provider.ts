@@ -11,6 +11,14 @@ const isProd = process.env.NODE_ENV === 'production';
 export function getAIProvider(): AIProvider {
   if (cachedProvider) return cachedProvider;
 
+  // DEMO_MODE=true: nunca se hacen llamadas externas de IA (ni se consume
+  // presupuesto). Vale para todos los engines y rutas que usen este provider.
+  if (process.env.DEMO_MODE === 'true') {
+    console.warn('[DEMO_MODE] Using MockAIProvider — no external AI calls');
+    cachedProvider = new MockAIProvider();
+    return cachedProvider;
+  }
+
   const provider = process.env.AI_PROVIDER || 'openrouter';
 
   switch (provider) {
@@ -31,6 +39,12 @@ export function getAIProvider(): AIProvider {
         cachedProvider = new GroqProvider();
         return cachedProvider;
       }
+      if (isProd) {
+        throw new Error(
+          'AI PROVIDER NOT CONFIGURED: GROQ_API_KEY is missing. ' +
+          'Set GROQ_API_KEY in .env.local to enable real AI generation.'
+        );
+      }
       break;
     case 'huggingface':
       if (process.env.HF_API_KEY) {
@@ -38,16 +52,7 @@ export function getAIProvider(): AIProvider {
         return cachedProvider;
       }
       if (isProd) {
-        throw new Error(
-          'AI PROVIDER NOT CONFIGURED: HF_API_KEY is missing. '
-        );
-      }
-      break;
-      if (isProd) {
-        throw new Error(
-          'AI PROVIDER NOT CONFIGURED: GROQ_API_KEY is missing. ' +
-          'Set GROQ_API_KEY in .env.local to enable real AI generation.'
-        );
+        throw new Error('AI PROVIDER NOT CONFIGURED: HF_API_KEY is missing.');
       }
       break;
     default:

@@ -12,15 +12,23 @@ import Link from "next/link"
 interface ContentPiece {
   id: string
   title: string
-  platform: string
-  status: string
+  platforms: string[]
+  status: "draft" | "scheduled" | "published" | "failed" | "pending"
   score: number
   date: string
+  author: string
   type: string
 }
 
-export default function ContentPage() {
-  const [viewMode, setViewMode] = React.useState<"table" | "grid">("table")
+const VALID_STATUSES = ["draft", "scheduled", "published", "failed", "pending"] as const
+type ContentStatus = (typeof VALID_STATUSES)[number]
+
+function normalizeStatus(raw: string | undefined): ContentStatus {
+  const v = (raw || "").toLowerCase()
+  return (VALID_STATUSES as readonly string[]).includes(v) ? (v as ContentStatus) : "draft"
+}
+
+export default function ContentPage() {  const [viewMode, setViewMode] = React.useState<"table" | "grid">("table")
   const [selectedItems, setSelectedItems] = React.useState<string[]>([])
   const [items, setItems] = React.useState<ContentPiece[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -35,10 +43,11 @@ export default function ContentPage() {
           setItems(pieces.map((p: Record<string, unknown>) => ({
             id: p.id as string,
             title: (p.title as string) || (p.hook as string) || "Sin título",
-            platform: (p.platform as string) || "instagram",
-            status: (p.status as string)?.toLowerCase() || "draft",
+            platforms: [((p.platform as string) || "instagram")],
+            status: normalizeStatus(p.status as string),
             score: (p.score as number) || 0,
             date: p.created_at ? new Date(p.created_at as number).toLocaleDateString("es-AR") : "",
+            author: (p.author as string) || "IA",
             type: (p.content_type as string) || "post",
           })))
         }
@@ -66,7 +75,7 @@ export default function ContentPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, status: status.toUpperCase() }),
       })
-      setItems(prev => prev.map(i => i.id === id ? { ...i, status: status.toLowerCase() } : i))
+      setItems(prev => prev.map(i => i.id === id ? { ...i, status: normalizeStatus(status) } : i))
     } catch { /* ignore */ }
   }
 

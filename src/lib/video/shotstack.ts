@@ -30,8 +30,18 @@ interface ShotstackAsset {
   offset?: { x: number; y: number };
 }
 
+interface ShotstackClip {
+  asset: ShotstackAsset;
+  start: number;
+  length: number;
+  fit?: string;
+  scale?: number;
+  position?: string;
+  offset?: { x: number; y: number };
+}
+
 interface ShotstackTrack {
-  clips: ShotstackAsset[];
+  clips: ShotstackClip[];
 }
 
 interface ShotstackTimeline {
@@ -104,7 +114,7 @@ export async function renderVideoWithShotstack(config: {
   const clipDuration = Math.max(2, duration / Math.max(1, images.length));
 
   // Build timeline - Shotstack format: clips have asset property
-  const tracks = [
+  const tracks: ShotstackTrack[] = [
     // Video track with images
     {
       clips: images.map((img, i) => ({
@@ -213,7 +223,10 @@ export async function checkShotstackStatus(renderId: string): Promise<{
 /**
  * Wait for render to complete (polling) - shorter timeout for Vercel
  */
-export async function waitForShotstackRender(renderId: string, maxWaitMs = 60000): Promise<{ url: string } | { error: string }> {
+export async function waitForShotstackRender(
+  renderId: string,
+  maxWaitMs = 60000
+): Promise<{ url: string; error?: undefined } | { error: string; url?: undefined }> {
   const startTime = Date.now();
   const pollInterval = 5000; // 5 seconds
 

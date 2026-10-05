@@ -18,12 +18,17 @@ import { hostImagePublicly } from "@/lib/media-hosting";
 import { getAllCampaignImages, pickCampaignImage } from "@/lib/campaign-images";
 import { processPendingRenders, startYouTubeRender, isVideoRenderBlocked } from "@/lib/video/render-queue";
 import { checkFFmpeg } from "@/lib/video/ffmpeg";
+import { maxSimilarityVs } from "../../../../shared/text-similarity";
+import { findProhibitedClaims } from "../../../../shared/prohibited-claims";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 interface LoopResult {
   timestamp: number;
   contentGenerated: number;
   contentPublished: number;
   imagesGenerated: number;
+  duplicatesBlocked: number;
+  claimsBlocked: number;
   errors: string[];
   details: string[];
   posts: { platform: string; id: string; status: string; scheduledAt?: string }[];
@@ -31,6 +36,34 @@ interface LoopResult {
 }
 
 const TIME_SLOTS_UTC: number[] = [15, 16, 17, 20, 21, 23, 0, 1];
+
+/**
+ * Textos publicados recientemente de una campaña/plataforma, para comparar
+ * candidatos contra lo ya publicado (anti-duplicados, umbral único 0.75).
+ */
+async function loadRecentPublishedTexts(
+  supabase: SupabaseClient,
+  campaignId: string,
+  platform: string
+): Promise<string[]> {
+  try {
+    const { data } = await supabase
+      .from("content_pieces")
+      .select("title, body")
+      .eq("campaign_id", campaignId)
+      .eq("platform", platform)
+      .eq("status", "PUBLISHED")
+      .order("published_at", { ascending: false })
+      .limit(50);
+
+    return (data || [])
+      .map((row) => `${row.title || ""} ${row.body || ""}`.trim())
+      .filter((text) => text.length > 20);
+  } catch {
+    // Sin historial no bloqueamos nada: preferimos publicar a no publicar.
+    return [];
+  }
+}
 
 function parseJsonContent<T>(text: string): T | null {
   if (!text) return null;
@@ -155,6 +188,8 @@ export async function POST(request?: NextRequest) {
       contentGenerated: 0,
       contentPublished: 0,
       imagesGenerated: 0,
+      duplicatesBlocked: 0,
+      claimsBlocked: 0,
       errors: [],
       details: [],
       posts: [],
@@ -291,6 +326,33 @@ Generá EXACTAMENTE en este formato JSON:
 
           result.contentGenerated++;
           result.details.push(`[${platform}] Contenido: ${content.hook}`);
+
+          // Anti-duplicados: si ya publicamos algo casi igual, no gastamos
+          // imagen ni mandamos el post (se reintenta en el próximo ciclo).
+          const duplicateCheck = maxSimilarityVs(
+            `${content.hook} ${content.body || ""}`,
+            await loadRecentPublishedTexts(supabase, campaign.id, platform)
+          );
+          if (duplicateCheck.isDuplicate) {
+            result.duplicatesBlocked++;
+            result.details.push(
+              `[${platform}] Duplicado probable (${Math.round(duplicateCheck.similarity * 100)}%) — se descarta sin publicar`
+            );
+            continue;
+          }
+
+          // Promesas prohibidas (ganancia garantizada / estadísticas de
+          // ganancias inventadas): se descarta antes de gastar imagen.
+          const claimIssue = findProhibitedClaims(
+            `${content.hook} ${content.body || ""} ${content.cta || ""}`
+          );
+          if (claimIssue.length > 0) {
+            result.claimsBlocked++;
+            result.details.push(
+              `[${platform}] Promesa prohibida (${claimIssue.join(", ")}) — se descarta sin publicar`
+            );
+            continue;
+          }
 
           const ownImage = pickCampaignImage(imagesFor(campaign.id));
           const imageUrl = ownImage || (await generatePlatformImage(platform));
@@ -435,10 +497,40 @@ Generá EXACTAMENTE en este formato JSON:
               `Sos experto en marketing para ${platform}. Respondé SOLO JSON.`
             );
 
-            let content = parseJsonContent<{ hook?: string }>(response.text);
+            const content = parseJsonContent<{
+              hook?: string;
+              body?: string;
+              cta?: string;
+              hashtags?: string[];
+            }>(response.text);
 
             if (!content?.hook) {
               result.details.push(`[${platform}] IA devolvió JSON sin "hook" — se reintenta en el próximo ciclo`);
+              continue;
+            }
+
+            // Anti-duplicados (mismo umbral 0.75 que el resto del sistema)
+            const dupCheck = maxSimilarityVs(
+              `${content.hook} ${content.body || ""}`,
+              await loadRecentPublishedTexts(supabase, campaign.id, platform)
+            );
+            if (dupCheck.isDuplicate) {
+              result.duplicatesBlocked++;
+              result.details.push(
+                `[${platform}] Duplicado probable (${Math.round(dupCheck.similarity * 100)}%) — se descarta sin publicar`
+              );
+              continue;
+            }
+
+            // Promesas prohibidas (mismo control que en el camino de Buffer)
+            const rotationClaimIssue = findProhibitedClaims(
+              `${content.hook} ${content.body || ""} ${content.cta || ""}`
+            );
+            if (rotationClaimIssue.length > 0) {
+              result.claimsBlocked++;
+              result.details.push(
+                `[${platform}] Promesa prohibida (${rotationClaimIssue.join(", ")}) — se descarta sin publicar`
+              );
               continue;
             }
 

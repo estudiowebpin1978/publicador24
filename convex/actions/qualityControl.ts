@@ -193,7 +193,7 @@ export const validateContentQuality = action({
     contentPieceId: v.id("contentPieces"),
   },
   handler: async (ctx, args) => {
-    const piece = await ctx.runQuery(api.contentPieces.get, { id: args.contentPieceId });
+    const piece = await ctx.runQuery(api.contentPieces.getById, { id: args.contentPieceId });
     if (!piece) throw new Error("Content piece not found");
 
     const fullText = `${piece.hook}\n\n${piece.body}`;

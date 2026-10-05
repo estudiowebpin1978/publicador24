@@ -3,6 +3,25 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
+
+/** Resultado de la acción generateFullContent. */
+interface GenerateFullContentResult {
+  contentId: Id<"content">;
+  title: string;
+  hooks: string[];
+  captions: string[];
+  hashtags: string[];
+  platformVariants: Array<{
+    platform: string;
+    hook: string;
+    caption: string;
+    hashtags: string[];
+    mentions: string[];
+    cta: string;
+  }>;
+  durationMs: number;
+}
 
 async function callMockAI(operation: string, input: Record<string, unknown>) {
   await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 1500));
@@ -55,7 +74,7 @@ export const generateFullContent = action({
     brandVoice: v.optional(v.any()),
     additionalInstructions: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<GenerateFullContentResult> => {
     const startTime = Date.now();
 
     try {

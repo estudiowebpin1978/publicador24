@@ -3,6 +3,7 @@
 import { action } from "../_generated/server";
 import { api } from "../_generated/api";
 import { v } from "convex/values";
+import type { Id } from "../_generated/dataModel";
 
 interface ImageResult {
   url: string;
@@ -50,7 +51,17 @@ export const generateImage = action({
     campaignId: v.optional(v.id("campaigns")),
     seed: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args
+  ): Promise<{
+    imageId: Id<"generatedImages">;
+    url: string;
+    width: number;
+    height: number;
+    aspectRatio: string;
+    durationMs: number;
+  }> => {
     const startTime = Date.now();
 
     try {
@@ -116,7 +127,7 @@ export const generateImagePack = action({
     aspectRatios: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const piece = await ctx.runQuery(api.contentPieces.get, { id: args.contentPieceId });
+    const piece = await ctx.runQuery(api.contentPieces.getById, { id: args.contentPieceId });
     if (!piece) throw new Error("Content piece not found");
     if (!piece.imagePrompt) throw new Error("No image prompt for this piece");
 

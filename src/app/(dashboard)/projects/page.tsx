@@ -9,6 +9,7 @@ import { Plus, Briefcase, FolderOpen } from "lucide-react";
 
 interface Project {
   _id: string;
+  id?: string;
   name: string;
   description?: string;
   industry?: string;

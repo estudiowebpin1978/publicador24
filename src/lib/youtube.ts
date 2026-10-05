@@ -272,7 +272,7 @@ export async function createYouTubeVideo(
   }
 }
 
-export async function getYouTubeAuthUrl(): string {
+export function getYouTubeAuthUrl(): string {
   const REDIRECT_URI = "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback";
   return `https://accounts.google.com/oauth2/v2/auth?client_id=197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com&redirect_uri=${encodeURIComponent("https://autopublicador-zeta.vercel.app/api/auth/youtube/callback")}&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline`;
 }
