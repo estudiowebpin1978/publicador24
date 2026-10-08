@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateMarketingPiece, type MarketingOptions } from "@/lib/marketing";
+import {
+  generateMarketingPiece,
+  resolveMarketingCompliance,
+  type MarketingOptions,
+} from "@/lib/marketing";
 import { checkPublicationSafety } from "@/lib/ai/publication-safety";
-
-// Palabras que activan el cumplimiento (+18 / disclaimer) por defecto.
-const REGULATED_TERMS = /\b(quiniela|quinielas|loter[íi]a|lotto|apuestas|apostar|casino|bingo|gol\s+de\s+hoy|pron[óo]stico\s+de\s+apuestas)\b/i;
-
-function isRegulated(idea: string, niche?: string): boolean {
-  return REGULATED_TERMS.test(`${idea} ${niche || ""}`);
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,20 +19,12 @@ export async function POST(request: NextRequest) {
     }
 
     const rawOptions = (body?.options ?? {}) as MarketingOptions;
-    const regulated = isRegulated(idea, rawOptions.niche);
 
     const options: MarketingOptions = {
       ...rawOptions,
       demoMode: rawOptions.demoMode ?? process.env.DEMO_MODE === "true",
-      compliance: {
-        // El cumplimiento se aplica SOLO en campañas reguladas (+18, disclaimer)
-        // y puede forzarse desde la campaña.
-        ageRestricted: rawOptions.compliance?.ageRestricted ?? regulated,
-        disclaimer:
-          rawOptions.compliance?.disclaimer ??
-          (regulated ? "Análisis estadístico. No garantiza resultados." : undefined),
-        ctaUrl: rawOptions.compliance?.ctaUrl,
-      },
+      // +18/disclaimer para nichos regulados y CTA con URL siempre.
+      compliance: resolveMarketingCompliance(idea, rawOptions.compliance, rawOptions.niche),
     };
 
     const piece = await generateMarketingPiece(idea, options);

@@ -1,4 +1,5 @@
 import { getAIProvider } from './provider';
+import { COPYWRITER_SYSTEM } from './copywriter';
 import type { TitleEngineInput, TitleEngineResult, GeneratedTitle } from './engines';
 
 export async function generateTitles(input: TitleEngineInput): Promise<TitleEngineResult> {
@@ -9,22 +10,22 @@ export async function generateTitles(input: TitleEngineInput): Promise<TitleEngi
     ? `\nHooks to consider: ${input.hooks.join(' | ')}`
     : '';
 
-  const prompt = `Generate ${count} compelling titles for content about: "${input.topic}"
-Platform: ${input.platform || 'multi'}
-Language: ${input.language || 'es'}${hooksContext}
+  const prompt = `Generá ${count} títulos para contenido sobre: "${input.topic}"
+Plataforma: ${input.platform || 'multi'}
+Idioma: ${input.language || 'es'} (español rioplatense, voseo)${hooksContext}
 
-Requirements:
-- Clear and concise
-- Generate curiosity
-- Relevant to topic
-- Platform-appropriate length
-- Include power words
+Requisitos:
+- Cortos, concretos y como los diría una persona (nunca titular de nota ni frase de IA).
+- Que generen curiosidad real sin clickbait ni promesas de resultados garantizados.
+- Keyword principal adelante cuando la plataforma lo permita (bueno para SEO).
+- Nada de "¡Increíble!", "No te pierdas", "Descubrí el poder de".
+- Cada uno con un ángulo distinto.
 
-Return JSON array with: text, clarity (0-100), curiosity (0-100), relevance (0-100), length (chars), platformFit (0-100), titleScore (0-100)`;
+Respondé SOLO con JSON array: [{ text, clarity, curiosity, relevance, length, platformFit, titleScore }]`;
 
   const result = await provider.generateText({
     prompt,
-    system_prompt: 'You are an expert headline copywriter. Create titles that demand attention.',
+    system_prompt: COPYWRITER_SYSTEM,
     temperature: 0.85,
   });
 

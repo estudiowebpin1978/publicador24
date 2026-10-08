@@ -18,16 +18,11 @@ import {
   type ContentFingerprintInput,
 } from '../content/duplicate-detector';
 import { scoreContent } from '../content/scoring';
+import type { MarketingCompliance } from './compliance';
+import { DEFAULT_SITE_URL } from '../ai/copywriter';
 
-/** Requisitos legales/por campaña. Aplica a nichos regulados (p. ej. +18). */
-export interface MarketingCompliance {
-  /** Agrega aviso de edad (+18) al caption. */
-  ageRestricted?: boolean;
-  /** Disclaimer obligatorio que se antepone al caption. */
-  disclaimer?: string;
-  /** URL de CTA que se agrega al final (p. ej. la del producto promocionado). */
-  ctaUrl?: string;
-}
+export { resolveMarketingCompliance } from './compliance';
+export type { MarketingCompliance } from './compliance';
 
 export interface MarketingOptions {
   /** Nicho o tema de la campaña, p. ej. "climatización de piscinas en Rosario". */
@@ -158,10 +153,9 @@ export async function generateMarketingPiece(
     ? pick(DEMO_CAPTIONS, seed)
     : await generateOneCaption(idea.title, hook, platform, options);
 
-  // 7. CTA + HASHTAGS
-  const cta = options.compliance?.ctaUrl
-    ? `Mirá más → ${options.compliance.ctaUrl}`
-    : 'Seguinos para más contenido así';
+  // 7. CTA + HASHTAGS — siempre con URL (sitio por defecto si no hay ctaUrl)
+  const ctaUrl = options.compliance?.ctaUrl ?? DEFAULT_SITE_URL;
+  const cta = `Mirá más → ${ctaUrl}`;
 
   // 8. CALIDAD
   const quality = scoreContent({
@@ -342,12 +336,13 @@ async function generateOneCaption(
   try {
     const styles: CaptionStyle[] = ['short', 'storytelling', 'educational', 'promotional'];
     const result = await generateCaptions({
-      topic,
+      topic: options.niche ? `${topic} (${options.niche})` : topic,
       hook,
       platform,
       language: options.language || 'es',
       tone: options.tone || 'cercano',
       audience: options.audience,
+      cta: options.compliance?.ctaUrl,
       styles,
     });
     const text = result.bestCaption?.text || result.captions[0]?.text;
@@ -368,8 +363,9 @@ function applyCompliance(
   if (compliance?.disclaimer) parts.push(compliance.disclaimer);
   if (compliance?.ageRestricted) parts.push('+18');
   parts.push(caption, hashtags.join(' '));
-  if (compliance?.ctaUrl) parts.push(compliance.ctaUrl);
-  else parts.push(cta);
+  // El CTA ya contiene la URL ("Mirá más → ..."), se agrega completo para no
+  // perder el texto de invitación.
+  parts.push(cta);
   return parts.filter(Boolean).join('\n\n');
 }
 

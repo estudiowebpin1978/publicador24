@@ -64,21 +64,25 @@ export function pickHumanTimeSlot(platform: string, preferPeak: boolean = true):
 export function humanizeText(text: string): string {
   let result = text;
 
+  // Sinónimos sólo cuando la frase sigue leyéndose natural después del cambio
+  // (nada de reemplazos que rompan la gramática ni palabras de manual de IA).
   const variations: [RegExp, string[]][] = [
-    [/\b ganar \b/gi, ["ganar", "hacer plata", "increíble"]],
-    [/\b gratis \b/gi, ["gratis", "sin costo", "0 pesos"]],
-    [/\b app \b/gi, ["app", "aplicación", "la app"]],
+    [/\bgratis\b/gi, ["gratis", "sin costo", "gratis posta"]],
+    [/\bapp\b/gi, ["app", "aplicación", "la app"]],
+    [/\bpágina web\b/gi, ["página web", "web", "sitio"]],
   ];
 
   for (const [pattern, options] of variations) {
-    if (Math.random() > 0.7 && pattern.test(result)) {
+    if (pattern.test(result) && Math.random() > 0.5) {
       const replacement = options[Math.floor(Math.random() * options.length)];
-      result = result.replace(pattern, replacement);
+      result = result.replace(new RegExp(pattern.source, pattern.flags.replace("g", "")), replacement);
     }
   }
 
-  const emojiSets = [["🔥", "💰"], ["✅", "🎯"], ["🚀", "💡"], ["⭐", "🎉"]];
-  if (Math.random() > 0.5 && !result.includes("🔥") && !result.includes("✅")) {
+  // Emojis con moderación: sólo si el texto todavía no tiene ninguno.
+  const hasEmoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(result);
+  if (!hasEmoji && Math.random() > 0.5) {
+    const emojiSets = [["🔥", "💰"], ["✅", "🎯"], ["🚀", "💡"], ["⭐", "🎉"]];
     const set = emojiSets[Math.floor(Math.random() * emojiSets.length)];
     result = `${set[0]} ${result} ${set[1]}`;
   }

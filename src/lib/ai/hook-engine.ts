@@ -1,34 +1,41 @@
 import { getAIProvider } from './provider';
+import { COPYWRITER_SYSTEM } from './copywriter';
 import type { HookEngineInput, HookEngineResult, GeneratedHook, HookType } from './engines';
 
 export async function generateHooks(input: HookEngineInput): Promise<HookEngineResult> {
   const provider = getAIProvider();
   const count = input.count || 5;
 
-  const prompt = `Generate ${count} engaging hooks for content about: "${input.topic}"
-  
-Target audience: ${input.audience || 'general'}
-Tone: ${input.tone || 'engaging'}
-Language: ${input.language || 'es'}
-Platform: ${input.platform || 'multi'}
+  const prompt = `Generá ${count} ganchos (primera línea que frena el scroll) para contenido sobre: "${input.topic}"
 
-Hook types to include:
-1. Curiosity - Create intrigue
-2. Question - Ask something compelling
-3. Contrarian - Challenge common beliefs
-4. Benefit - Highlight value
-5. Fear - Address pain points
-6. Story - Narrative approach
-7. Surprise - Unexpected angle
-8. Problem - Identify issue
-9. Solution - Offer answer
-10. List - Number-based
+Público: ${input.audience || 'general'}
+Tono: ${input.tone || 'cercano'}
+Idioma: ${input.language || 'es'} (español rioplatense, voseo)
+Plataforma: ${input.platform || 'multi'}
 
-Return JSON array with: text, type, score (0-100)`;
+Reglas:
+- Máximo 10 palabras, como se habla (nunca sonar a titular de nota ni a IA).
+- Prohibido: "¿Sabías que...?" vacío, "En este post...", "Descubrí el poder de", promesas de resultados garantizados.
+- Concreto: una situación real, un dato o una pregunta que al público le duela o le interesse.
+- Cada gancho con un ángulo distinto del anterior.
+
+Tipos a incluir:
+1. Curiosity - genera intriga
+2. Question - pregunta que engancha
+3. Contrarian - desafía una creencia común
+4. Benefit - destaca un valor real
+5. Fear - toca un punto de dolor
+6. Story - arranque narrativo
+7. Surprise - giro inesperado
+8. Problem - nombra el problema
+9. Solution - ofrece la salida
+10. List - número concreto
+
+Respondé SOLO con JSON array: [{ "text": "...", "type": "...", "score": 0 }]`;
 
   const result = await provider.generateText({
     prompt,
-    system_prompt: 'You are an expert content creator and copywriter. Generate hooks that stop the scroll.',
+    system_prompt: COPYWRITER_SYSTEM,
     temperature: 0.8,
   });
 

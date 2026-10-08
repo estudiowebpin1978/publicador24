@@ -1,5 +1,6 @@
 import type { SocialPlatform } from '@/types';
 import { getAIProvider } from './provider';
+import { COPYWRITER_SYSTEM } from './copywriter';
 import type {
   IdeaGeneratorInput,
   IdeaGeneratorResult,
@@ -21,30 +22,36 @@ export async function generateIdeas(input: IdeaGeneratorInput): Promise<IdeaGene
   const platforms = input.platforms || (['tiktok', 'instagram'] as SocialPlatform[]);
   const pillars = input.contentPillars || DEFAULT_PILLARS;
 
-  const prompt = `Generate ${count} content ideas for a niche: "${input.niche}"
-Language: ${input.language || 'es'}
-Country: ${input.country || 'global'}
-Audience: ${input.audience || 'general'}
-Platforms: ${platforms.join(', ')}
+  const prompt = `Generá ${count} ideas de contenido para el nicho: "${input.niche}"
+Idioma: ${input.language || 'es'} (español rioplatense, voseo)
+País: ${input.country || 'global'}
+Público: ${input.audience || 'general'}
+Plataformas: ${platforms.join(', ')}
 
-Content pillars (distribute ideas across these):
+Pilares de contenido (repartí las ideas entre estos):
 ${pillars.map((p) => `- ${p.name} (${p.percentage}%): ${p.description || p.type}`).join('\n')}
 
-For each idea provide:
-- Title: catchy title
-- Hook: attention-grabbing opening
-- Angle: unique perspective
-- Format: content format (reel, carousel, thread, etc.)
-- Platform: best platform
-- Pillar: which content pillar
-- Score: quality score (0-100)
-- Description: brief description
+Reglas:
+- Cada idea tiene que tener que ver con el nicho pedido y con algo concreto que la gente busca hoy.
+- Título y gancho: como los diría una persona, no como un folleto. Nada de "descubrí el poder de", "en el mundo de", promesas de resultados garantizados ni títulos con % inventados.
+- Ideas accionables y distintas entre sí: ninguna puede ser un rewording de otra.
+- Todas pensadas para terminar llevando al lector a un sitio web.
 
-Return JSON array with: title, hook, angle, format, platform, pillar, score, description.`;
+Para cada idea devolvé:
+- Title: título corto y concreto
+- Hook: primera línea que frene el scroll (máx. 10 palabras)
+- Angle: ángulo propio, distinto al de las demás
+- Format: formato (reel, carrusel, thread, etc.)
+- Platform: mejor plataforma
+- Pillar: pilar de contenido
+- Score: puntaje de calidad (0-100)
+- Description: descripción breve de qué se trata
+
+Respondé SOLO con JSON array: [{ title, hook, angle, format, platform, pillar, score, description }]`;
 
   const result = await provider.generateText({
     prompt,
-    system_prompt: 'You are a content strategist. Generate creative, engaging content ideas.',
+    system_prompt: COPYWRITER_SYSTEM,
     temperature: 0.9,
   });
 

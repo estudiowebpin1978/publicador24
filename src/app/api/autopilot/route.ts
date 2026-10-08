@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateTextWithFallback } from "@/lib/ai/multi-provider";
+import {
+  buildPostPrompt,
+  buildYouTubePrompt,
+  buildImagePrompt,
+  ensureSiteUrl,
+  isLotteryCampaign,
+  COPYWRITER_SYSTEM,
+  type CopyCampaignContext,
+} from "@/lib/ai/copywriter";
 import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getBufferAccount, getBufferChannels, createBufferPost, getBufferPosts, deleteBufferPost, isBufferRateLimited, type BufferChannel } from "@/lib/buffer/client";
@@ -65,6 +74,19 @@ async function loadRecentPublishedTexts(
   }
 }
 
+/**
+ * Devuelve una nota para el prompt con los últimos textos publicados, para que
+ * la IA no repita ganchos, frases ni estructuras ya usadas.
+ */
+function avoidRepetitionNote(recentTexts: string[]): string {
+  if (recentTexts.length === 0) return "";
+  const samples = recentTexts
+    .slice(0, 8)
+    .map((text) => `- ${text.replace(/\s+/g, " ").slice(0, 90)}`)
+    .join("\n");
+  return `Ya publicaste esto en este canal (NO repitas ganchos, frases, estructuras ni ideas; cambiá el ángulo):\n${samples}`;
+}
+
 function parseJsonContent<T>(text: string): T | null {
   if (!text) return null;
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "");
@@ -82,29 +104,6 @@ const PLATFORM_DAYS: Record<string, number[]> = {
   instagram: [1, 2, 3, 4, 5, 6, 0],
   facebook: [1, 2, 3, 4, 5],
   youtube: [2, 3, 4, 5, 6],
-};
-
-const PLATFORM_PROMPTS: Record<string, string> = {
-  tiktok: `Generá un post para TikTok sobre lotería/quinela.
-ESTILO: Entretenimiento, hooks rápidos, humor, tendencias, audios virales.
-INCLUYE: Emojis, llamado a la acción directo, gancho en primera línea.
-Tono: Joven, informal, argentino.
-Máximo 150 caracteres para el hook.`,
-  instagram: `Generá un post para Instagram sobre lotería/quinela.
-ESTILO: Prueba social, Reels, carruseles educativos, capturas de ganadores.
-INCLUYE: Paso a paso, sorteos inminentes, comprobantes de pago.
-Tono: Profesional pero cercano, argentino.
-Formato: Carrusel o Reel.`,
-  facebook: `Generá un post para Facebook sobre lotería/quinela.
-ESTILO: Comunidad, información oficial, extractos, pozos acumulados.
-INCLUYE: Enlaces directos, recordatorios, datos concretos.
-Tono: Informativo, adulto +35, argentino.
-Formato: Texto largo con enlace.`,
-  youtube: `Generá contenido para YouTube sobre lotería/quinela.
-ESTILO: Video educativo, tutorial, análisis de números, predicciones con IA.
-INCLUYE: Título llamativo (max 100 chars), descripción con timestamps, tags SEO.
-Tono: Profesional, educativo, argentino.
-Formato: Título + Descripción + Tags + Thumbnail prompt.`,
 };
 
 const IMAGE_STYLES: Record<string, string[]> = {
@@ -140,10 +139,10 @@ const IMAGE_STYLES: Record<string, string[]> = {
 
 const TRENDING_SOUNDS: Record<string, string[]> = {
   tiktok: [
-    "Sonido trending: original sound - quiniela_ia",
-    "Musica viral: busca loteria winner en sonidos",
-    "Audio popular: dinero facile trending",
-    "Sonido en tendencia: ganar es facil",
+    "Sonido trending: original sound",
+    "Musica viral: el audio que esté subiendo ahora",
+    "Audio popular: el que está sonando en todos lados",
+    "Sonido en tendencia: upbeat rápido",
     "Usa: success music para mas alcance",
   ],
   instagram: [
@@ -155,25 +154,47 @@ const TRENDING_SOUNDS: Record<string, string[]> = {
   ],
 };
 
-async function generatePlatformImage(platform: string): Promise<string> {
-  const styles = IMAGE_STYLES[platform] || IMAGE_STYLES.instagram;
-  const style = styles[Math.floor(Math.random() * styles.length)];
+async function generatePlatformImage(
+  platform: string,
+  campaign?: CopyCampaignContext | null
+): Promise<string> {
   const aspectRatio = platform === "youtube" ? "16:9" : "1:1";
+  // Imágenes curadas sólo para campañas de quiniela/lotería; para cualquier
+  // otro nicho el prompt sale de la campaña (o se omite el asset).
+  const lottery = isLotteryCampaign(campaign);
+  const campaignPrompt = lottery ? null : buildImagePrompt(platform, campaign);
+  const styles = IMAGE_STYLES[platform] || IMAGE_STYLES.instagram;
+  // Nunca usar estilos de quiniela en campañas de otros nichos (p. ej. cuando
+  // la campaña no tiene texto para derivar un prompt): prompt neutro genérico.
+  const neutralStyle = `Foto realista y natural para ${platform}, escena cotidiana de persona usando su teléfono, luz natural, sin texto ni logos, sin estética publicitaria`;
+  const style = campaignPrompt
+    ? campaignPrompt
+    : lottery
+      ? styles[Math.floor(Math.random() * styles.length)]
+      : neutralStyle;
 
   let url = "";
   try {
     const image = await generateImageWithFallback(style, aspectRatio);
     url = image.url;
   } catch {
-    const fallback = [
-      "quiniela-matematica.png",
-      "quiniela-patron.png",
-      "quiniela-metodo.png",
-      "quiniela-factores.png",
-      "quiniela-datos.png",
-    ];
-    url = `https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/${fallback[Math.floor(Math.random() * fallback.length)]}`;
+    if (lottery) {
+      const fallback = [
+        "quiniela-matematica.png",
+        "quiniela-patron.png",
+        "quiniela-metodo.png",
+        "quiniela-factores.png",
+        "quiniela-datos.png",
+      ];
+      url = `https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/${fallback[Math.floor(Math.random() * fallback.length)]}`;
+    } else {
+      // Sin imagen de respaldo no publicamos una foto de otro nicho: el caller
+      // decide (si hay assets de la campaña se usan; si no, se omite el asset).
+      return "";
+    }
   }
+
+  if (!url) return "";
 
   // Re-hostear en Supabase Storage: URL publica estable que Meta/Buffer/BulkPublish
   // pueden descargar sin depender de proveedores externos lentos.
@@ -259,7 +280,6 @@ export async function POST(request?: NextRequest) {
     for (const campaign of campaigns) {
       for (const channel of channels) {
         const platform = channel.service;
-        const platformPrompt = PLATFORM_PROMPTS[platform] || PLATFORM_PROMPTS.instagram;
 
         // Smart schedule: learns from analytics data
         let smartHour = 15;
@@ -291,24 +311,11 @@ export async function POST(request?: NextRequest) {
           continue;
         }
 
-        const prompt = `${platformPrompt}
-Campaña: ${campaign.name}
-Nichos: ${campaign.industry || "lotería/quinela"}
-Público: ${campaign.target_audience || "argentino general"}
-
-Generá EXACTAMENTE en este formato JSON:
-{
-  "hook": "Frase gancho para ${platform} (máximo 10 palabras)",
-  "body": "Cuerpo del post adaptado para ${platform} en español rioplatense",
-  "cta": "Call to action con URL quiniela-ia-two.vercel.app",
-  "hashtags": ["tag1", "tag2", "tag3", "tag4", "tag5"]
-}`;
+        const recentTexts = await loadRecentPublishedTexts(supabase, campaign.id, platform);
+        const prompt = buildPostPrompt(platform, campaign, avoidRepetitionNote(recentTexts));
 
         try {
-          const response = await generateTextWithFallback(
-            prompt,
-            `Sos un experto en marketing para ${platform}. Español rioplatense. Respondé SOLO con el JSON, sin texto adicional.`
-          );
+          const response = await generateTextWithFallback(prompt, COPYWRITER_SYSTEM);
 
           let content;
           try {
@@ -331,7 +338,7 @@ Generá EXACTAMENTE en este formato JSON:
           // imagen ni mandamos el post (se reintenta en el próximo ciclo).
           const duplicateCheck = maxSimilarityVs(
             `${content.hook} ${content.body || ""}`,
-            await loadRecentPublishedTexts(supabase, campaign.id, platform)
+            recentTexts
           );
           if (duplicateCheck.isDuplicate) {
             result.duplicatesBlocked++;
@@ -355,21 +362,30 @@ Generá EXACTAMENTE en este formato JSON:
           }
 
           const ownImage = pickCampaignImage(imagesFor(campaign.id));
-          const imageUrl = ownImage || (await generatePlatformImage(platform));
-          if (!ownImage) result.imagesGenerated++;
+          const imageUrl = ownImage || (await generatePlatformImage(platform, campaign));
+          if (!ownImage && imageUrl) result.imagesGenerated++;
           result.details.push(
-            `[${platform}] Imagen: ${ownImage ? "de la campaña" : "generada con IA"}`
+            `[${platform}] Imagen: ${ownImage ? "de la campaña" : imageUrl ? "generada con IA" : "omitida (sin asset propio)"}`
           );
 
           // Anti-bot: human time slot + humanized text
           const scheduledTime = pickHumanTimeSlot(platform);
           const humanText = humanizeText(
-            `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${(content.hashtags || []).join(" ")}`
+            `${ensureSiteUrl(
+              `${content.hook || ""}\n\n${content.body || ""}\n\n${content.cta || ""}`.trim(),
+              campaign
+            )}\n\n${(content.hashtags || []).join(" ")}`
           );
 
           const sounds = TRENDING_SOUNDS[platform];
-          const soundSuggestion = sounds ? sounds[Math.floor(Math.random() * sounds.length)] : "";
-          const text = soundSuggestion ? `${humanText}\n\n\uD83C\uDFB5 ${soundSuggestion}` : humanText;
+          // Sonido trending: sólo sugerencia interna (nunca se publica en el texto
+          // del post — se vería como ruido/bot en la descripción publicada).
+          if (sounds?.length) {
+            result.details.push(
+              `[${platform}] Sonido trending sugerido: ${sounds[Math.floor(Math.random() * sounds.length)]}`
+            );
+          }
+          const text = humanText;
 
           let metadata = {};
           let schedulingType: "automatic" | "notification" = "automatic";
@@ -389,7 +405,7 @@ Generá EXACTAMENTE en este formato JSON:
             schedulingType,
             mode: "addToQueue",
             metadata,
-            assets: [{ image: { url: imageUrl } }],
+            assets: imageUrl ? [{ image: { url: imageUrl } }] : undefined,
           });
 
           result.contentPublished++;
@@ -407,12 +423,13 @@ Generá EXACTAMENTE en este formato JSON:
           const { data: cp } = await supabase.from("content_pieces").insert({
             campaign_id: campaign.id,
             title: content.hook,
+            hook: content.hook,
             body: content.body,
             cta: content.cta,
             hashtags: content.hashtags || [],
             status: "PUBLISHED",
             platform,
-            media_urls: [imageUrl],
+            media_urls: imageUrl ? [imageUrl] : [],
             external_post_id: post.id,
             published_at: Date.now(),
           }).select("id").single();
@@ -481,21 +498,14 @@ Generá EXACTAMENTE en este formato JSON:
           try {
             await humanDelay("between_platforms");
 
-            const platformPrompt = PLATFORM_PROMPTS[platform] || PLATFORM_PROMPTS.instagram;
-            const prompt = `${platformPrompt}
-Campaña: ${campaign.name}
-Generá EXACTAMENTE en este formato JSON:
-{
-  "hook": "Frase gancho (máximo 10 palabras)",
-  "body": "Cuerpo del post en español rioplatense",
-  "cta": "CTA con URL quiniela-ia-two.vercel.app",
-  "hashtags": ["tag1", "tag2", "tag3"]
-}`;
-
-            const response = await generateTextWithFallback(
-              prompt,
-              `Sos experto en marketing para ${platform}. Respondé SOLO JSON.`
+            const rotationRecent = await loadRecentPublishedTexts(
+              supabase,
+              campaign.id,
+              platform
             );
+            const prompt = buildPostPrompt(platform, campaign, avoidRepetitionNote(rotationRecent));
+
+            const response = await generateTextWithFallback(prompt, COPYWRITER_SYSTEM);
 
             const content = parseJsonContent<{
               hook?: string;
@@ -512,7 +522,7 @@ Generá EXACTAMENTE en este formato JSON:
             // Anti-duplicados (mismo umbral 0.75 que el resto del sistema)
             const dupCheck = maxSimilarityVs(
               `${content.hook} ${content.body || ""}`,
-              await loadRecentPublishedTexts(supabase, campaign.id, platform)
+              rotationRecent
             );
             if (dupCheck.isDuplicate) {
               result.duplicatesBlocked++;
@@ -535,23 +545,25 @@ Generá EXACTAMENTE en este formato JSON:
             }
 
             const ownImage = pickCampaignImage(imagesFor(campaign.id));
-            const imageUrl = ownImage || (await generatePlatformImage(platform));
-            if (!ownImage) result.imagesGenerated++;
+            const imageUrl = ownImage || (await generatePlatformImage(platform, campaign));
+            if (!ownImage && imageUrl) result.imagesGenerated++;
             const humanText = humanizeText(
-              `${content.hook}\n\n${content.body}\n\n${content.cta}\n\n${(content.hashtags || []).join(" ")}`
+              `${ensureSiteUrl(
+                `${content.hook || ""}\n\n${content.body || ""}\n\n${content.cta || ""}`.trim(),
+                campaign
+              )}\n\n${(content.hashtags || []).join(" ")}`
             );
             const scheduledTime = pickHumanTimeSlot(platform);
 
             const rotResult = await publishWithRotation({
               text: humanText,
               platform,
-              imageUrl,
+              ...(imageUrl ? { imageUrl } : {}),
             });
 
             if (rotResult.success) {
               result.contentPublished++;
               result.contentGenerated++;
-              result.imagesGenerated++;
               await clearPublishFailure(platform);
               result.posts.push({ platform, id: rotResult.externalId || "", status: "published" });
               result.details.push(`[${platform}] ${rotResult.publisher} OK: ${rotResult.externalId}`);
@@ -559,12 +571,13 @@ Generá EXACTAMENTE en este formato JSON:
               await supabase.from("content_pieces").insert({
                 campaign_id: campaign.id,
                 title: content.hook,
+                hook: content.hook,
                 body: content.body,
                 cta: content.cta,
                 hashtags: content.hashtags || [],
                 status: "PUBLISHED",
                 platform,
-                media_urls: [imageUrl],
+                media_urls: imageUrl ? [imageUrl] : [],
                 external_post_id: rotResult.externalId || "",
                 published_at: Date.now(),
               });
@@ -614,27 +627,16 @@ Generá EXACTAMENTE en este formato JSON:
           for (const campaign of campaigns) {
             if (!quotaOk || startedThisCycle >= 2) break;
 
-            const ytPrompt = `Generá contenido para YouTube sobre: ${campaign.name}
-Nichos: ${campaign.industry || "lotería/quinela"}
-Público: ${campaign.target_audience || "gana-ganar a la quiniela de la ciudad (ex nacional)"}
+            const ytRecent = await loadRecentPublishedTexts(supabase, campaign.id, "youtube");
+            const ytPrompt = `${buildYouTubePrompt(campaign)}
 
-Objetivo: promocionar la app https://quiniela-ia-two.vercel.app/ — incluila como CTA en la descripción.
-Estilo: natural y realista (persona real, sin estética publicitaria forzada), formato reel/short.
 Cada video debe usar un enfoque distinto al anterior (tema, hook y encuadre siempre nuevos).
+Estilo: natural y realista (persona real, sin estética publicitaria forzada), formato reel/short.
 
-Generá EXACTAMENTE en este formato JSON:
-{
-  "title": "Título llamativo para YouTube (max 100 caracteres, con emojis, termina con #Shorts)",
-  "description": "Descripción completa con timestamps y el enlace https://quiniela-ia-two.vercel.app/ (min 200 caracteres)",
-  "tags": ["tag1", "tag2", "tag3", "tag4", "tag5", "tag6", "tag7", "tag8"],
-  "thumbnail_prompt": "Descripción de la imagen thumbnail para YouTube (natural, realista, relacionada a quiniela/app)"
-}`;
+${avoidRepetitionNote(ytRecent)}`;
 
             try {
-              const response = await generateTextWithFallback(
-                ytPrompt,
-                "Sos un experto en YouTube SEO y optimización de videos. Español rioplatense. Respondé SOLO con el JSON, sin texto adicional."
-              );
+              const response = await generateTextWithFallback(ytPrompt, COPYWRITER_SYSTEM);
 
               const ytContent = parseJsonContent<{
                 title?: string;
@@ -658,11 +660,14 @@ Generá EXACTAMENTE en este formato JSON:
               let thumbnailUrl = ytOwnImages[0] || "";
               if (!thumbnailUrl) {
                 try {
-                  const thumb = await generateImageWithFallback(
+                  // Prompt de la campaña (nunca un nicho hardcodeado).
+                  const thumbPrompt =
                     ytContent.thumbnail_prompt ||
-                      "YouTube thumbnail: quiniela lottery winning numbers with AI predictions, dramatic lighting, bold colors",
-                    "16:9"
-                  );
+                    buildImagePrompt("youtube", campaign) ||
+                    `Thumbnail de YouTube natural y realista sobre: ${campaign.name}${
+                      campaign.description ? ` — ${campaign.description.slice(0, 120)}` : ""
+                    }`;
+                  const thumb = await generateImageWithFallback(thumbPrompt, "16:9");
                   thumbnailUrl = await hostImagePublicly(thumb.url, "youtube");
                   result.imagesGenerated++;
                 } catch {}
@@ -671,8 +676,15 @@ Generá EXACTAMENTE en este formato JSON:
               const started = await startYouTubeRender(supabase, {
                 campaignId: campaign.id,
                 title: ytContent.title,
-                description:
-                  ytContent.description + "\n\n" + (ytContent.tags || []).join(", "),
+                description: ensureSiteUrl(
+                  [
+                    (ytContent.description || "").trim(),
+                    (ytContent.tags || []).length ? (ytContent.tags || []).join(", ") : "",
+                  ]
+                    .filter(Boolean)
+                    .join("\n\n"),
+                  campaign
+                ),
                 tags: ytContent.tags || [],
                 thumbnailUrl: thumbnailUrl || undefined,
                 images: ytOwnImages,

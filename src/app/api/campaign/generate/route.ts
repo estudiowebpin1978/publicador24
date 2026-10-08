@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAIProvider } from "@/lib/ai/provider";
 import { wrapProviderWithCostTracking, getTodayCost } from "@/lib/ai/cost-tracker";
 import { checkPublicationSafety } from "@/lib/ai/publication-safety";
+import { COPYWRITER_SYSTEM, getSiteUrl } from "@/lib/ai/copywriter";
 
 interface CampaignInput {
   businessName: string;
@@ -33,27 +34,70 @@ interface GeneratedPiece extends CalendarSlot {
   safetyCheck: { approved: boolean; score: number; reason?: string };
 }
 
-function generateTemplateCalendar(input: CampaignInput): CalendarSlot[] {  const days = ["Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo"];
+const STOPWORDS = new Set([
+  "para", "como", "más", "mas", "este", "esta", "esto", "ese", "esa", "eso", "con",
+  "por", "una", "uno", "unos", "unas", "del", "los", "las", "que", "desde", "hacia",
+  "sobre", "entre", "muy", "también", "tambien", "cuando", "donde", "dónde", "qué",
+  "cómo", "servicios", "servicio", "negocio", "negocios", "empresa", "empresas",
+]);
+
+/** Palabras clave del nicho, para hashtags y copy que tengan que ver con lo pedido. */
+function nicheKeywords(text: string, max: number): string[] {
+  return (text || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 5 && !STOPWORDS.has(w))
+    .slice(0, max);
+}
+
+function generateTemplateCalendar(input: CampaignInput): CalendarSlot[] {
+  const site = getSiteUrl({ url: input.website });
+  const business = input.businessName.trim();
+  const desc = (input.description || "").trim();
+  const descShort = desc.length > 140 ? `${desc.slice(0, 137).trimEnd()}…` : desc;
+  const goal = (input.objective || "").trim();
+
+  // Respaldo cuando la IA no responde: siempre habla del negocio pedido,
+  // nunca de un nicho genérico, y siempre lleva al sitio.
   const hookTemplates = [
-    `¿Sabías que el ${80}% de los negocios pierden clientes por no tener presencia en redes?`,
-    `Te voy a revelar el método que uso para atraer clientes con contenido auténtico`,
-    `No es suerte. Es estrategia. Así genero demanda real para negocios`,
-    `Si todavía no usás redes sociales para tu negocio, estás dejando plata sobre la mesa`,
-    `El secreto que separa a los negocios que crecen de los que se estancan`,
-    `3 errores que cometen todos los negocios en redes (y cómo evitarlos)`,
-    `Transformá tu negocio con este método basado en datos y contenido auténtico`,
+    `${business}: lo que casi nadie te cuenta antes de empezar.`,
+    `¿Viste cómo ${business} resuelve algo que a vos te jode hace meses?`,
+    `Esto es lo que nadie te dice sobre ${descShort.split(/[.,;]/)[0].toLowerCase()}.`,
+    `Si todavía no probaste esto, te falta un detalle — no suerte.`,
+    `La razón por la que ${business} no depende del boca a boca.`,
+    `Tres errores tontos que se cometen acá (y te hacen perder plata).`,
+    `Lo probé, lo comparé y me quedé con esto. Acá te cuento por qué.`,
   ];
   const captionTemplates = [
-    `El éxito no es solo suerte. Es estrategia.\n\nCon el contenido correcto, puedo atraer clientes que realmente necesitan tu producto o servicio.\n\nAsí es como genero demanda, paso a paso.\n\n¿Querés ver cómo funciona? Link en bio.`,
-    `Cada negocio tiene una historia. Tu contenido la cuenta.\n\nNo adivino. Creo contenido que conecta. Los datos son los que mandan.\n\nSi querés dejar de depender del boca a boca, esta es tu oportunidad.\n\nDescubrí mi método → link en bio.`,
-    `El ${90}% de los negocios pierden oportunidades en redes. Yo estoy en el otro ${10}%.\n\nLa diferencia? Creo contenido auténtico que genera confianza.\n\nNo es magia. Es estrategia.\n\nUnite a los que crecen distinto.`,
-    `Pensá tu negocio como un inversor piensa la inversión.\n\nDatos. Tendencias. Estrategia. Y contenido auténtico.\n\nAsí genero clientes todas las semanas.\n\n¿Querés probar? Link en bio.`,
-    `Hoy te muestro cómo el contenido cambió mi forma de crecer.\n\nAntes: esperanza.\nAhora: datos + contenido = resultados.\n\nEl futuro de tu negocio es inteligente.`,
-    `No necesitas ser experto para crecer en redes.\n\nNecesitás la estrategia correcta. Y el contenido es esa herramienta.\n\nAnalizo tendencias, detecto lo que funciona y te doy los mejores resultados.`,
-    `Cada semana mejoro mi método. Gracias a la estrategia.\n\nLos datos no mienten. Y el contenido auténtico conecta mejor que cualquier anuncio.\n\n¿Querés ver los resultados? Seguí mi perfil.`,
+    `Corto y claro: ${descShort}\n\nNo es magia, es hacer las cosas bien y de forma consistente.\n\nMirá cómo se ve en ${site}.`,
+    `Lo que buscaba era simple: algo que funcione sin vueltas.\n\n${descShort}\n\nSi te sirve, entrá a ${site} y fijate vos.`,
+    `Nadie te va a avisar cuando algo te está costando plata.\n\n${descShort}\n\nPor eso lo miro siempre desde ${site}.`,
+    `Antes hacía esto a mano y perdía horas.\n\n${descShort}\n\nLo dejé de lado y no volví atrás. Detalles en ${site}.`,
+    `La pregunta no es si lo necesitás, sino cuándo te vas a dar cuenta.\n\n${descShort}\n\nMirá el paso a paso en ${site}.`,
+    `Probé un montón de opciones y casi todas eran lo mismo con otro nombre.\n\n${descShort}\n\nEste fue el que me quedó. Info en ${site}.`,
+    `Si te quedaste con la duda, hacé la prueba vos:\n\n${descShort}\n\nEntrá a ${site} y contame qué te pareció.`,
   ];
-  const ctas = ["Link en bio", "Seguí para más", "Comentá tu opinión", "DM para info", "Unite al grupo", "Probalo gratis", "Dejá tu like"];
-  const hashtagPool = ["#marketing", "#redessociales", "#negocios", "#emprendedores", "#contenido", "#estrategia", "#marketingdigital", "#crecimiento", "#clientes", "#branding", "#socialmedia", "#emprendimiento", "#venderonline", "#negociosdigitales", "#éxito"];
+  const ctas = [
+    `Mirá más en ${site}`,
+    `Entrá a ${site}`,
+    `Probalo en ${site}`,
+    `Comentá qué te pareció`,
+    `DM si te queda alguna duda`,
+    `Guardalo para después`,
+    `Pasalo a alguien que lo necesite`,
+  ];
+  const tagWords = nicheKeywords(`${desc} ${business}`, 12);
+  const hashtagPool = [
+    ...tagWords.map((w) => `#${w}`),
+    "#argentina",
+    "#recomendacion",
+    "#tips",
+    "#producto",
+    "#servicio",
+    "#hoy",
+  ];
 
   const platformTypes: Record<string, string[]> = {
     instagram: ["reel", "carousel", "post", "story"],
@@ -101,9 +145,28 @@ async function tryAIAnalysis(input: CampaignInput, provider: ReturnType<typeof g
 
 async function tryAIGeneratePiece(slot: CalendarSlot, input: CampaignInput, provider: ReturnType<typeof getAIProvider>) {
   try {
+    const site = getSiteUrl({ url: input.website });
     const result = await provider.generateText({
-      prompt: `Generá un contenido corto para ${slot.platform} sobre: ${input.businessName} - ${input.description}. Hook: "${slot.hook}". Objetivo: ${input.objective}. Respondé JSON: { "hook": "...", "caption": "...", "hashtags": ["#tag1"] }`,
-      system_prompt: "Sos un copywriter experto. Español rioplatense. JSON válido.",
+      prompt: `Generá el contenido de un día del calendario para ${slot.platform}.
+
+CONTEXTO
+- Negocio: ${input.businessName}
+- De qué se trata: ${input.description}
+- Objetivo de la campaña: ${input.objective}
+- Sitio web (CTA obligatoria): ${site}
+- Etapa del embudo: ${slot.funnelStage}
+- Ángulo del post: ${slot.angle}
+- Gancho sugerido (podés mejorarlo): "${slot.hook}"
+
+REGLAS (obligatorias)
+- Español rioplatense, tono de persona real: frases cortas y largas, sin relleno.
+- Nada de estructura de nota ni de IA: prohibido "En este post", "descubrí el poder de", listas genéricas de beneficios y promesas de resultados garantizados.
+- Que tenga que ver con el negocio descrito, no con un nicho genérico.
+- Cerrá con una invitación concreta a entrar a ${site}, con un motivo real para el lector.
+- Primera línea que frene el scroll.
+
+Respondé SOLO JSON: { "hook": "...", "caption": "...", "hashtags": ["#tag1"] }`,
+      system_prompt: COPYWRITER_SYSTEM,
       max_tokens: 600,
     });
     const match = result.text.match(/```json\s*([\s\S]*?)```/);

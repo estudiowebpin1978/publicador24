@@ -1,5 +1,6 @@
 import type { SocialPlatform } from '@/types';
 import { getAIProvider } from './provider';
+import { COPYWRITER_SYSTEM } from './copywriter';
 import type { RepurposeInput, RepurposeResult, RepurposedVariant } from './engines';
 
 const PLATFORM_SPECS: Record<SocialPlatform, { format: string; maxCaption: number; features: string }> = {
@@ -15,31 +16,39 @@ export async function repurposeContent(input: RepurposeInput): Promise<Repurpose
   const provider = getAIProvider();
   const platforms = input.targetPlatforms || (['tiktok', 'instagram', 'facebook', 'x', 'youtube', 'linkedin'] as SocialPlatform[]);
 
-  const prompt = `Repurpose this content for multiple platforms:
+  const prompt = `Adaptá este contenido para cada plataforma (que cada versión suene a persona distinta, no a la misma frase reciclada):
 
-ORIGINAL CONTENT:
+CONTENIDO ORIGINAL:
 "${input.originalContent}"
 
-TOPIC: ${input.topic}
-LANGUAGE: ${input.language || 'es'}
-TONE: ${input.tone || 'engaging'}
-AUDIENCE: ${input.audience || 'general'}
+TEMA: ${input.topic}
+IDIOMA: ${input.language || 'es'} (español rioplatense, voseo)
+TONO: ${input.tone || 'cercano'}
+PÚBLICO: ${input.audience || 'general'}
 
-TARGET PLATFORMS: ${platforms.join(', ')}
+PLATAFORMAS OBJETIVO: ${platforms.join(', ')}
 
-For each platform, create:
-- Hook: attention-grabbing first line
-- Caption: platform-optimized text
-- Hashtags: 5-10 relevant hashtags
-- Mentions: relevant accounts
-- CTA: call to action
-- Format: recommended content format
+Reglas por plataforma:
+- Respetá el formato y la longitud de cada una (X: máximo 280 caracteres; las demás, medias).
+- Primera línea que frene el scroll y desarrollo concreto, sin estructura de transcripción.
+- Nada de "En este post", "descubrí el poder de", listas genéricas ni promesas de resultados garantizados.
+- CTA distinta en cada plataforma, siempre llevando al sitio web.
+- Hashtags específicos del tema, en el idioma pedido.
 
-Return JSON array with objects containing: platform, hook, caption, hashtags, mentions, cta, format, score (0-100).`;
+Para cada plataforma creá:
+- Hook: primera línea que frene el scroll
+- Caption: texto optimizado para esa plataforma
+- Hashtags: 5 a 10 hashtags relevantes
+- Mentions: cuentas relevantes (o vacío)
+- CTA: llamado a la acción con el sitio web
+- Format: formato recomendado
+- Score: 0 a 100
+
+Respondé SOLO con JSON array: [{ platform, hook, caption, hashtags, mentions, cta, format, score }]`;
 
   const result = await provider.generateText({
     prompt,
-    system_prompt: 'You are a content repurposing expert. Adapt content for each platform\'s unique style and audience.',
+    system_prompt: COPYWRITER_SYSTEM,
     temperature: 0.8,
   });
 
