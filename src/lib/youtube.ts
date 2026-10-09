@@ -51,21 +51,35 @@ export async function tryGetSavedToken(): Promise<string | null> {
       .eq("user_id", "00000000-0000-0000-0000-000000000000")
       .single();
 
-    if (!data?.access_token || data.access_token === "PENDING_EXCHANGE") {
-      return null;
+    if (data?.access_token && data.access_token !== "PENDING_EXCHANGE") {
+      const testRes = await fetch(
+        "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true",
+        { headers: { Authorization: `Bearer ${data.access_token}` } }
+      );
+
+      if (testRes.ok) {
+        return data.access_token;
+      }
+
+      if (data.refresh_token) {
+        const newToken = await refreshYouTubeToken(data.refresh_token);
+        if (newToken) return newToken;
+      }
     }
 
-    const testRes = await fetch(
-      "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true",
-      { headers: { Authorization: `Bearer ${data.access_token}` } }
-    );
-
-    if (testRes.ok) {
-      return data.access_token;
+    // Fallback: si la DB no tiene token utilizable (fila borrada, refresh
+    // revocado), se usa el par de env vars como última opción.
+    const envAccess = process.env.YOUTUBE_ACCESS_TOKEN;
+    const envRefresh = process.env.YOUTUBE_REFRESH_TOKEN;
+    if (envAccess && envAccess !== "PENDING_EXCHANGE") {
+      const testRes = await fetch(
+        "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true",
+        { headers: { Authorization: `Bearer ${envAccess}` } }
+      );
+      if (testRes.ok) return envAccess;
     }
-
-    if (data.refresh_token) {
-      const newToken = await refreshYouTubeToken(data.refresh_token);
+    if (envRefresh) {
+      const newToken = await refreshYouTubeToken(envRefresh);
       if (newToken) return newToken;
     }
 

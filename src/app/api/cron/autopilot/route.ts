@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { POST as autopilotPOST } from "@/app/api/autopilot/route";
 
+// El ciclo incluye render de video con ffmpeg (TikTok/YouTube). Hobby permite
+// hasta 300s por función (docs de planes de Vercel): 120 alcanza para cubrir
+// todas las campañas en una sola pasada.
+export const maxDuration = 120;
+
 async function runAutopilot(request: NextRequest) {
   // Check auth: header OR query param
   const authHeader = request.headers.get("authorization");

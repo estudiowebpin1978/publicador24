@@ -94,21 +94,22 @@ export async function bpFetch<T>(path: string, options: RequestInit = {}): Promi
   });
 
   if (res.status === 429) {
+    const body429 = await res.text().catch(() => "");
     markRateLimited(msUntilDailyReset());
-    throw new Error("BulkPublish rate limited");
+    throw new Error(`BulkPublish rate limited (429${body429 ? `: ${body429.slice(0, 160)}` : ""})`);
   }
 
   if (!res.ok) {
     const body = await res.text();
     if (/DAILY_QUOTA_EXCEEDED|quota exceeded/i.test(body)) {
       markRateLimited(msUntilDailyReset());
-      throw new Error("BulkPublish rate limited");
+      throw new Error(`BulkPublish rate limited (cuota: ${body.slice(0, 160)})`);
     }
     // Límite del plan (p.ej. 3 posts/día gratis): reintentar hoy solo gasta
     // llamadas de la cuota diaria, así que cortamos hasta mañana.
     if (/plan limit|upgrade|not available in your plan|maximum (of )?\d+ post|post limit|reached your limit/i.test(body)) {
       markRateLimited(msUntilDailyReset());
-      throw new Error("BulkPublish rate limited");
+      throw new Error(`BulkPublish rate limited (plan: ${body.slice(0, 160)})`);
     }
     throw new Error(`BulkPublish ${res.status}: ${body}`);
   }
@@ -276,6 +277,15 @@ export async function normalizeMedia(url: string): Promise<string> {
   }
 }
 
+/**
+ * Borra el bloqueo de rate limit tanto en memoria como en la fila persistida.
+ * Importante: la instancia serverless arranca "limpia" (localUntil=0), así que
+ * clearRateLimit() por sí solo no haría nada y el bloqueo volvería a cargarse
+ * desde Supabase en el próximo ciclo.
+ */
 export function resetRateLimit() {
-  clearRateLimit();
+  localUntil = 0;
+  remoteUntil = 0;
+  lastRemoteCheck = 0;
+  void persist(0);
 }

@@ -26,10 +26,17 @@ import {
 import { hostImagePublicly } from "@/lib/media-hosting";
 import { getAllCampaignImages, pickCampaignImage } from "@/lib/campaign-images";
 import { processPendingRenders, startYouTubeRender, isVideoRenderBlocked } from "@/lib/video/render-queue";
+import { buildTikTokVideo, selectTikTokFrames } from "@/lib/video/tiktok-video";
 import { checkFFmpeg } from "@/lib/video/ffmpeg";
 import { maxSimilarityVs } from "../../../../shared/text-similarity";
 import { findProhibitedClaims } from "../../../../shared/prohibited-claims";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+// Render de video con ffmpeg (TikTok/YouTube) dentro del ciclo. En Hobby,
+// Vercel permite funciones de hasta 300s (docs de planes); 120 deja holgura
+// para cubrir todas las campañas en un solo paso del cron sin acercarse al
+// límite.
+export const maxDuration = 120;
 
 interface LoopResult {
   timestamp: number;
@@ -42,7 +49,15 @@ interface LoopResult {
   details: string[];
   posts: { platform: string; id: string; status: string; scheduledAt?: string }[];
   youtubeReady?: number;
+  /** Presente cuando YouTube quedó sin token: el link de re-autorización. */
+  youtubeAuthUrl?: string;
 }
+
+/** Formatea milisegundos como "12.3s" para los detalles de tiempos. */
+const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
+
+/** Link de re-autorización de YouTube (Google revocó el token en prod). */
+const YOUTUBE_AUTH_URL = "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback";
 
 const TIME_SLOTS_UTC: number[] = [15, 16, 17, 20, 21, 23, 0, 1];
 
@@ -220,7 +235,8 @@ export async function POST(request?: NextRequest) {
       .from("campaigns")
       .select("*")
       .eq("status", "ACTIVE")
-      .limit(3);
+      .order("created_at", { ascending: true })
+      .limit(50);
 
     if (!campaigns || campaigns.length === 0) {
       return NextResponse.json({ ...result, details: ["No hay campañas activas"] });
@@ -456,13 +472,25 @@ export async function POST(request?: NextRequest) {
       }
     }
 
-    // FALLBACK: Rotation (Meta/BulkPublish) for platforms not handled by Buffer
-    if (bufferSkipped || result.contentPublished === 0) {
+    // FALLBACK: Rotation (Meta/BulkPublish) for platforms not handled by Buffer.
+    // Siempre corre: TikTok no tiene canal en Buffer, así que antes solo se
+    // publicaba cuando Buffer fallaba por completo. Cada plataforma que Buffer
+    // SÍ cubre queda salteada por el `channels.find` de adentro.
+    {
+      // Presupuesto de tiempo: la función se corta en maxDuration. Si no queda
+      // margen para IA + render + publicar, esa campaña se posterga al próximo
+      // ciclo en vez de empezar algo que no va a terminar.
+      const rotationDeadline = Date.now() + 80_000;
+      const MIN_REMAINING_MS = 25_000;
+      let outOfTime = false;
+
       for (const campaign of campaigns) {
+        if (outOfTime) break;
         // Facebook queda fuera a pedido del usuario: no consigue el permiso
         // pages_manage_posts (#240) y no vale la pena gastar IA en fallos.
         // Para reactivarlo: agregar "facebook" a esta lista.
         for (const platform of ["instagram", "tiktok"]) {
+          if (outOfTime) break;
           if (channels.find((c) => c.service === platform)) continue;
 
           // Sin proveedor libre no tiene sentido generar contenido: se gastaría
@@ -495,8 +523,18 @@ export async function POST(request?: NextRequest) {
             continue;
           }
 
+          // ¿Queda tiempo para terminar este post dentro del ciclo?
+          if (Date.now() + MIN_REMAINING_MS > rotationDeadline) {
+            outOfTime = true;
+            result.details.push(
+              `[${platform}] ${campaign.name}: sin tiempo en este ciclo — se publica en el próximo`
+            );
+            break;
+          }
+
           try {
             await humanDelay("between_platforms");
+            const tStart = Date.now();
 
             const rotationRecent = await loadRecentPublishedTexts(
               supabase,
@@ -506,6 +544,7 @@ export async function POST(request?: NextRequest) {
             const prompt = buildPostPrompt(platform, campaign, avoidRepetitionNote(rotationRecent));
 
             const response = await generateTextWithFallback(prompt, COPYWRITER_SYSTEM);
+            const tAi = Date.now();
 
             const content = parseJsonContent<{
               hook?: string;
@@ -547,6 +586,23 @@ export async function POST(request?: NextRequest) {
             const ownImage = pickCampaignImage(imagesFor(campaign.id));
             const imageUrl = ownImage || (await generatePlatformImage(platform, campaign));
             if (!ownImage && imageUrl) result.imagesGenerated++;
+
+            // TikTok (BulkPublish) rechaza posts sin video. Se arma un reel
+            // vertical con ffmpeg a partir de las imágenes de la campaña y se
+            // publica ese video en lugar de una foto estática.
+            let videoUrl = "";
+            if (platform === "tiktok") {
+              const frames = selectTikTokFrames(ownImage || "", imageUrl, imagesFor(campaign.id));
+              const video = await buildTikTokVideo({ images: frames, audioText: content.hook });
+              videoUrl = video.url;
+              result.details.push(
+                videoUrl
+                  ? `[tiktok] Video generado (${video.frames} frames / ${video.seconds}s)`
+                  : `[tiktok] Sin video (${video.error}) — se omite en vez de publicar sin media`
+              );
+              if (!videoUrl) continue;
+            }
+
             const humanText = humanizeText(
               `${ensureSiteUrl(
                 `${content.hook || ""}\n\n${content.body || ""}\n\n${content.cta || ""}`.trim(),
@@ -554,12 +610,20 @@ export async function POST(request?: NextRequest) {
               )}\n\n${(content.hashtags || []).join(" ")}`
             );
             const scheduledTime = pickHumanTimeSlot(platform);
+            const tMedia = Date.now();
 
             const rotResult = await publishWithRotation({
               text: humanText,
               platform,
+              ...(videoUrl ? { videoUrl } : {}),
               ...(imageUrl ? { imageUrl } : {}),
             });
+            const tPub = Date.now();
+            result.details.push(
+              `[${platform}] tiempos ${campaign.name}: ia ${secs(tAi - tStart)}` +
+                ` · media ${secs(tMedia - tAi)} · publicar ${secs(tPub - tMedia)}` +
+                ` · total ${secs(tPub - tStart)}`
+            );
 
             if (rotResult.success) {
               result.contentPublished++;
@@ -577,7 +641,7 @@ export async function POST(request?: NextRequest) {
                 hashtags: content.hashtags || [],
                 status: "PUBLISHED",
                 platform,
-                media_urls: imageUrl ? [imageUrl] : [],
+                media_urls: videoUrl ? [videoUrl] : imageUrl ? [imageUrl] : [],
                 external_post_id: rotResult.externalId || "",
                 published_at: Date.now(),
               });
@@ -595,6 +659,7 @@ export async function POST(request?: NextRequest) {
     // AUTO-YOUTUBE: primero retoma renders pendientes; si no hay ninguno, arma uno nuevo.
     // El render corre en Shotstack (gratis) y se retoma en el siguiente ciclo: así nunca
     // se supera el timeout de 60s de Vercel.
+    let youtubeAuthNeeded = false;
     try {
       const youtubeToken = await tryGetSavedToken();
       if (youtubeToken) {
@@ -623,9 +688,12 @@ export async function POST(request?: NextRequest) {
             result.details.push("[youtube] Cuota diaria alcanzada. Se retoma mañana.");
           }
 
+          // El límite real lo pone la cuota diaria (3/día): así cada campaña
+          // activa recibe video en el mismo ciclo, no solo las dos primeras.
+          const ytStartLimit = campaigns.length;
           let startedThisCycle = 0;
           for (const campaign of campaigns) {
-            if (!quotaOk || startedThisCycle >= 2) break;
+            if (!quotaOk || startedThisCycle >= ytStartLimit) break;
 
             const ytRecent = await loadRecentPublishedTexts(supabase, campaign.id, "youtube");
             const ytPrompt = `${buildYouTubePrompt(campaign)}
@@ -723,7 +791,11 @@ ${avoidRepetitionNote(ytRecent)}`;
           }
         }
       } else {
-        result.details.push("[youtube] Token no disponible — saltando publicación YouTube");
+        youtubeAuthNeeded = true;
+        result.youtubeAuthUrl = YOUTUBE_AUTH_URL;
+        result.details.push(
+          `[youtube] Token de Google no disponible (expirado o revocado). Re-autorizá la cuenta para volver a publicar: ${YOUTUBE_AUTH_URL}`
+        );
       }
     } catch (e) {
       result.errors.push(`[youtube] ${e instanceof Error ? e.message : "error"}`);
@@ -754,6 +826,17 @@ ${avoidRepetitionNote(ytRecent)}`;
       );
     } catch (e) {
       result.details.push(`[Auto] BulkPublish cleanup: ${e instanceof Error ? e.message : "error"}`);
+    }
+
+    // Aviso visible en el dashboard: sin re-autorizar no se sube ningún video.
+    if (youtubeAuthNeeded) {
+      await supabase.from("notifications").insert({
+        type: "warning",
+        title: "YouTube desconectado",
+        message: `Google expiró o revocó el token: no se publican videos hasta volver a conectar la cuenta. Link: ${YOUTUBE_AUTH_URL}`,
+        read: false,
+        created_at: Date.now(),
+      });
     }
 
     await supabase.from("notifications").insert({

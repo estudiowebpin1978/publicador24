@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import { getSupabaseAdmin } from "@/lib/supabase/server"
 
 const BUCKET = "media"
@@ -49,5 +50,58 @@ export async function hostImagePublicly(sourceUrl: string, kind: string = "post"
   } catch (e) {
     console.warn("[media-hosting] failed:", e instanceof Error ? e.message : e)
     return sourceUrl
+  }
+}
+
+/**
+ * Sube un mp4 local a Supabase Storage y devuelve la URL publica estable.
+ * TikTok (via BulkPublish) exige un VIDEO, no una imagen: sin esta URL el
+ * post se rechaza con 400 "tiktok video requires a video".
+ */
+export async function hostVideoPublicly(localPath: string): Promise<string> {
+  const bytes = readFileSync(localPath)
+  const path = `videos/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`
+  const supabase = getSupabaseAdmin()
+
+  let { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, bytes, { contentType: "video/mp4", upsert: false })
+
+  // El bucket `media` fue creado para imágenes y viene con mime types
+  // restringidos: si rechaza el mp4 se habilita video/mp4 y se reintenta una
+  // vez (una sola vez por instancia, para no repetir llamadas de admin).
+  if (error && /mime|content.?type/i.test(error.message) && !videoMimeEnsured) {
+    videoMimeEnsured = true
+    await allowVideoMime()
+    ;({ error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, bytes, { contentType: "video/mp4", upsert: false }))
+  }
+
+  if (error) {
+    throw new Error(`upload de video falló: ${error.message}`)
+  }
+
+  return hostedObjectUrl(path)
+}
+
+let videoMimeEnsured = false
+
+async function allowVideoMime(): Promise<void> {
+  try {
+    const supabase = getSupabaseAdmin()
+    const { data } = await supabase.storage.getBucket(BUCKET)
+    const allowed = data?.allowed_mime_types || []
+    // null/[] = sin restricción; si hay lista, se agrega video/mp4 sin tocar
+    // el resto de los permisos del bucket.
+    if (allowed.length > 0 && !allowed.includes("video/mp4")) {
+      await supabase.storage.updateBucket(BUCKET, {
+        public: data?.public ?? true,
+        allowedMimeTypes: [...allowed, "video/mp4"],
+        ...(data?.file_size_limit ? { fileSizeLimit: data.file_size_limit } : {}),
+      })
+    }
+  } catch (e) {
+    console.warn("[media-hosting] no se pudo habilitar video/mp4:", e instanceof Error ? e.message : e)
   }
 }

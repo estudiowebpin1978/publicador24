@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test test/text-similarity.test.ts test/duplicate-detector.test.ts test/publication-safety.test.ts test/copywriter.test.ts",
+    "test": "node --test test/text-similarity.test.ts test/duplicate-detector.test.ts test/publication-safety.test.ts test/copywriter.test.ts test/tiktok-video.test.ts",
     "convex:dev": "npx convex dev",
     "convex:deploy": "npx convex deploy"
   },

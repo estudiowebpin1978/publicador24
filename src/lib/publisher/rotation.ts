@@ -8,6 +8,12 @@ interface PublishInput {
   text: string;
   platform: string;
   imageUrl?: string;
+  /**
+   * TikTok exige un VIDEO (BulkPublish devuelve 400 "tiktok video requires a
+   * video" si se manda solo imagen o nada). Si se pasa, tiene prioridad sobre
+   * imageUrl como media del post.
+   */
+  videoUrl?: string;
   scheduledAt?: Date;
 }
 
@@ -90,7 +96,11 @@ async function publishViaBuffer(input: PublishInput): Promise<PublishResult> {
     schedulingType,
     mode: "addToQueue",
     metadata,
-    assets: input.imageUrl ? [{ image: { url: input.imageUrl } }] : [],
+    assets: input.videoUrl
+      ? [{ video: { url: input.videoUrl } }]
+      : input.imageUrl
+        ? [{ image: { url: input.imageUrl } }]
+        : [],
   });
 
   return { publisher: "buffer", success: true, externalId: post.id };
@@ -140,7 +150,8 @@ async function publishViaBulkPublish(input: PublishInput): Promise<PublishResult
   const result = await createPost({
     text: input.text,
     channelIds: [channel.id],
-    mediaUrls: input.imageUrl ? [input.imageUrl] : [],
+    // TikTok exige video: si hay videoUrl se manda ese; si no, la imagen.
+    mediaUrls: input.videoUrl ? [input.videoUrl] : input.imageUrl ? [input.imageUrl] : [],
     scheduledAt: input.scheduledAt?.toISOString(),
     publishNow: !input.scheduledAt,
   });

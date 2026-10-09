@@ -13,6 +13,12 @@ export interface LocalVideoInput {
   audioText?: string;
   /** Reel/Short vertical 1080x1920 (default). false → 1280x720 horizontal. */
   vertical?: boolean;
+  /**
+   * Vertical 720x1280 en vez de 1080x1920. TikTok acepta 720p y la codificación
+   * tarda ~4x menos, lo que deja margen para publicar todas las campañas en un
+   * solo ciclo del cron.
+   */
+  vertical720?: boolean;
 }
 
 export interface LocalVideoResult {
@@ -21,7 +27,7 @@ export interface LocalVideoResult {
   withAudio: boolean;
 }
 
-function downloadFile(url: string, destPath: string): Promise<void> {
+function downloadFile(url: string, destPath: string, timeoutMs = 30_000): Promise<void> {
   return new Promise((resolve, reject) => {
     const attempt = (target: string, redirects = 0): void => {
       if (redirects > 5) return reject(new Error("demasiados redirects"));
@@ -46,7 +52,7 @@ function downloadFile(url: string, destPath: string): Promise<void> {
         }
       );
       req.on("error", reject);
-      req.setTimeout(30_000, () => req.destroy(new Error("timeout descarga")));
+      req.setTimeout(timeoutMs, () => req.destroy(new Error("timeout descarga")));
     };
     attempt(url);
   });
@@ -60,7 +66,9 @@ async function generateTTS(text: string): Promise<string | null> {
     const clean = (text || "").replace(/\s+/g, " ").trim().slice(0, 180);
     if (!clean) return null;
     const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=es&q=${encodeURIComponent(clean)}`;
-    await downloadFile(url, audioPath);
+    // TTS es best-effort: si tarda más de 8s no vale la pena frenar el ciclo
+    // completo (el video sale mudo y listo).
+    await downloadFile(url, audioPath, 8_000);
     const duration = await probeDuration(audioPath);
     if (!duration || duration < 1) return null;
     return audioPath;
@@ -117,13 +125,21 @@ export async function renderLocalVideo(input: LocalVideoInput): Promise<LocalVid
       input.vertical === false
         ? "scale=1280:720:force_original_aspect_ratio=decrease," +
           "pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p"
-        : "scale=1080:1920:force_original_aspect_ratio=increase," +
-          "crop=1080:1920,format=yuv420p";
+        : input.vertical720
+          ? "scale=720:1280:force_original_aspect_ratio=increase," +
+            "crop=720:1280,format=yuv420p"
+          : "scale=1080:1920:force_original_aspect_ratio=increase," +
+            "crop=1080:1920,format=yuv420p";
 
     const args = ["-y", "-f", "concat", "-safe", "0", "-i", concatFile];
-    if (withAudio && audioPath) args.push("-i", audioPath);
+    if (withAudio && audioPath) {
+      args.push("-i", audioPath);
+    } else {
+      // Pista de audio silenciosa: algunos (TikTok) rechazan mp4 sin audio.
+      args.push("-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100");
+    }
     args.push("-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "26");
-    if (withAudio && audioPath) args.push("-c:a", "aac", "-b:a", "96k");
+    args.push("-c:a", "aac", "-b:a", "64k");
     args.push("-t", String(totalDuration), outputPath);
 
     await runFfmpeg(args, 110_000);
