@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { selectTikTokFrames } from "../src/lib/video/tiktok-frames.ts";
+import { selectTikTokFrames, planTikTokVideo } from "../src/lib/video/tiktok-frames.ts";
 
 test("selectTikTokFrames prefiere la imagen propia de la campaña", () => {
   const frames = selectTikTokFrames(
@@ -37,4 +37,31 @@ test("selectTikTokFrames no duplica la propia cuando también está en la campa�
     ["https://host/propia.png"]
   );
   assert.deepEqual(frames, ["https://host/propia.png"]);
+});
+
+test("planTikTokVideo usa 3 frames de 2s cuando hay assets suficientes", () => {
+  const plan = planTikTokVideo(["a.png", "b.png", "c.png", "d.png"]);
+  assert.equal(plan.frames.length, 3);
+  assert.equal(plan.secondsPerImage, 2);
+  assert.equal(plan.seconds, 6);
+});
+
+test("planTikTokVideo estira el único frame para no quedar en un video de 2s", () => {
+  const plan = planTikTokVideo(["a.png"]);
+  assert.equal(plan.frames.length, 1);
+  assert.equal(plan.secondsPerImage, 6);
+  assert.equal(plan.seconds, 6);
+});
+
+test("planTikTokVideo descarta entradas vacías y no baja de 6 segundos", () => {
+  const plan = planTikTokVideo(["", "a.png", "b.png"]);
+  assert.deepEqual(plan.frames, ["a.png", "b.png"]);
+  assert.equal(plan.secondsPerImage, 3);
+  assert.equal(plan.seconds, 6);
+});
+
+test("planTikTokVideo sin imágenes no arma video", () => {
+  const plan = planTikTokVideo([]);
+  assert.deepEqual(plan.frames, []);
+  assert.equal(plan.seconds, 0);
 });

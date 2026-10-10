@@ -332,5 +332,34 @@ export async function GET(request: NextRequest) {
     out.last30d = { error: e instanceof Error ? e.message : "error" };
   }
 
+  // 9. Ultimas piezas (?last=tiktok&n=3): texto, media y estado real de lo que
+  //    salio publicado, para verificar CTA, disclaimers y video adjunto.
+  if (url.searchParams.get("last")) {
+    try {
+      const platform = url.searchParams.get("last") || "";
+      const rawN = parseInt(url.searchParams.get("n") || "3", 10);
+      const limitN = Number.isFinite(rawN) ? Math.min(Math.max(rawN, 1), 10) : 3;
+      const { data } = await supabase
+        .from("content_pieces")
+        .select(
+          "status, title, body, media_urls, external_post_id, published_at, created_at"
+        )
+        .eq("platform", platform)
+        .order("created_at", { ascending: false })
+        .limit(limitN);
+      out.last = (data || []).map((p) => ({
+        status: p.status,
+        title: p.title,
+        body: (p.body || "").slice(0, 400),
+        media: p.media_urls,
+        externalId: p.external_post_id || "",
+        publishedAt: p.published_at || null,
+        createdAt: p.created_at,
+      }));
+    } catch (e) {
+      out.last = { error: e instanceof Error ? e.message : "error" };
+    }
+  }
+
   return NextResponse.json(out);
 }

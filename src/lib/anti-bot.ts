@@ -94,13 +94,19 @@ export function getDailyPostLimit(platform: string, direct = false): number {
   const limits: Record<string, number> = {
     facebook: 10,
     instagram: 8,
-    tiktok: 6,
+    // BulkPublish (unica via gratis de TikTok) responde en su plan Free:
+    // "You've reached the posts per day limit (3/3)". Intentar mas posts no
+    // solo falla: gasta tiempo de IA y de render de video por cada intento.
+    tiktok: 3,
     youtube: 3,
   };
   const base = limits[platform] || 5;
-  // Publicar directo por la API oficial (Meta Graph) no arriesga bloqueo del
-  // navegador/cuenta como sí lo hace automatizar la UI: se permite el doble.
-  return direct ? base * 2 : base;
+  // El doble solo aplica a las plataformas que se publican con la API oficial
+  // de Meta (Graph): no arriesga bloqueo de navegador/cuenta como si lo hace
+  // automatizar la UI. TikTok se publica via BulkPublish, que tiene limite
+  // duro de plan, asi que ahi `direct` no habilita margen extra.
+  const isMetaPlatform = platform === "facebook" || platform === "instagram";
+  return direct && isMetaPlatform ? base * 2 : base;
 }
 
 export async function checkDailyQuota(

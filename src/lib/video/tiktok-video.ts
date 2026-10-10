@@ -5,7 +5,9 @@ import { dirname } from "path";
 import { renderLocalVideo, checkFFmpeg } from "./local-render.ts";
 import { hostVideoPublicly } from "../media-hosting.ts";
 
-export { selectTikTokFrames } from "./tiktok-frames.ts";
+import { planTikTokVideo } from "./tiktok-frames.ts";
+
+export { selectTikTokFrames, planTikTokVideo } from "./tiktok-frames.ts";
 
 export interface TikTokVideoInput {
   /** Imágenes propias de la campaña (o la imagen generada) que van a los frames. */
@@ -37,9 +39,9 @@ export interface TikTokVideoResult {
  * solo ciclo.
  */
 export async function buildTikTokVideo(input: TikTokVideoInput): Promise<TikTokVideoResult> {
-  const images = (input.images || []).filter(Boolean).slice(0, 3);
-  const secondsPerImage = input.secondsPerImage ?? 2;
-  const seconds = images.length * secondsPerImage;
+  const plan = planTikTokVideo(input.images || [], input.secondsPerImage ?? 2);
+  const images = plan.frames;
+  const seconds = plan.seconds;
   const empty = (error: string): TikTokVideoResult => ({ url: "", frames: images.length, seconds, error });
 
   if (images.length === 0) return empty("sin imágenes disponibles");
@@ -51,7 +53,7 @@ export async function buildTikTokVideo(input: TikTokVideoInput): Promise<TikTokV
       images,
       title: "",
       audioText: input.audioText,
-      secondsPerImage,
+      secondsPerImage: plan.secondsPerImage,
       vertical720: true,
     });
     localPath = videoPath;
