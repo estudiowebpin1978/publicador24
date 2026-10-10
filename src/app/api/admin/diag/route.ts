@@ -310,6 +310,30 @@ export async function GET(request: NextRequest) {
     out.bufferChannels = { error: e instanceof Error ? e.message : "error" };
   }
 
+  // 7.5. Carga imágenes propias de una campaña (?setimages=<id>&urls=<a,b,c>).
+  //      La tabla campaigns no tiene columna de imágenes: se guardan en
+  //      social_accounts (ver campaign-images.ts). Sin urls se limpian.
+  //      Es lo que decide qué frames usa el reel y qué foto publica Instagram
+  //      antes de caer en la generación con IA.
+  if (url.searchParams.get("setimages")) {
+    const campaignId = url.searchParams.get("setimages") || "";
+    const urls = (url.searchParams.get("urls") || "")
+      .split(",")
+      .map((u) => u.trim())
+      .filter(Boolean);
+    if (!campaignId) {
+      out.setImages = { error: "falta campaignId" };
+    } else {
+      try {
+        const { setCampaignImages } = await import("@/lib/campaign-images");
+        await setCampaignImages(campaignId, urls);
+        out.setImages = { campaignId, count: urls.length, urls };
+      } catch (e) {
+        out.setImages = { error: e instanceof Error ? e.message : "error" };
+      }
+    }
+  }
+
   try {
     const { data } = await supabase
       .from("campaigns")
@@ -355,10 +379,11 @@ export async function GET(request: NextRequest) {
       const platform = url.searchParams.get("platform") || "tiktok";
       const { generateImageWithFallback } = await import("@/lib/ai/multi-image");
       const { AUDIENCE_CONTEXT } = await import("@/lib/ai/copywriter");
+      // Los estilos nuevos: priorizan tomas sin cara (manos, boletos, billetes, cartelera).
       const style =
         platform === "instagram"
-          ? "Young Argentine woman (Latina, dark wavy hair, olive skin) holding a quiniela ticket, happy celebration, Argentine neighbourhood shop behind, professional lifestyle photo, warm lighting"
-          : "Young Argentine man (Latino, dark hair, olive skin) holding a winning quiniela ticket with excited expression, Argentine kiosco background, celebration moment, realistic photo";
+          ? "Close-up of a printed quiniela lottery ticket held in a hand at a lottery agency, blurred colourful results board behind, warm indoor light, photorealistic"
+          : "Photorealistic close-up of a hand receiving a printed quiniela lottery ticket across a lottery agency counter, POS terminal and peso bills on the counter, warm indoor light, real photo";
       const t0 = Date.now();
       const image = await generateImageWithFallback(
         `${style}. ${AUDIENCE_CONTEXT}`,

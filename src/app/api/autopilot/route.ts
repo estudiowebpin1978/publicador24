@@ -112,34 +112,41 @@ const PLATFORM_DAYS: Record<string, number[]> = {
   youtube: [2, 3, 4, 5, 6],
 };
 
+// Estilos calibrados contra las referencias del usuario (fotos reales de
+// agencias argentinas de quiniela: boleto impreso en el mostrador, billetes de
+// $100 frente a la cartelera de resultados, calendario con la fecha marcada).
+// Predominan las tomas SIN cara (manos, papeles, cartelera): se parecen más a
+// lo que ya se publica y, de paso, eliminan el problema de rasgos que no son
+// los de la audiencia. La guía de audiencia se agrega igual en todos los casos.
 const IMAGE_STYLES: Record<string, string[]> = {
   tiktok: [
-    "Photorealistic close-up of hands holding an Argentine quiniela lottery ticket with printed numbers, store counter background, warm yellow lighting, real photo style, no text",
-    "Hand holding Argentine peso bills in front of a colorful quiniela results board with red yellow green signage, Argentine lottery locale, realistic photo, high detail",
-    "Mobile phone displaying Quiniela IA predictions app interface with numbers and emojis, dark purple theme, modern UI, realistic mockup, clean design",
-    "Stack of printed quiniela lottery tickets next to peso bills on wooden table, coffee shop setting, warm tones, professional photography",
-    "Young Argentine man (Latino, dark hair, olive skin) holding a winning quiniela ticket with excited expression, confetti in foreground, Argentine kiosco background, celebration moment, realistic photo",
+    "Photorealistic close-up of a hand receiving a printed quiniela lottery ticket across a lottery agency counter, POS terminal and peso bills on the counter, warm indoor light, real photo",
+    "Fan of Argentine peso bills held up in front of a colourful quiniela results board with red and yellow signage and large printed numbers, Argentine lottery shop, warm light, photorealistic close-up",
+    "Wall of an Argentine quiniela results board with rows of printed winning numbers on red green and white panels, slightly worn paper, photorealistic, no people",
+    "Printed quiniela betting slip on a wooden table with a pen resting on the marked numbers and peso bills beside it, natural window light, photorealistic macro photo",
+    "Wall calendar with one date circled in red marker, morning sunlight through a window, a hand holding the marker, photorealistic close-up",
+    "Stack of printed quiniela tickets and peso bills on a lottery agency counter, shallow depth of field, warm tones, photorealistic",
   ],
   instagram: [
-    "Elegant Argentine quiniela lottery ticket close-up on dark background, premium design, gold and white details, macro photography, luxury feel",
-    "Smartphone showcasing Quiniela IA app with predicted numbers and fire emojis, dark purple gradient background, professional mockup, clean UI",
-    "Young Argentine woman (Latina, dark wavy hair, olive skin) holding a quiniela ticket with a voucher, happy celebration, confetti falling, Argentine neighbourhood shop behind, professional lifestyle photo, warm lighting",
-    "Quiniela results board with glowing numbers 5829 6135, neon lights, night atmosphere, Argentine locale, cinematic photo",
-    "Flat lay of Argentine quiniela ticket, peso bills, phone app mockup, and lucky charm on dark surface, professional product photo",
+    "Close-up of a printed quiniela lottery ticket held in a hand at a lottery agency, blurred colourful results board behind, warm indoor light, photorealistic",
+    "Fan of Argentine peso bills in front of a colourful quiniela results board with large printed numbers, Argentine lottery shop wall, photorealistic close-up",
+    "Printed quiniela betting slip on a table with a pen and a phone showing numbers, natural light, photorealistic flat lay",
+    "Argentine quiniela results board wall with rows of printed numbers and red signage, slightly worn, photorealistic, no people",
+    "Young Argentine man (Latino, dark hair, olive skin) talking on the phone with a surprised expression against a plain coloured background, editorial photo",
   ],
   facebook: [
-    "Official quiniela results display with colorful numbers 5829 6135, clean typography, Argentine lottery board, professional photo",
-    "Argentine friends (Latinos, dark hair) looking at quiniela results on a smartphone, happy expressions, Argentine home or kiosco, community atmosphere, warm indoor lighting, lifestyle photo",
-    "Lottery jackpot numbers displayed prominently with red and gold colors, dramatic lighting, attention grabbing, professional photo",
-    "Person pointing excitedly at winning quiniela numbers on phone screen, celebration moment, professional photography",
-    "Close-up of quiniela ticket with highlighted winning numbers, dramatic side lighting, focus on paper details, professional photo",
+    "Wall of an Argentine quiniela results board with rows of printed winning numbers on red and green panels, photorealistic, no people",
+    "Argentine friends (Latinos, dark hair) looking at quiniela results on a smartphone at home, warm indoor light, lifestyle photo",
+    "Hand holding a printed quiniela ticket in front of a colourful results board, warm light, photorealistic close-up",
+    "Stack of Argentine peso bills next to printed quiniela tickets on a counter, golden light, photorealistic",
+    "Close-up of a quiniela ticket with a pen marking numbers, dramatic side light, photorealistic",
   ],
   youtube: [
-    "YouTube thumbnail style: Split screen showing quiniela ticket with winning numbers on left and AI prediction app on right, bold contrasting colors, dramatic lighting, eye-catching composition, 16:9 aspect ratio",
-    "YouTube thumbnail style: Giant red arrow pointing at winning quiniela numbers on a results board, shocked face expression, bright yellow and red colors, 16:9 aspect ratio",
-    "YouTube thumbnail style: Stack of Argentine peso bills next to quiniela tickets with green checkmarks, wealth concept, golden lighting, 16:9 aspect ratio",
-    "YouTube thumbnail style: Before and after comparison showing random numbers vs AI-predicted quiniela numbers, transformation concept, blue and green tones, 16:9 aspect ratio",
-    "YouTube thumbnail style: Close-up of phone screen showing Quiniela IA app with fire emojis and winning numbers, dark background with glowing accents, 16:9 aspect ratio",
+    "YouTube thumbnail style: Split screen with a printed quiniela ticket on the left and a phone showing predictions on the right, bold contrasting colours, dramatic lighting, 16:9 aspect ratio",
+    "YouTube thumbnail style: Giant red arrow pointing at winning numbers on an Argentine quiniela results board, bright yellow and red colours, 16:9 aspect ratio",
+    "YouTube thumbnail style: Stack of Argentine peso bills next to printed quiniela tickets, golden lighting, 16:9 aspect ratio",
+    "YouTube thumbnail style: Close-up of a phone screen showing quiniela predictions on a dark background with glowing accents, 16:9 aspect ratio",
+    "YouTube thumbnail style: Hand circling a date on a calendar with a red marker, dramatic lighting, 16:9 aspect ratio",
   ],
 };
 
