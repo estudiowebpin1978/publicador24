@@ -114,6 +114,43 @@ function parseJsonContent<T>(text: string): T | null {
   }
 }
 
+/**
+ * La IA no siempre devuelve el mismo JSON: a veces manda `caption` en vez de
+ * `body` o se olvida el `hook`. En vez de tirar el post (y la llamada a la IA
+ * que ya costó hasta 25s) se normaliza y, si falta el gancho, se toma la
+ * primera línea del cuerpo.
+ */
+function normalizePostContent(raw: {
+  hook?: string;
+  title?: string;
+  body?: string;
+  caption?: string;
+  text?: string;
+  cta?: string;
+  hashtags?: string[];
+  tags?: string[];
+} | null): { hook: string; body: string; cta: string; hashtags: string[] } | null {
+  if (!raw) return null;
+  const body = String(raw.body || raw.caption || raw.text || "").trim();
+  const hook = String(raw.hook || raw.title || "").trim();
+  const firstLine =
+    body
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.length > 0) || "";
+  const finalHook = hook || firstLine.slice(0, 90);
+  if (!finalHook && !body) return null;
+  const hashtags = (raw.hashtags || raw.tags || []).filter(
+    (h): h is string => typeof h === "string" && h.trim().length > 0
+  );
+  return {
+    hook: finalHook,
+    body,
+    cta: String(raw.cta || "").trim(),
+    hashtags,
+  };
+}
+
 const PLATFORM_DAYS: Record<string, number[]> = {
   tiktok: [1, 2, 3, 4, 5, 6, 0],
   instagram: [1, 2, 3, 4, 5, 6, 0],
@@ -336,7 +373,7 @@ export async function POST(request?: NextRequest) {
           let content;
           try {
             const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-            content = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+            content = normalizePostContent(jsonMatch ? JSON.parse(jsonMatch[0]) : null);
           } catch {
             content = null;
           }
@@ -577,14 +614,20 @@ export async function POST(request?: NextRequest) {
             const response = await generateTextWithFallback(prompt, COPYWRITER_SYSTEM);
             const tAi = Date.now();
 
-            const content = parseJsonContent<{
-              hook?: string;
-              body?: string;
-              cta?: string;
-              hashtags?: string[];
-            }>(response.text);
+            const content = normalizePostContent(
+              parseJsonContent<{
+                hook?: string;
+                title?: string;
+                body?: string;
+                caption?: string;
+                text?: string;
+                cta?: string;
+                hashtags?: string[];
+                tags?: string[];
+              }>(response.text)
+            );
 
-            if (!content?.hook) {
+            if (!content) {
               result.details.push(`[${platform}] IA devolvió JSON sin "hook" — se reintenta en el próximo ciclo`);
               continue;
             }

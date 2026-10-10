@@ -29,6 +29,19 @@ export async function GET(request: NextRequest) {
         const supabase = getSupabaseAdmin();
         // No hay constraint único en (user_id, platform): limpiar filas viejas
         // para que tryGetSavedToken().single() no falle con "multiple rows".
+        // Google solo devuelve refresh_token cuando hay consentimiento
+        // explicito (prompt=consent). Si no viene, se conserva el anterior:
+        // borrar la fila y guardar un string vacio dejaria el canal sin
+        // refresh y con un access_token que vence en ~1h.
+        const { data: existingRows } = await supabase
+          .from("social_accounts")
+          .select("refresh_token")
+          .eq("platform", "youtube")
+          .eq("user_id", "00000000-0000-0000-0000-000000000000")
+          .limit(1);
+        const refreshToken =
+          tokenData.refresh_token || existingRows?.[0]?.refresh_token || "";
+
         await supabase
           .from("social_accounts")
           .delete()
@@ -39,14 +52,16 @@ export async function GET(request: NextRequest) {
           platform: "youtube",
           channel_name: "quiniela_ia_youtube",
           access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token || "",
+          refresh_token: refreshToken,
           status: "active",
           updated_at: Date.now(),
           connected_at: Date.now(),
         });
 
         return NextResponse.redirect(
-          "https://autopublicador-zeta.vercel.app/autopilot?youtube=connected&token_ready=true"
+          refreshToken
+            ? "https://autopublicador-zeta.vercel.app/autopilot?youtube=connected&token_ready=true"
+            : "https://autopublicador-zeta.vercel.app/autopilot?youtube=connected&token_ready=false&details=no_refresh_token"
         );
       }
 
