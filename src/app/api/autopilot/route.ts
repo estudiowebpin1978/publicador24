@@ -6,6 +6,7 @@ import {
   buildImagePrompt,
   ensureSiteUrl,
   isLotteryCampaign,
+  AUDIENCE_CONTEXT,
   COPYWRITER_SYSTEM,
   type CopyCampaignContext,
 } from "@/lib/ai/copywriter";
@@ -117,18 +118,18 @@ const IMAGE_STYLES: Record<string, string[]> = {
     "Hand holding Argentine peso bills in front of a colorful quiniela results board with red yellow green signage, Argentine lottery locale, realistic photo, high detail",
     "Mobile phone displaying Quiniela IA predictions app interface with numbers and emojis, dark purple theme, modern UI, realistic mockup, clean design",
     "Stack of printed quiniela lottery tickets next to peso bills on wooden table, coffee shop setting, warm tones, professional photography",
-    "Person holding winning quiniela ticket with excited expression, confetti in foreground, celebration moment, realistic photo",
+    "Young Argentine man (Latino, dark hair, olive skin) holding a winning quiniela ticket with excited expression, confetti in foreground, Argentine kiosco background, celebration moment, realistic photo",
   ],
   instagram: [
     "Elegant Argentine quiniela lottery ticket close-up on dark background, premium design, gold and white details, macro photography, luxury feel",
     "Smartphone showcasing Quiniela IA app with predicted numbers and fire emojis, dark purple gradient background, professional mockup, clean UI",
-    "Winner holding quiniela ticket with voucher, happy celebration, confetti falling, professional lifestyle photo, warm lighting",
+    "Young Argentine woman (Latina, dark wavy hair, olive skin) holding a quiniela ticket with a voucher, happy celebration, confetti falling, Argentine neighbourhood shop behind, professional lifestyle photo, warm lighting",
     "Quiniela results board with glowing numbers 5829 6135, neon lights, night atmosphere, Argentine locale, cinematic photo",
     "Flat lay of Argentine quiniela ticket, peso bills, phone app mockup, and lucky charm on dark surface, professional product photo",
   ],
   facebook: [
     "Official quiniela results display with colorful numbers 5829 6135, clean typography, Argentine lottery board, professional photo",
-    "Friends looking at quiniela results on smartphone, happy expressions, community atmosphere, warm indoor lighting, lifestyle photo",
+    "Argentine friends (Latinos, dark hair) looking at quiniela results on a smartphone, happy expressions, Argentine home or kiosco, community atmosphere, warm indoor lighting, lifestyle photo",
     "Lottery jackpot numbers displayed prominently with red and gold colors, dramatic lighting, attention grabbing, professional photo",
     "Person pointing excitedly at winning quiniela numbers on phone screen, celebration moment, professional photography",
     "Close-up of quiniela ticket with highlighted winning numbers, dramatic side lighting, focus on paper details, professional photo",
@@ -180,7 +181,12 @@ async function generatePlatformImage(
 
   let url = "";
   try {
-    const image = await generateImageWithFallback(style, aspectRatio);
+    // La guía de audiencia va a TODOS los prompts: sin ella el modelo devuelve
+    // caras que no son de la audiencia de la campaña (rasgos asiáticos).
+    const image = await generateImageWithFallback(
+      `${style}. ${AUDIENCE_CONTEXT}`,
+      aspectRatio
+    );
     url = image.url;
   } catch {
     if (lottery) {

@@ -346,6 +346,30 @@ export async function GET(request: NextRequest) {
     out.last30d = { error: e instanceof Error ? e.message : "error" };
   }
 
+  // 5c. Test de imagen (?test=image&platform=tiktok): genera una imagen con el
+  //     mismo formato de prompt que usa el ciclo (estilo + guía de audiencia)
+  //     y devuelve la URL pública, para verificar a la vista que sale gente
+  //     local y no rasgos asiáticos.
+  if (url.searchParams.get("test") === "image") {
+    try {
+      const platform = url.searchParams.get("platform") || "tiktok";
+      const { generateImageWithFallback } = await import("@/lib/ai/multi-image");
+      const { AUDIENCE_CONTEXT } = await import("@/lib/ai/copywriter");
+      const style =
+        platform === "instagram"
+          ? "Young Argentine woman (Latina, dark wavy hair, olive skin) holding a quiniela ticket, happy celebration, Argentine neighbourhood shop behind, professional lifestyle photo, warm lighting"
+          : "Young Argentine man (Latino, dark hair, olive skin) holding a winning quiniela ticket with excited expression, Argentine kiosco background, celebration moment, realistic photo";
+      const t0 = Date.now();
+      const image = await generateImageWithFallback(
+        `${style}. ${AUDIENCE_CONTEXT}`,
+        "1:1"
+      );
+      out.testImage = { url: image.url, provider: image.provider, ms: Date.now() - t0 };
+    } catch (e) {
+      out.testImage = { url: "", error: e instanceof Error ? e.message : "error" };
+    }
+  }
+
   // 8b. Test de Buffer (?test=buffer): limpia cache y bloqueo local y hace UNA
   //     llamada real a la API, para distinguir un 429 transitorio de un token
   //     que ya no sirve (los dos se manifiestan igual desde el resto del ciclo).

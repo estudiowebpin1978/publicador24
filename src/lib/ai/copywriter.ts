@@ -197,6 +197,19 @@ export function buildImagePrompt(
 }
 
 /** La campaña es de quiniela/lotería: ahí sí corresponden las imágenes curadas. */
+/**
+ * El público es de Argentina y Latinoamérica (+18). Los modelos de imagen
+ * tienden a devolver caras asiáticas si no se lo pide uno explícitamente, y
+ * así salían fotos con gente que no se parece a la audiencia de la campaña.
+ * Se concatena a TODOS los prompts de imagen.
+ */
+export const AUDIENCE_CONTEXT =
+  'Público objetivo: argentinos y latinoamericanos. ' +
+  'Personas de rasgos latinoamericanos (tez morena u oliva, cabello oscuro), ' +
+  'corte de pelo y ropa típica de Argentina, nada de rasgos asiáticos. ' +
+  'Escena local argentina: kiosco o lotería de barrio, cartelera de quiniela, ' +
+  'pesos argentinos, avenidas y casas de Argentina. Luz natural de día.';
+
 export function isLotteryCampaign(campaign?: CopyCampaignContext | null): boolean {
   const about = [campaign?.name, campaign?.idea, campaign?.description].join(' ');
   return /quiniela|loter[ií]a|sorteo|bolet[oa]|números ganadores/i.test(about);
