@@ -33,10 +33,10 @@ import { findProhibitedClaims } from "../../../../shared/prohibited-claims";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Render de video con ffmpeg (TikTok/YouTube) dentro del ciclo. En Hobby,
-// Vercel permite funciones de hasta 300s (docs de planes); 120 deja holgura
-// para cubrir todas las campañas en un solo paso del cron sin acercarse al
-// límite.
-export const maxDuration = 120;
+// Vercel permite funciones de hasta 300s (docs de planes): se usa casi todo
+// porque una publicación pesa ~50s (IA + render + publicar) y hay que cubrir
+// todas las campañas en una sola pasada del cron.
+export const maxDuration = 300;
 
 interface LoopResult {
   timestamp: number;
@@ -480,16 +480,43 @@ export async function POST(request?: NextRequest) {
       // Presupuesto de tiempo: la función se corta en maxDuration. Si no queda
       // margen para IA + render + publicar, esa campaña se posterga al próximo
       // ciclo en vez de empezar algo que no va a terminar.
-      const rotationDeadline = Date.now() + 80_000;
-      const MIN_REMAINING_MS = 25_000;
+      const rotationDeadline = Date.now() + 250_000;
+      const MIN_REMAINING_MS = 45_000;
       let outOfTime = false;
 
-      for (const campaign of campaigns) {
+      // Campañas con la publicación más vieja primero: si el presupuesto del
+      // ciclo no alcanza para todas, no se lo queda siempre la primera de la
+      // lista y en pocos días todas reciben contenido.
+      let orderedCampaigns = campaigns;
+      try {
+        const { data: recentPubs } = await supabase
+          .from("content_pieces")
+          .select("campaign_id, published_at")
+          .eq("status", "PUBLISHED")
+          .order("published_at", { ascending: false })
+          .limit(100);
+        const lastPub: Record<string, number> = {};
+        for (const row of recentPubs || []) {
+          if (row.campaign_id && lastPub[row.campaign_id] === undefined) {
+            lastPub[row.campaign_id] = row.published_at || 0;
+          }
+        }
+        orderedCampaigns = [...campaigns].sort(
+          (a, b) => (lastPub[a.id] || 0) - (lastPub[b.id] || 0)
+        );
+      } catch {
+        // Sin historial usable se mantiene el orden original.
+      }
+
+      // TikTok va primero: es la plataforma que más se complicó (requiere video
+      // y BulkPublish Free solo admite 3 posts/día), así que se le da prioridad
+      // en el presupuesto del ciclo. Instagram entra si queda tiempo.
+      for (const platform of ["tiktok", "instagram"]) {
         if (outOfTime) break;
         // Facebook queda fuera a pedido del usuario: no consigue el permiso
         // pages_manage_posts (#240) y no vale la pena gastar IA en fallos.
         // Para reactivarlo: agregar "facebook" a esta lista.
-        for (const platform of ["instagram", "tiktok"]) {
+        for (const campaign of orderedCampaigns) {
           if (outOfTime) break;
           if (channels.find((c) => c.service === platform)) continue;
 
