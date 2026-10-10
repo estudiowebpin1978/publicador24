@@ -107,6 +107,10 @@ async function callProvider(
       temperature: 0.7,
       max_tokens: config.maxTokens || 2000,
     }),
+    // La cadena prueba varios proveedores y modelos en serie: sin un tope por
+    // intento, un modelo lento (se midieron 60-99s) se come el presupuesto del
+    // ciclo completo y publica menos campañas.
+    signal: AbortSignal.timeout(25_000),
   });
 
   if (!response.ok) {

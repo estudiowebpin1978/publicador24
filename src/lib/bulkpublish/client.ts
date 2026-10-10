@@ -210,6 +210,13 @@ export async function createPost(input: {
   text: string;
   channelIds: number[];
   mediaUrls?: string[];
+  /**
+   * TikTok exige un VIDEO: si el medio no viene marcado como video la API
+   * responde 400 "tiktok video requires a video (no media attached)". Solo se
+   * envía el tipo cuando se pide explícitamente, para no tocar el camino de
+   * imágenes que ya funciona.
+   */
+  mediaType?: string;
   scheduledAt?: string;
   publishNow?: boolean;
 }): Promise<{ id?: string | number; success?: boolean; error?: string }> {
@@ -224,29 +231,39 @@ export async function createPost(input: {
   }
 
   if (input.mediaUrls && input.mediaUrls.length > 0) {
-    payload.media = input.mediaUrls.map((url) => ({ url }));
+    payload.media = input.mediaUrls.map((url) =>
+      input.mediaType ? { url, type: input.mediaType } : { url }
+    );
   }
 
+  let postId: string | number | undefined;
   try {
     const data = await bpFetch<{ id?: string | number; success?: boolean; post?: { id: string | number } }>(
       "/api/posts",
       { method: "POST", body: JSON.stringify(payload) }
     );
-    const postId = data.id || data.post?.id;
-
-    if (input.publishNow && postId) {
-      await bpFetch(`/api/posts/${postId}/publish`, { method: "POST" });
-    }
-
-    return { id: postId, success: true };
+    postId = data.id || data.post?.id;
   } catch (e) {
     if (e instanceof Error && /rate limited/i.test(e.message)) throw e;
     const msg = e instanceof Error ? e.message : String(e);
     if (/channel|not connected|unauthorized/i.test(msg)) {
       return { success: false, error: msg };
     }
-    throw e;
+    // Se aclara que falló la CREACIÓN: así un 400 con "requires a video" se
+    // sabe que viene del payload del post y no del paso de publicación.
+    throw new Error(`create: ${msg}`);
   }
+
+  if (input.publishNow && postId) {
+    try {
+      await bpFetch(`/api/posts/${postId}/publish`, { method: "POST" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return { id: postId, success: false, error: `publish: ${msg}` };
+    }
+  }
+
+  return { id: postId, success: true };
 }
 
 export async function listPosts(channelId?: number, limit: number = 50): Promise<{ id: number | string; status: string }[]> {

@@ -152,6 +152,9 @@ async function publishViaBulkPublish(input: PublishInput): Promise<PublishResult
     channelIds: [channel.id],
     // TikTok exige video: si hay videoUrl se manda ese; si no, la imagen.
     mediaUrls: input.videoUrl ? [input.videoUrl] : input.imageUrl ? [input.imageUrl] : [],
+    // El medio se marca como video solo cuando lo es: sin ese hint BulkPublish
+    // responde 400 "tiktok video requires a video (no media attached)".
+    ...(input.videoUrl ? { mediaType: "video" } : {}),
     scheduledAt: input.scheduledAt?.toISOString(),
     publishNow: !input.scheduledAt,
   });

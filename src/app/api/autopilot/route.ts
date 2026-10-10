@@ -480,7 +480,11 @@ export async function POST(request?: NextRequest) {
       // Presupuesto de tiempo: la función se corta en maxDuration. Si no queda
       // margen para IA + render + publicar, esa campaña se posterga al próximo
       // ciclo en vez de empezar algo que no va a terminar.
-      const rotationDeadline = Date.now() + 250_000;
+      // Presupuesto de tiempo: la función se corta en maxDuration (300s). La
+      // rotación usa 225s y el resto queda para YouTube, la limpieza automática
+      // y la notificación: una corrida medida llegó a 286s y no debe morir a
+      // mitad de publicación.
+      const rotationDeadline = Date.now() + 225_000;
       const MIN_REMAINING_MS = 45_000;
       let outOfTime = false;
 

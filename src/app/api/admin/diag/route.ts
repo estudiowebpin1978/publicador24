@@ -194,12 +194,14 @@ export async function GET(request: NextRequest) {
         // Permite probar con media (?media=<url>) para ver si TikTok acepta
         // imagen o exige video ( BulkPublish valida esto en la API ).
         const mediaUrl = url.searchParams.get("media");
+        const mediaType = url.searchParams.get("mediaType") || undefined;
         const publishNow = url.searchParams.get("publish") === "1";
         try {
           const created = await createPost({
             text: url.searchParams.get("text") || "Diagnóstico — borrador de prueba (se elimina).",
             channelIds: [tiktok.id],
             ...(mediaUrl ? { mediaUrls: [mediaUrl] } : {}),
+            ...(mediaType ? { mediaType } : {}),
             ...(publishNow ? { publishNow: true } : {}),
           });
           if (created.id) {
