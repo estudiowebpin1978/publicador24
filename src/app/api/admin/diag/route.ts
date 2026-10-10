@@ -369,6 +369,68 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 8c. Test de Meta (?test=meta): pide debug_token con el token guardado y
+  //     reporta los permisos reales, para saber si el token tiene
+  //     pages_manage_posts antes de intentar publicar en Facebook.
+  if (url.searchParams.get("test") === "meta") {
+    try {
+      const { getMetaConfigAsync } = await import("@/lib/meta/graph");
+      const config = await getMetaConfigAsync();
+      if (!config?.pageAccessToken) {
+        out.testMeta = { ok: false, error: "sin token de Meta guardado" };
+      } else {
+        const debugUrl =
+          `https://graph.facebook.com/v21.0/debug_token?` +
+          `input_token=${encodeURIComponent(config.pageAccessToken)}` +
+          `&access_token=${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`;
+        const res = await fetch(debugUrl, { signal: AbortSignal.timeout(15000) });
+        const data = await res.json();
+        const info = data?.data || {};
+        out.testMeta = {
+          ok: !!info.is_valid,
+          pageId: config.pageId,
+          valid: !!info.is_valid,
+          type: info.type || null,
+          expiresAt: info.expires_at || 0,
+          scopes: info.scopes || [],
+          hasPagesManagePosts: (info.scopes || []).includes("pages_manage_posts"),
+          metaError: data?.error?.message || null,
+        };
+      }
+    } catch (e) {
+      out.testMeta = { ok: false, error: e instanceof Error ? e.message : "error" };
+    }
+  }
+
+  // 8d. Test real de Facebook (?test=facebook): el token actual no tiene
+  //     pages_manage_posts, por lo que la ruta de foto (/photos) falla con
+  //     #240. Se prueba la ruta de link (/feed), que publishToFacebook usa
+  //     cuando no hay imagen. Publica un post real con el CTA de la campaña.
+  if (url.searchParams.get("test") === "facebook") {
+    try {
+      const { publishToFacebook } = await import("@/lib/meta/graph");
+      const { data: campaigns } = await supabase
+        .from("campaigns")
+        .select("name, url")
+        .eq("status", "ACTIVE")
+        .limit(1);
+      const campaign = campaigns?.[0];
+      const site = campaign?.url || "https://quiniela-ia-two.vercel.app/";
+      const message =
+        `La quiniela de la ciudad está más fácil de lo que parece. ` +
+        `Mirá las pistas de hoy y armá tu jugada en ${site}`;
+      const result = await publishToFacebook(message, site, undefined);
+      out.testFacebook = {
+        ok: true,
+        id: result.id,
+        url: result.url || null,
+        campaign: campaign?.name || null,
+      };
+    } catch (e) {
+      out.testFacebook = { ok: false, error: e instanceof Error ? e.message : "error" };
+    }
+  }
+
   // 9. Ultimas piezas (?last=tiktok&n=3): texto, media y estado real de lo que
   //    salio publicado, para verificar CTA, disclaimers y video adjunto.
   if (url.searchParams.get("last")) {

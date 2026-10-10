@@ -80,6 +80,44 @@ export async function saveMetaTokens(config: MetaConfig): Promise<void> {
 export function invalidateMetaConfig() {
   memConfig = null;
   memLoaded = false;
+  fbScopesCache = null;
+}
+
+let fbScopesCache: { checkedAt: number; granted: boolean } | null = null;
+
+/**
+ * ¿El token de Meta permite publicar en la página de Facebook?
+ *
+ * Publicar exige pages_manage_posts además de pages_read_engagement: sin ese
+ * permiso la API responde (#200)/(#240) y cada intento solo gasta una llamada
+ * a la IA y deja un backoff, sin publicar nada. Se consulta una vez cada 6 h y
+ * se cachea en memoria, así el ciclo no paga ese viaje en cada pasada.
+ */
+export async function canPublishToFacebook(): Promise<boolean> {
+  if (fbScopesCache && Date.now() - fbScopesCache.checkedAt < 6 * 3_600_000) {
+    return fbScopesCache.granted;
+  }
+  try {
+    const config = await getMetaConfigAsync();
+    if (!config?.pageAccessToken) {
+      fbScopesCache = { checkedAt: Date.now(), granted: false };
+      return false;
+    }
+    const res = await fetch(
+      `https://graph.facebook.com/v21.0/debug_token?` +
+        `input_token=${encodeURIComponent(config.pageAccessToken)}` +
+        `&access_token=${process.env.META_APP_ID}|${process.env.META_APP_SECRET}`,
+      { signal: AbortSignal.timeout(10_000) }
+    );
+    const data = await res.json();
+    const scopes: string[] = data?.data?.scopes || [];
+    const granted = scopes.includes("pages_manage_posts");
+    fbScopesCache = { checkedAt: Date.now(), granted };
+    return granted;
+  } catch {
+    // Sin confirmar no se arriesga el intento: se mantiene el último valor.
+    return fbScopesCache?.granted ?? false;
+  }
 }
 
 export function isMetaConfigured(): boolean {

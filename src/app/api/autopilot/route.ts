@@ -25,6 +25,7 @@ import {
   clearPublishFailure,
 } from "@/lib/publisher/failure-backoff";
 import { hostImagePublicly, normalizeImageForMeta } from "@/lib/media-hosting";
+import { canPublishToFacebook } from "@/lib/meta/graph";
 import { getAllCampaignImages, pickCampaignImage } from "@/lib/campaign-images";
 import { processPendingRenders, startYouTubeRender, isVideoRenderBlocked } from "@/lib/video/render-queue";
 import { buildTikTokVideo, selectTikTokFrames } from "@/lib/video/tiktok-video";
@@ -506,9 +507,20 @@ export async function POST(request?: NextRequest) {
       // en el presupuesto del ciclo. Instagram entra si queda tiempo.
       // Orden por prioridad: TikTok primero (requiere video y BulkPublish Free
       // solo admite 3 posts/dia), despues Instagram y por ultimo Facebook.
-      // Facebook volvio a la rotacion a pedido del usuario: usa la misma
-      // conexion de Meta que ya publica en Instagram.
-      for (const platform of ["tiktok", "instagram", "facebook"]) {
+      // Facebook solo entra si el token de Meta tiene pages_manage_posts: sin
+      // ese permiso la API responde (#200)/(#240), cada intento gasta una
+      // llamada a la IA y deja backoff sin publicar nada.
+      const metaCanFacebook = await canPublishToFacebook();
+      if (!metaCanFacebook) {
+        result.details.push(
+          "[facebook] Sin permiso pages_manage_posts en el token de Meta - se omite hasta concederlo"
+        );
+      }
+      for (const platform of [
+        "tiktok",
+        "instagram",
+        ...(metaCanFacebook ? ["facebook"] : []),
+      ]) {
         if (outOfTime) break;
         for (const campaign of orderedCampaigns) {
           if (outOfTime) break;
