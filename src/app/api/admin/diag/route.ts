@@ -147,6 +147,18 @@ export async function GET(request: NextRequest) {
         cleared.bulkpublishRateLimit = { error: e instanceof Error ? e.message : "error" };
       }
     }
+    // El bloqueo de Buffer (30 min) tambien se persiste en Supabase: sin
+    // limpiarlo, clear=all dejaba a Buffer bloqueado y ni siquiera se podian
+    // listar los canales para ver por donde publica cada plataforma.
+    if (clear === "buffer" || clear === "all") {
+      try {
+        const { clearRateLimit } = await import("@/lib/buffer/rate-limit");
+        clearRateLimit();
+        cleared.bufferRateLimit = true;
+      } catch (e) {
+        cleared.bufferRateLimit = { error: e instanceof Error ? e.message : "error" };
+      }
+    }
     out.cleared = cleared;
   }
 
@@ -332,6 +344,29 @@ export async function GET(request: NextRequest) {
     out.last30d = summary;
   } catch (e) {
     out.last30d = { error: e instanceof Error ? e.message : "error" };
+  }
+
+  // 8b. Test de Buffer (?test=buffer): limpia cache y bloqueo local y hace UNA
+  //     llamada real a la API, para distinguir un 429 transitorio de un token
+  //     que ya no sirve (los dos se manifiestan igual desde el resto del ciclo).
+  if (url.searchParams.get("test") === "buffer") {
+    try {
+      const { clearRateLimit } = await import("@/lib/buffer/rate-limit");
+      const { invalidateBufferCache, getBufferAccount } = await import(
+        "@/lib/buffer/client"
+      );
+      clearRateLimit();
+      invalidateBufferCache();
+      const t0 = Date.now();
+      const account = await getBufferAccount();
+      out.testBuffer = {
+        ok: true,
+        ms: Date.now() - t0,
+        user: (account as { account?: { username?: string } })?.account?.username || null,
+      };
+    } catch (e) {
+      out.testBuffer = { ok: false, error: e instanceof Error ? e.message : "error" };
+    }
   }
 
   // 9. Ultimas piezas (?last=tiktok&n=3): texto, media y estado real de lo que
