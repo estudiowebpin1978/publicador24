@@ -504,11 +504,12 @@ export async function POST(request?: NextRequest) {
       // TikTok va primero: es la plataforma que más se complicó (requiere video
       // y BulkPublish Free solo admite 3 posts/día), así que se le da prioridad
       // en el presupuesto del ciclo. Instagram entra si queda tiempo.
-      for (const platform of ["tiktok", "instagram"]) {
+      // Orden por prioridad: TikTok primero (requiere video y BulkPublish Free
+      // solo admite 3 posts/dia), despues Instagram y por ultimo Facebook.
+      // Facebook volvio a la rotacion a pedido del usuario: usa la misma
+      // conexion de Meta que ya publica en Instagram.
+      for (const platform of ["tiktok", "instagram", "facebook"]) {
         if (outOfTime) break;
-        // Facebook queda fuera a pedido del usuario: no consigue el permiso
-        // pages_manage_posts (#240) y no vale la pena gastar IA en fallos.
-        // Para reactivarlo: agregar "facebook" a esta lista.
         for (const campaign of orderedCampaigns) {
           if (outOfTime) break;
           if (channels.find((c) => c.service === platform)) continue;
