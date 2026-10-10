@@ -162,6 +162,12 @@ export async function generateTextWithFallback(
         try {
           console.log(`Trying ${provider.name} (${model}) attempt ${attempt}...`);
           const result = await callProvider(provider, messages, model);
+          // Una respuesta en blanco no sirve: si el modelo devolvio texto
+          // vacio se sigue el siguiente en vez de entregar contenido que el
+          // pipeline va a descartar igual (perdiendo la publicacion).
+          if (!result.text || !result.text.trim()) {
+            throw new Error("respuesta vacia del modelo");
+          }
           console.log(`Success with ${provider.name}`);
           return result;
         } catch (error) {

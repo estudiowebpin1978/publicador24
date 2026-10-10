@@ -628,6 +628,13 @@ export async function POST(request?: NextRequest) {
             );
 
             if (!content) {
+              // Diagnostico: que devolvio realmente la IA cuando no se pudo
+              // armar el post (vacia, JSON con otra forma, texto cortado...).
+              result.details.push(
+                `[${platform}] IA cruda: ${(response.text || "")
+                  .replace(/\s+/g, " ")
+                  .slice(0, 200) || "(respuesta vacia)"}`
+              );
               result.details.push(`[${platform}] IA devolvió JSON sin "hook" — se reintenta en el próximo ciclo`);
               continue;
             }
