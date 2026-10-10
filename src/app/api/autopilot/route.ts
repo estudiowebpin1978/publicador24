@@ -24,7 +24,7 @@ import {
   markPublishFailure,
   clearPublishFailure,
 } from "@/lib/publisher/failure-backoff";
-import { hostImagePublicly } from "@/lib/media-hosting";
+import { hostImagePublicly, normalizeImageForMeta } from "@/lib/media-hosting";
 import { getAllCampaignImages, pickCampaignImage } from "@/lib/campaign-images";
 import { processPendingRenders, startYouTubeRender, isVideoRenderBlocked } from "@/lib/video/render-queue";
 import { buildTikTokVideo, selectTikTokFrames } from "@/lib/video/tiktok-video";
@@ -622,6 +622,15 @@ export async function POST(request?: NextRequest) {
             const imageUrl = ownImage || (await generatePlatformImage(platform, campaign));
             if (!ownImage && imageUrl) result.imagesGenerated++;
 
+            // Meta rechaza fotos con proporciones que no le gustan: el error
+            // real en produccion es 36003 "aspect ratio is not supported" y
+            // tira la publicacion entera (le pasa a las capturas de la
+            // campana). Se normaliza a 4:5 con ffmpeg para Graph.
+            let finalImageUrl = imageUrl;
+            if (imageUrl && (platform === "instagram" || platform === "facebook")) {
+              finalImageUrl = await normalizeImageForMeta(imageUrl, `${platform}-post`);
+            }
+
             // TikTok (BulkPublish) rechaza posts sin video. Se arma un reel
             // vertical con ffmpeg a partir de las imágenes de la campaña y se
             // publica ese video en lugar de una foto estática.
@@ -651,7 +660,7 @@ export async function POST(request?: NextRequest) {
               text: humanText,
               platform,
               ...(videoUrl ? { videoUrl } : {}),
-              ...(imageUrl ? { imageUrl } : {}),
+              ...(finalImageUrl ? { imageUrl: finalImageUrl } : {}),
             });
             const tPub = Date.now();
             result.details.push(

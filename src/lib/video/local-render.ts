@@ -27,7 +27,7 @@ export interface LocalVideoResult {
   withAudio: boolean;
 }
 
-function downloadFile(url: string, destPath: string, timeoutMs = 30_000): Promise<void> {
+export function downloadFile(url: string, destPath: string, timeoutMs = 30_000): Promise<void> {
   return new Promise((resolve, reject) => {
     const attempt = (target: string, redirects = 0): void => {
       if (redirects > 5) return reject(new Error("demasiados redirects"));

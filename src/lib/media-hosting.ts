@@ -1,5 +1,8 @@
-import { readFileSync } from "fs"
+import { readFileSync, unlinkSync } from "fs"
+import { join } from "path"
+import { tmpdir } from "os"
 import { getSupabaseAdmin } from "@/lib/supabase/server"
+import { downloadFile } from "@/lib/video/local-render"
 
 const BUCKET = "media"
 
@@ -103,5 +106,73 @@ async function allowVideoMime(): Promise<void> {
     }
   } catch (e) {
     console.warn("[media-hosting] no se pudo habilitar video/mp4:", e instanceof Error ? e.message : e)
+  }
+}
+
+/**
+ * Meta rechaza fotos con proporciones que no le gustan: el error real en
+ * producción es "Meta Graph: The aspect ratio is not supported. (code 36003)",
+ * que tira la publicación entera. Le pasa sobre todo a las capturas de la
+ * campaña (no son 4:5). Se re-encodea con ffmpeg a 1080x1350 (4:5, el vertical
+ * del feed) con fondo, y se publica esa copia.
+ *
+ * Si no hay ffmpeg o algo falla, se devuelve la imagen original: se prefiere
+ * arriesgar el rechazo de Meta antes que no publicar.
+ */
+export async function normalizeImageForMeta(
+  sourceUrl: string,
+  kind: string = "meta"
+): Promise<string> {
+  if (!sourceUrl) return sourceUrl
+
+  let tmp = ""
+  try {
+    const { checkFFmpeg, runFfmpeg } = await import("@/lib/video/ffmpeg")
+    if (!(await checkFFmpeg())) return sourceUrl
+
+    tmp = join(tmpdir(), `meta_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`)
+    // La imagen se descarga con Node y ffmpeg trabaja sobre el archivo local:
+    // el binario empaquetado no trae soporte https.
+    const input = `${tmp}.src`
+    await downloadFile(sourceUrl, input, 20_000)
+
+    // scale conserva el encuadre y pad completa el resto: nunca se recorta.
+    await runFfmpeg(
+      [
+        "-y",
+        "-i",
+        input,
+        "-vf",
+        "scale=1080:1350:force_original_aspect_ratio=decrease,pad=1080:1350:(ow-iw)/2:(oh-ih)/2:color=0x111111",
+        "-frames:v",
+        "1",
+        "-q:v",
+        "3",
+        tmp,
+      ],
+      60_000
+    )
+
+    const bytes = readFileSync(tmp)
+    const path = `${kind}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`
+    const supabase = getSupabaseAdmin()
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, bytes, { contentType: "image/jpeg", upsert: true })
+
+    if (error) {
+      console.warn("[media-hosting] normalize upload error:", error.message)
+      return sourceUrl
+    }
+    return hostedObjectUrl(path)
+  } catch (e) {
+    console.warn("[media-hosting] normalize failed:", e instanceof Error ? e.message : e)
+    return sourceUrl
+  } finally {
+    for (const f of [tmp, `${tmp}.src`]) {
+      try {
+        if (f) unlinkSync(f)
+      } catch {}
+    }
   }
 }
