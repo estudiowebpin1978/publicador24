@@ -84,6 +84,22 @@ export default function SettingsPage() {
 
   const [saved, setSaved] = React.useState<string | null>(null)
 
+  // Estado de la conexión OAuth de BulkPublish (PKCE). Se lee desde el servidor.
+  const [bpStatus, setBpStatus] = React.useState<{
+    clientIdConfigured: boolean
+    connected: boolean
+    expiresInMin: number | null
+    scope: string | null
+  } | null>(null)
+  const [bpBusy, setBpBusy] = React.useState(false)
+
+  React.useEffect(() => {
+    fetch("/api/auth/bulkpublish?status=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setBpStatus(d))
+      .catch(() => setBpStatus(null))
+  }, [])
+
   const handleSaveProfile = async () => {
     try {
       await fetch("/api/setup", {
@@ -327,6 +343,60 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="api" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>BulkPublish (OAuth 2.0 + PKCE)</CardTitle>
+              <CardDescription>
+                Autorización por usuario para publicar en TikTok e Instagram. Se usa el token OAuth si está
+                conectado; si no, la API key del servidor.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {bpStatus === null ? (
+                <p className="text-sm text-muted-foreground">Consultando estado…</p>
+              ) : !bpStatus.clientIdConfigured ? (
+                <div className="rounded-xl border border-amber-500/40 p-4">
+                  <p className="font-medium">Falta BULKPUBLISH_CLIENT_ID</p>
+                  <p className="text-sm text-muted-foreground">
+                    Registrá la app OAuth en BulkPublish y guardá el client_id en el entorno del servidor.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl border p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">
+                        {bpStatus.connected ? "Conectado" : "Sin conectar"}
+                      </p>
+                      <p className="text-sm text-muted-foreground font-mono">
+                        {bpStatus.connected
+                          ? `Vence en ${bpStatus.expiresInMin ?? "?"} min · scopes: ${bpStatus.scope || "—"}`
+                          : "Todavía no autorizaste la app en BulkPublish"}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {!bpStatus.connected ? (
+                        <a
+                          href="/api/auth/bulkpublish"
+                          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                          onClick={() => setBpBusy(true)}
+                        >
+                          {bpBusy ? "Abriendo…" : "Conectar"}
+                        </a>
+                      ) : (
+                        <a
+                          href="/api/auth/bulkpublish?disconnect=1"
+                          className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium hover:bg-muted"
+                        >
+                          Desconectar
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Integraciones Configuradas</CardTitle>

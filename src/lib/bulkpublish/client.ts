@@ -74,24 +74,63 @@ async function refreshRemoteState() {
   } catch {}
 }
 
-export async function bpFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const apiKey = process.env.BULKPUBLISH_API_KEY;
+/**
+ * Resuelve la credencial de la llamada: token OAuth (bpat_, si está conectado y
+ * vigente) o, si no, la API key. Algunas operaciones de administración de
+ * cuenta devuelven 403 para cualquier token OAuth, así que bpFetch reintenta
+ * con la API key cuando el OAuth es rechazado.
+ */
+async function resolveAuthorization(): Promise<{
+  header: string;
+  isOauth: boolean;
+  apiKey: string | null;
+}> {
+  const apiKey = process.env.BULKPUBLISH_API_KEY || null;
+  let oauthToken: string | null = null;
+  try {
+    const { getValidAccessToken } = await import("./oauth");
+    oauthToken = await getValidAccessToken();
+  } catch {
+    oauthToken = null;
+  }
+  if (oauthToken) {
+    return { header: `Bearer ${oauthToken}`, isOauth: true, apiKey };
+  }
   if (!apiKey) throw new Error("BULKPUBLISH_API_KEY not configured");
+  return { header: `Bearer ${apiKey}`, isOauth: false, apiKey };
+}
 
+export async function bpFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   await refreshRemoteState();
   if (isBulkPublishRateLimited()) {
     throw new Error("BulkPublish rate limited — skipping");
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
+  let auth = await resolveAuthorization();
+  let res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: auth.header,
       "Accept": "application/json",
       "Content-Type": "application/json",
       ...options.headers,
     },
   });
+
+  // OAuth rechazado (endpoint sólo-API-key, o token recién invalidado): un solo
+  // reintento con la API key antes de dar por fallida la llamada.
+  if ((res.status === 401 || res.status === 403) && auth.isOauth && auth.apiKey) {
+    auth = { header: `Bearer ${auth.apiKey}`, isOauth: false, apiKey: auth.apiKey };
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        Authorization: auth.header,
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
+  }
 
   if (res.status === 429) {
     const body429 = await res.text().catch(() => "");

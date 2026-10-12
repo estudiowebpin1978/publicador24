@@ -242,6 +242,63 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 5c. Test OAuth (?test=bpoauth): estado de la autorización BulkPublish y
+  //     una llamada real a /api/channels con el token OAuth para confirmar que
+  //     sirve para publicar (no sólo para leer).
+  if (url.searchParams.get("test") === "bpoauth") {
+    try {
+      const oauth = await import("@/lib/bulkpublish/oauth");
+      const status = await oauth.getOAuthStatus();
+      out.oauthStatus = status;
+
+      // Verifica que BulkPublish acepte el redirect_uri configurado: pega el
+      // authorize endpoint y detecta el rechazo "Invalid redirect".
+      if (status.clientIdConfigured) {
+        try {
+          const probeUrl = oauth.buildAuthorizeUrl({
+            clientId: oauth.getClientId(),
+            redirectUri: status.redirectUri,
+            state: "diag",
+            codeChallenge: oauth.generatePkce().challenge,
+          });
+          const probe = await fetch(probeUrl, { redirect: "manual" });
+          const html = await probe.text();
+          const invalidRedirect = /Invalid redirect/i.test(html);
+          out.oauthRedirectProbe = {
+            status: probe.status,
+            redirectUri: status.redirectUri,
+            registered: !invalidRedirect,
+            hint: invalidRedirect
+              ? "BulkPublish rechaza el redirect_uri: hay que registrarlo en la app OAuth (panel /developer)."
+              : "redirect_uri aceptado — el flujo puede completarse.",
+          };
+        } catch (e) {
+          out.oauthRedirectProbe = { error: e instanceof Error ? e.message : String(e) };
+        }
+      }
+
+      if (status.connected) {
+        let token: string | null = null;
+        try {
+          token = await oauth.getValidAccessToken();
+        } catch (e) {
+          out.oauthRefresh = { error: e instanceof Error ? e.message : String(e) };
+        }
+        out.oauthToken = mask(token);
+
+        if (token) {
+          const res = await fetch("https://app.bulkpublish.com/api/channels", {
+            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          });
+          const body = await res.text();
+          out.oauthApiCall = { status: res.status, ok: res.ok, body: body.slice(0, 300) };
+        }
+      }
+    } catch (e) {
+      out.oauthStatus = { error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
   // 6. Test de refresh del token de YouTube (?test=yttoken): intenta renovar el
   //    access token con el refresh token y reporta la respuesta exacta de Google.
   if (url.searchParams.get("test") === "yttoken") {
