@@ -529,11 +529,19 @@ export async function POST(request?: NextRequest) {
           "[facebook] Sin permiso pages_manage_posts en el token de Meta - se omite hasta concederlo"
         );
       }
-      for (const platform of [
-        "tiktok",
-        "instagram",
-        ...(metaCanFacebook ? ["facebook"] : []),
-      ]) {
+      const rotationPlan = [
+        { platform: "tiktok", max: 3 },
+        { platform: "instagram", max: 2 },
+        ...(metaCanFacebook ? [{ platform: "facebook", max: 1 }] : []),
+      ];
+      let tiktokDone = 0;
+      let instagramDone = 0;
+      let facebookDone = 0;
+      for (const rot of rotationPlan) {
+        const platform = rot.platform;
+        if (platform === "tiktok" && tiktokDone >= rot.max) continue;
+        if (platform === "instagram" && instagramDone >= rot.max) continue;
+        if (platform === "facebook" && facebookDone >= rot.max) continue;
         if (outOfTime) break;
         for (const campaign of orderedCampaigns) {
           if (outOfTime) break;
@@ -695,6 +703,9 @@ export async function POST(request?: NextRequest) {
             );
 
             if (rotResult.success) {
+              if (platform === "tiktok") tiktokDone++;
+              else if (platform === "instagram") instagramDone++;
+              else if (platform === "facebook") facebookDone++;
               result.contentPublished++;
               result.contentGenerated++;
               await clearPublishFailure(platform);

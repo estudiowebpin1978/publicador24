@@ -93,7 +93,7 @@ export function humanizeText(text: string): string {
 export function getDailyPostLimit(platform: string, direct = false): number {
   const limits: Record<string, number> = {
     facebook: 10,
-    instagram: 8,
+    instagram: 3,
     // BulkPublish (unica via gratis de TikTok) responde en su plan Free:
     // "You've reached the posts per day limit (3/3)". Intentar mas posts no
     // solo falla: gasta tiempo de IA y de render de video por cada intento.
