@@ -14,27 +14,16 @@ import {
 import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { parseJsonContent, normalizePostContent } from "@/lib/ai/json-content";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import { getBufferAccount, getBufferChannels, createBufferPost, getBufferPosts, deleteBufferPost, isBufferRateLimited, type BufferChannel } from "@/lib/buffer/client";
-import { getSmartSchedule, autoImproveCampaign } from "@/lib/ai/autonomous";
-import { tryGetSavedToken } from "@/lib/youtube";
-import { publishWithRotation, getProviderStatus } from "@/lib/publisher/rotation";
-import { humanDelay, humanizeText, pickHumanTimeSlot, checkDailyQuota } from "@/lib/anti-bot";
-import { POST as cleanupBufferRoute } from "@/app/api/admin/cleanup-buffer/route";
-import { POST as cleanupBulkPublishRoute } from "@/app/api/admin/cleanup-bulkpublish/route";
-import {
-  getPublishBlock,
-  markPublishFailure,
-  clearPublishFailure,
-} from "@/lib/publisher/failure-backoff";
-import { hostImagePublicly, normalizeImageForMeta } from "@/lib/media-hosting";
-import { canPublishToFacebook } from "@/lib/meta/graph";
-import { getAllCampaignImages, pickCampaignImage } from "@/lib/campaign-images";
-import { processPendingRenders, startYouTubeRender, isVideoRenderBlocked } from "@/lib/video/render-queue";
+import { buildPostPrompt, buildImagePrompt, ensureSiteUrl, COPYWRITER_SYSTEM, isLotteryCampaign, AUDIENCE_CONTEXT } from "@/lib/ai/copywriter";
+import { normalizePostContent, parseJsonContent, salvageJsonFields } from "@/lib/ai/json-content";
+import { generateTextWithFallback } from "@/lib/ai/multi-provider";
+import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { buildTikTokVideo, selectTikTokFrames } from "@/lib/video/tiktok-video";
-import { checkFFmpeg } from "@/lib/video/ffmpeg";
-import { maxSimilarityVs } from "../../../../shared/text-similarity";
-import { findProhibitedClaims } from "../../../../shared/prohibited-claims";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { hostImagePublicly, normalizeImageForMeta } from "@/lib/media-hosting";
+import { publishWithRotation, getProviderStatus } from "@/lib/publisher/rotation";
+import { getCampaignImages, pickCampaignImage } from "@/lib/campaign-images";
+import { canPublishToFacebook, isMetaConfiguredAsync } from "@/lib/meta/graph";
+import { humanDelay, getDailyPostLimit, checkDailyQuota, pickHumanTimeSlot, humanizeText } from "@/lib/anti-bot";
 
 // Render de video con ffmpeg (TikTok/YouTube) dentro del ciclo. En Hobby,
 // Vercel permite funciones de hasta 300s (docs de planes): se usa casi todo
@@ -246,21 +235,23 @@ async function generatePlatformImage(
 }
 
 export async function POST(request?: NextRequest) {
-  try {
-    const supabase = getSupabaseAdmin();
-    const result: LoopResult = {
-      timestamp: Date.now(),
-      contentGenerated: 0,
-      contentPublished: 0,
-      imagesGenerated: 0,
-      duplicatesBlocked: 0,
-      claimsBlocked: 0,
-      errors: [],
-      details: [],
-      posts: [],
-    };
+  const tStart = Date.now();
+  const supabase = getSupabaseAdmin();
+  const result = {
+    status: "autopilot",
+    cycleStarted: new Date().toISOString(),
+    contentPublished: 0,
+    contentGenerated: 0,
+    imagesGenerated: 0,
+    duplicatesBlocked: 0,
+    claimsBlocked: 0,
+    details: [] as string[],
+    posts: [] as { platform: string; id: string; status: string }[],
+    errors: [] as string[],
+  };
 
-    const { data: campaigns } = await supabase
+  try {
+    const campaignsData = await supabase
       .from("campaigns")
       .select("*")
       .eq("status", "ACTIVE")
@@ -297,10 +288,6 @@ export async function POST(request?: NextRequest) {
           );
         }
       }
-    } catch (e) {
-      result.errors.push(`Buffer: ${e instanceof Error ? e.message : "error"}`);
-      if (/too many requests/i.test(e instanceof Error ? e.message : "")) bufferSkipped = true;
-    }
 
     if (channels.length === 0 && !bufferSkipped) {
       return NextResponse.json({ ...result, errors: [...result.errors, "No hay canales de Buffer conectados"] });
@@ -318,21 +305,23 @@ export async function POST(request?: NextRequest) {
           else if (active.length >= 8) result.details.push(`[${ch.service}] ${active.length}/10 posts (cerca del l├¡mite)`);
         } catch {}
       }
-      await humanDelay("before_buffer");
-    }
-    await humanDelay("before_bulkpublish");
 
-    for (const campaign of campaigns) {
-      for (const channel of channels) {
-        const platform = channel.service;
+      for (const campaign of campaigns) {
+        if (outOfTime) break;
+        if (platform === "tiktok" && tiktokDone >= rot.max) break;
+        if (platform === "instagram" && instagramDone >= rot.max) break;
+        if (platform === "facebook" && facebookDone >= rot.max) break;
 
-        // Smart schedule: learns from analytics data
-        let smartHour = 15;
+        await humanDelay("between_platforms");
+
+        const prompt = buildPostPrompt(platform, { id: (campaign.id as string) || "", name: (campaign.name as string) || "", url: (campaign.url as string) || "https://quiniela-ia-two.vercel.app/", idea: (campaign.idea as string) || "", description: (campaign.description as string) || "", platforms: (campaign.platforms as string[]) || [] });
+        const aiResp = await generateTextWithFallback(prompt, COPYWRITER_SYSTEM);
+
+        let content: { hook?: string; body?: string; caption?: string; cta?: string; hashtags?: string[] } | null = null;
         try {
-          const smart = await getSmartSchedule(platform);
-          smartHour = smart.hour;
-          result.details.push(`[${platform}] ${smart.reason}`);
-        } catch {}
+          const parsed = parseJsonContent(aiResp.text || "{}");
+          content = normalizePostContent(parsed);
+        } catch { content = null; }
 
         // Skip full channels
         if (fullChannels.has(channel.id)) {
@@ -372,8 +361,12 @@ export async function POST(request?: NextRequest) {
         );
         result.details.push(`[${platform}] Ángulo: ${bufferAngle.label}`);
 
-        try {
-          const response = await generateTextWithFallback(prompt, COPYWRITER_SYSTEM);
+        const rotResult = await publishWithRotation({
+          text: humanText,
+          platform,
+          ...(videoUrl ? { videoUrl } : {}),
+          ...(finalImageUrl ? { imageUrl: finalImageUrl } : {}),
+        });
 
           let content;
           try {
@@ -468,29 +461,22 @@ export async function POST(request?: NextRequest) {
             assets: imageUrl ? [{ image: { url: imageUrl } }] : undefined,
           });
 
+        if (rotResult.success) {
           result.contentPublished++;
-          await clearPublishFailure(platform);
-          result.posts.push({
-            platform,
-            id: post.id,
-            status: post.status,
-            scheduledAt: scheduledTime.toISOString(),
-          });
-          result.details.push(
-            `[${platform}] Buffer OK: ${post.id} | ${scheduledTime.toLocaleString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}`
-          );
-
-          const { data: cp } = await supabase.from("content_pieces").insert({
-            campaign_id: campaign.id,
-            title: content.hook,
-            hook: content.hook,
-            body: content.body,
-            cta: content.cta,
+          result.contentGenerated++;
+          result.posts.push({ platform, id: rotResult.externalId || "", status: "published" });
+          result.details.push(`[${platform}] ${rotResult.publisher} OK`);
+          await supabase.from("content_pieces").insert({
+            campaign_id: (campaign.id as string) || "",
+            title: content.hook || content.caption || content.text || "",
+            hook: content.hook || content.caption || "",
+            body: content.body || "",
+            cta: content.cta || "",
             hashtags: content.hashtags || [],
             status: "PUBLISHED",
             platform,
-            media_urls: imageUrl ? [imageUrl] : [],
-            external_post_id: post.id,
+            media_urls: videoUrl ? [videoUrl] : imageUrl ? [imageUrl] : [],
+            external_post_id: rotResult.externalId || "",
             published_at: Date.now(),
           }).select("id").single();
 
@@ -939,8 +925,6 @@ ${avoidRepetitionNote(ytRecent)}`;
           `[youtube] Token de Google no disponible (expirado o revocado). Re-autoriz├í la cuenta para volver a publicar: ${YOUTUBE_AUTH_URL}`
         );
       }
-    } catch (e) {
-      result.errors.push(`[youtube] ${e instanceof Error ? e.message : "error"}`);
     }
 
     // LIMPIEZA AUTOM├üTICA (al final: primero se publica, despu├®s se libera
@@ -996,19 +980,6 @@ ${avoidRepetitionNote(ytRecent)}`;
       { status: 500 }
     );
   }
-}
 
-export async function GET() {
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data: posts } = await supabase
-      .from("scheduled_posts")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(10);
-
-    return NextResponse.json({ recentPosts: posts || [] });
-  } catch {
-    return NextResponse.json({ recentPosts: [] });
-  }
+  return NextResponse.json({ ...result, durationMs: Date.now() - tStart });
 }
