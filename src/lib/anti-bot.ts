@@ -25,10 +25,32 @@ export async function humanDelay(profile: keyof typeof DELAY_PROFILES): Promise<
   return ms;
 }
 
-const TIME_SLOTS_PEAK: number[] = [12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
-const TIME_SLOTS_OFFPEAK: number[] = [8, 9, 10, 11, 23, 0, 1];
+// Franjas horarias en UTC pensadas para la audiencia de Argentina (UTC-3):
+// se convierten de las ventanas de actividad reales del público, no de una
+// lista genérica. La prime time argentina es la noche (19-23 ARG) y ahí es
+// donde está el engagement más alto en redes, así que esas horas son pico.
+//
+//   ARG 7-9  (ida al trabajo)   -> UTC 10-12
+//   ARG 12-14 (almuerzo)        -> UTC 15-17
+//   ARG 19-23 (noche)           -> UTC 22-02
+const TIME_SLOTS_PEAK: number[] = [10, 11, 12, 15, 16, 17, 22, 23, 0, 1, 2];
+// Madrugada y primera hora: se publica solo si el azar lo elige (circula
+// contenido cuando la competencia no está, pero nunca compite con la noche).
+const TIME_SLOTS_OFFPEAK: number[] = [3, 4, 5, 6, 7, 8, 9, 13, 14, 18, 19, 20, 21];
 
-export function pickHumanTimeSlot(platform: string, preferPeak: boolean = true): Date {
+/**
+ * Elige un horario "humano" para el post.
+ *
+ * `preferredHour` (UTC) viene del scheduler con datos de engagement: si se
+ * pasa, se respeta la hora y solo se varía el minuto (para que los posts no
+ * caigan todos en el mismo minuto y se vea automatizado). Sin preferencia se
+ * sortea entre las franjas de la audiencia argentina.
+ */
+export function pickHumanTimeSlot(
+  platform: string,
+  preferPeak: boolean = true,
+  preferredHour?: number | null
+): Date {
   const now = new Date();
   const day = now.getUTCDay();
 
@@ -46,9 +68,21 @@ export function pickHumanTimeSlot(platform: string, preferPeak: boolean = true):
     if (dayOffset > 7) break;
   }
 
+  const hasPreferred =
+    typeof preferredHour === "number" &&
+    Number.isFinite(preferredHour) &&
+    preferredHour >= 0 &&
+    preferredHour <= 23;
+
   const slots = preferPeak && Math.random() > 0.3 ? TIME_SLOTS_PEAK : TIME_SLOTS_OFFPEAK;
-  const hour = slots[Math.floor(Math.random() * slots.length)];
-  const minute = Math.floor(Math.random() * 60);
+  const hour = hasPreferred
+    ? ((Math.floor(preferredHour as number) % 24) + 24) % 24
+    : slots[Math.floor(Math.random() * slots.length)];
+  // Minuto aleatorio salvo que la hora venga de datos: ahí se desplaza ±25 min
+  // para no publicar siempre en el mismo punto exacto.
+  const minute = hasPreferred
+    ? Math.min(59, Math.max(0, Math.floor(Math.random() * 51) + Math.floor(Math.random() * 9)))
+    : Math.floor(Math.random() * 60);
 
   const target = new Date(now);
   target.setUTCDate(target.getUTCDate() + dayOffset);

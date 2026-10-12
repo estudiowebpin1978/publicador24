@@ -18,22 +18,12 @@ export async function autoCleanBuffer(): Promise<{ cleaned: number; message: str
 }
 
 export async function getSmartSchedule(platform: string): Promise<{ hour: number; reason: string }> {
-  try {
-    const supabase = getSupabaseAdmin();
-    const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const { data: rows } = await supabase
-      .from("analytics_daily")
-      .select("platform, date, engagement, likes, comments, shares")
-      .eq("platform", platform)
-      .gte("date", since)
-      .order("engagement", { ascending: false })
-      .limit(5);
-    if (rows && rows.length > 0 && rows[0].date) {
-      const best = new Date(rows[0].date).getUTCHours();
-      return { hour: best || 15, reason: `Mejor hora basada en datos: ${best}:00 UTC (${best-3}:00 ARG)` };
-    }
-  } catch {}
-  return { hour: 15, reason: "Horario óptimo por defecto (12:30 ARG)" };
+  // Implementación única en smart-scheduler.ts: analiza el engagement por HORA
+  // del día (promediando los días con datos) en vez de tomar la hora de la
+  // fecha del mejor día, que siempre daba medianoche y devolvía siempre 0.
+  // Acá solo se re-exporta para no romper los imports existentes.
+  const { getSmartSchedule: schedule } = await import("@/lib/smart-scheduler");
+  return schedule(platform);
 }
 
 export async function autoImproveCampaign(campaignId: string): Promise<{ insight: string; action: string }> {

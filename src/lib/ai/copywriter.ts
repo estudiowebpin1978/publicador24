@@ -67,6 +67,91 @@ export const NATURAL_RULES = `- Primera línea que frena el scroll: una pregunta
 - Escribí como le hablarías a un amigo, no como un folleto ni como una nota de radio.
 - No repitas el mismo arranque ni la misma estructura entre publicaciones.`;
 
+/**
+ * Ángulos de marketing: la perspectiva desde la que se aborda cada post.
+ *
+ * Un copywriter humano planifica la mezcla (educar, despertar curiosidad,
+ * mostrar prueba social...); si se le deja a la IA variar sola, converge
+ * siempre al mismo gancho. Acá la rotación es determinística sobre los posts
+ * ya publicados de esa campaña+plataforma, así cada publicación toma un
+ * ángulo distinto a las últimas sin repetir en los próximos N turnos.
+ */
+export const CONTENT_ANGLES: { id: string; label: string; guide: string }[] = [
+  {
+    id: "educativo",
+    label: "Educación",
+    guide: "Explicá algo que el público suele hacer mal o no sabe, con un detalle concreto que sirva hoy mismo.",
+  },
+  {
+    id: "curiosidad",
+    label: "Curiosidad",
+    guide: "Abrí con algo poco obvio o contraintuitivo del tema, sin prometer nada ni exagerar: curiosidad real, no clickbait.",
+  },
+  {
+    id: "prueba-social",
+    label: "Prueba social",
+    guide: "Contá lo que ven haciendo otros usuarios o clientes reales del servicio (solo lo que la campaña declare; nada de testimonios inventados).",
+  },
+  {
+    id: "mito",
+    label: "Mito o error común",
+    guide: "Derribá una creencia extendida del nicho o un error frecuente, y explicá por qué conviene hacerlo distinto.",
+  },
+  {
+    id: "situacion",
+    label: "Situación real",
+    guide: "Arrancá con una escena cotidiana y reconocible del público (el momento en que aparece el problema o la decisión).",
+  },
+  {
+    id: "cómo-se-hace",
+    label: "Cómo se hace",
+    guide: "Pasos concretos y accionables para lograr algo, ordenados y aplicables sin rodeos.",
+  },
+  {
+    id: "comparativa",
+    label: "Comparativa",
+    guide: "Compará dos maneras de hacerlo y dejá clara cuál conviene y por qué, sin desacreditar a nadie.",
+  },
+  {
+    id: "detrás",
+    label: "Detrás de escena",
+    guide: "Mostrá cómo funciona por dentro el servicio o el método: el detalle que casi nadie explica.",
+  },
+];
+
+/**
+ * Elige el ángulo para la próxima publicación.
+ *
+ * `usedCount` es cuántos posts ya salieron en esa campaña+plataforma: se usa
+ * como índice estable, de modo que el ángulo avanza de a uno y no vuelve a
+ * repetirse hasta pasada la rueda completa. Se excluyen los ángulos cuyo
+ * texto ya aparece en los recientes, por si el contador se desalineó.
+ */
+export function pickContentAngle(
+  usedCount: number,
+  recentTexts: string[] = []
+): { id: string; label: string; guide: string } {
+  const total = CONTENT_ANGLES.length;
+  const start = ((usedCount % total) + total) % total;
+  for (let i = 0; i < total; i++) {
+    const angle = CONTENT_ANGLES[(start + i) % total];
+    // Si el ángulo ya se usó en los últimos posts (por keyword del label en
+    // los ganchos), se saltea: la rotación no debe repetir nada conocido.
+    const alreadyUsed = recentTexts.some((t) =>
+      t.toLowerCase().includes(angle.label.toLowerCase().split(" ")[0])
+    );
+    if (!alreadyUsed) return angle;
+  }
+  return CONTENT_ANGLES[start];
+}
+
+/** Bloque de ángulo para el prompt: le dice a la IA desde qué perspectiva escribir. */
+export function buildAngleNote(angle: { label: string; guide: string }): string {
+  return `ÁNGULO DE ESTA PUBLICACIÓN: ${angle.label}
+${angle.guide}
+Desarrollá la idea ENTREMANDO ese ángulo en la historia: no lo anuncies ("hoy te hablo de...") ni lo enumeres.`;
+}
+
 /** Guías de formato por plataforma (sin nichos hardcodeados). */
 export const PLATFORM_STYLES: Record<string, string> = {
   tiktok: `Generá un post para TikTok.
@@ -125,7 +210,8 @@ export function buildCampaignContext(campaign?: CopyCampaignContext | null): str
 export function buildPostPrompt(
   platform: string,
   campaign?: CopyCampaignContext | null,
-  extra?: string
+  extra?: string,
+  angle?: { label: string; guide: string }
 ): string {
   const style = PLATFORM_STYLES[platform] || PLATFORM_STYLES.instagram;
   const site = getSiteUrl(campaign);
@@ -137,6 +223,9 @@ export function buildPostPrompt(
     'REGLAS DE ESCRITURA (obligatorias):',
     NATURAL_RULES,
     '',
+    // El ángulo va antes de la TAREA: es la decisión de edición del día, y
+    // condiciona todo lo que se escriba. Sin él la IA converge al mismo gancho.
+    ...(angle ? [buildAngleNote(angle), ''] : []),
     'TAREA',
     `Escribí la publicación de hoy para ${platform}: que le hable al público de la campaña y le dé un motivo real para entrar a ${site}.`,
     '',

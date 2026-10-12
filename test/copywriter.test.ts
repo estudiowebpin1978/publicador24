@@ -10,6 +10,9 @@ import {
   isLotteryCampaign,
   buildImagePrompt,
   COPYWRITER_SYSTEM,
+  CONTENT_ANGLES,
+  pickContentAngle,
+  buildAngleNote,
 } from "../src/lib/ai/copywriter.ts";
 import { resolveMarketingCompliance } from "../src/lib/marketing/compliance.ts";
 
@@ -114,4 +117,45 @@ test("resolveMarketingCompliance: +18/disclaimer en nichos regulados y CTA con U
   const forced = resolveMarketingCompliance("Yoga", { ctaUrl: "https://otro.com" });
   assert.equal(forced.ctaUrl, "https://otro.com");
   assert.equal(forced.ageRestricted, false);
+});
+
+test("la rotación de ángulos avanza con cada publicación sin repetir en la rueda", () => {
+  const seen: string[] = [];
+  for (let i = 0; i < CONTENT_ANGLES.length; i++) {
+    seen.push(pickContentAngle(i, []).id);
+  }
+  // Una vuelta completa recorre todos los ángulos, sin repetir ninguno.
+  assert.equal(new Set(seen).size, CONTENT_ANGLES.length);
+  // La rueda es estable: al volver al inicio repite el primero.
+  assert.equal(pickContentAngle(CONTENT_ANGLES.length, []).id, seen[0]);
+  // Índices fuera de rango no rompen la rotación.
+  assert.ok(pickContentAngle(-3, []).id);
+  assert.ok(pickContentAngle(999, []).id);
+});
+
+test("pickContentAngle saltea ángulos que ya aparecen en los recientes", () => {
+  // El label "Educación" empieza con "educación": si ese texto ya se usó, se saltea.
+  const angle = pickContentAngle(0, ["un post sobre educación financiera para todos"]);
+  assert.notEqual(angle.label, "Educación");
+});
+
+test("el ángulo entra al prompt antes de la TAREA y no cambia el JSON pedido", () => {
+  const angle = pickContentAngle(0, []);
+  const withAngle = buildPostPrompt("instagram", { name: "X", url: "https://x.com" }, "", angle);
+  assert.match(withAngle, /ÁNGULO DE ESTA PUBLICACIÓN/);
+  assert.ok(withAngle.indexOf("ÁNGULO") < withAngle.indexOf("TAREA"));
+  assert.match(withAngle, /"hook"/);
+  assert.match(withAngle, /"cta"/);
+
+  // Sin ángulo el prompt sigue siendo válido (compatibilidad hacia atrás).
+  const without = buildPostPrompt("instagram", { name: "X", url: "https://x.com" });
+  assert.doesNotMatch(without, /ÁNGULO DE ESTA PUBLICACIÓN/);
+  assert.match(without, /"hashtags"/);
+});
+
+test("buildAngleNote le da instrucción concreta, no un título vacío", () => {
+  const note = buildAngleNote({ label: "Mito", guide: "Derribá una creencia extendida." });
+  assert.match(note, /Mito/);
+  assert.match(note, /Derribá una creencia extendida/);
+  assert.match(note, /no lo anuncies/);
 });

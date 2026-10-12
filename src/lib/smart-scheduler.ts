@@ -1,9 +1,14 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 
+// Horas por defecto en UTC, derivadas de la audiencia argentina (UTC-3).
+// Sin datos de engagement suficientes se usan estas ventanas, que cubren la
+// noche argentina (19-23 ARG = 22-02 UTC), el almuerzo (12-14 ARG = 15-17
+// UTC) y la salida del trabajo (18-19 ARG = 21-22 UTC).
 const DEFAULT_SLOTS: Record<string, number[]> = {
-  tiktok: [15, 16, 17, 20, 21],
-  instagram: [15, 16, 20, 21, 23],
-  facebook: [16, 17, 20, 21, 0],
+  tiktok: [22, 23, 0, 1, 15, 16],
+  instagram: [22, 23, 0, 1, 15, 21],
+  facebook: [22, 23, 15, 16, 21],
+  youtube: [22, 23, 16, 17],
 };
 
 export async function getOptimalTimeSlots(platform: string): Promise<number[]> {
