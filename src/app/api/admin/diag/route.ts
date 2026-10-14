@@ -537,6 +537,46 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 8b. ¿Hay analítica real disponible en BulkPublish? (?test=bpanalytics)
+  //
+  // Motivo: el learning loop y el smart scheduler están ciegos porque Buffer
+  // está rate-limited 30 días y no hay Insights de Meta configurados. BulkPublish
+  // pidió el scope analytics:read en el OAuth: si devuelve métricas reales de los
+  // posts publicados, esa pasa a ser la fuente de engagement de analytics_daily.
+  if (url.searchParams.get("test") === "bpanalytics") {
+    const bp: Record<string, unknown> = {};
+    try {
+      const { getChannels, bpFetch } = await import("@/lib/bulkpublish/client");
+      const channels = await getChannels();
+      bp.channels = channels.map((ch: { id: number; platform: string }) => ({ id: ch.id, platform: ch.platform }));
+      const tiktok = channels.find((ch: { platform: string }) => ch.platform.toLowerCase().includes("tiktok"));
+      // listar posts recientes del canal
+      const list = await bpFetch<{ posts?: { id: number | string; status: string }[] }>(
+        `/api/posts?channels=${tiktok?.id}&limit=5`
+      ).catch((e: unknown) => ({ error: e instanceof Error ? e.message : "err" }));
+      bp.recentPosts = (list as { posts?: unknown[] }).posts?.slice?.(0, 3) ?? list;
+      // sondear endpoints de analítica habituales
+      const probes: Record<string, unknown> = {};
+      for (const p of [
+        `/api/posts/${tiktok?.id}/analytics`,
+        "/api/analytics/posts",
+        `/api/analytics?channels=${tiktok?.id}`,
+        "/api/metrics/posts",
+      ]) {
+        try {
+          const r = await bpFetch<unknown>(p);
+          probes[p] = r;
+        } catch (e: unknown) {
+          probes[p] = { error: e instanceof Error ? e.message.slice(0, 120) : "err" };
+        }
+      }
+      bp.analyticsProbes = probes;
+    } catch (e) {
+      bp.error = e instanceof Error ? e.message : "error";
+    }
+    out.testBpAnalytics = bp;
+  }
+
   // 9. Ultimas piezas (?last=tiktok&n=3): texto, media y estado real de lo que
   //    salio publicado, para verificar CTA, disclaimers y video adjunto.
   if (url.searchParams.get("last")) {
