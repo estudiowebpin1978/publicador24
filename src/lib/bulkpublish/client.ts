@@ -245,6 +245,31 @@ export function invalidateChannelsCache() {
   } catch {}
 }
 
+/**
+ * Espera (con tope) a que BulkPublish termine de ingerir el medio de un post.
+ *
+ * Motivo real: `/api/posts` acepta el `media` pero lo procesa de forma
+ * asíncrona; si `/publish` se ejecuta antes de que el medio quede adjunto,
+ * responde 400 "tiktok video requires a video (no media attached)" aunque el
+ * create lo haya aceptado. Se hace polling de `GET /api/posts/{id}` y se
+ * corta apenas el medio aparece (o al llegar al tope).
+ */
+async function waitForPostMedia(postId: string | number, timeoutMs: number): Promise<void> {
+  const started = Date.now();
+  const step = 3000;
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const data = await bpFetch<Record<string, unknown>>(`/api/posts/${postId}`);
+      const p = (data.post as Record<string, unknown>) || data;
+      const media = p.media || p.assets || p.attachments;
+      if (Array.isArray(media) && media.length > 0) return;
+    } catch {
+      // GET puntual falla: se reintenta hasta el tope
+    }
+    await new Promise((r) => setTimeout(r, step));
+  }
+}
+
 export async function createPost(input: {
   text: string;
   channelIds: number[];
@@ -270,9 +295,17 @@ export async function createPost(input: {
   }
 
   if (input.mediaUrls && input.mediaUrls.length > 0) {
-    payload.media = input.mediaUrls.map((url) =>
-      input.mediaType ? { url, type: input.mediaType } : { url }
-    );
+    // BulkPublish ingiere el medio por `/api/media` antes de adjuntarlo al
+    // post: si se manda la URL externa cruda, el create la acepta pero el
+    // medio nunca queda adjunto y `/publish` responde 400 "no media attached".
+    // normalizeMedia devuelve la URL ya ingerida en BulkPublish (o la original
+    // si la ingesta falla, para no romper el camino de imágenes que funciona).
+    const media: { url: string; type?: string }[] = [];
+    for (const url of input.mediaUrls) {
+      const ingested = await normalizeMedia(url);
+      media.push(input.mediaType ? { url: ingested, type: input.mediaType } : { url: ingested });
+    }
+    payload.media = media;
   }
 
   let postId: string | number | undefined;
@@ -294,6 +327,12 @@ export async function createPost(input: {
   }
 
   if (input.publishNow && postId) {
+    // El medio se ingiere de forma asíncrona: se espera (con tope) a que
+    // quede adjunto antes de publicar, o BulkPublish tira 400 "no media
+    // attached" en el paso /publish.
+    if (input.mediaUrls && input.mediaUrls.length > 0) {
+      await waitForPostMedia(postId, 15000);
+    }
     try {
       await bpFetch(`/api/posts/${postId}/publish`, { method: "POST" });
     } catch (e) {
