@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { syncInstagramInsights } from "@/lib/analytics/meta";
+import { aggregateDaily } from "@/lib/analytics/daily";
 
 const BUFFER_API_URL = "https://api.buffer.com";
 
@@ -81,6 +83,13 @@ export async function GET(request: NextRequest) {
     const since = Date.now() - days * 24 * 60 * 60 * 1000;
 
     if (sync) {
+      // Meta Insights primero: fuente real de engagement (Buffer puede estar
+      // rate-limited; este sync es best-effort y no corta la lectura).
+      try {
+        await syncInstagramInsights(days);
+      } catch {
+        // best-effort: si Meta no responde, el resto del sync sigue
+      }
       try {
         const accountRes = await bufferGraphQL<{
           account: { organizations: { id: string }[] };
@@ -153,19 +162,9 @@ export async function GET(request: NextRequest) {
     const isMissingTable = error?.message?.includes("does not exist") || error?.message?.includes("relation");
     const data = isMissingTable ? [] : rows || [];
 
-    const daily = data.map((row) => ({
-      date: new Date(row.date).toISOString().split("T")[0],
-      platform: row.platform,
-      impressions: row.impressions || 0,
-      reach: row.reach || 0,
-      likes: row.likes || 0,
-      comments: row.comments || 0,
-      shares: row.shares || 0,
-      saves: row.saves || 0,
-      clicks: row.clicks || 0,
-      views: row.views || 0,
-      engagement: (row.likes || 0) + (row.comments || 0) + (row.shares || 0),
-    }));
+    // Una fila por post deja varias entradas por día: se agregan por
+    // (día, plataforma) para mantener la forma que consume el dashboard.
+    const daily = aggregateDaily(data);
 
     const summary = {
       totalImpressions: daily.reduce((s, d) => s + d.impressions, 0),

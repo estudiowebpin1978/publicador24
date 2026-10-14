@@ -2,6 +2,7 @@ import { ConvexHttpClient } from "convex/browser";
 import type { Id } from "@convex/_generated/dataModel";
 import { getAIProvider } from "./provider";
 import { wrapProviderWithCostTracking } from "./cost-tracker";
+import { getSmartSchedule } from "@/lib/smart-scheduler";
 
 // Lazy: el cliente solo se crea al primer uso, así importar este módulo nunca
 // rompe aunque falte NEXT_PUBLIC_CONVEX_URL.
@@ -318,6 +319,75 @@ Respondé SOLO con el JSON, sin markdown.`;
   }
 }
 
+/**
+ * Fallback con datos reales cuando Convex no tiene publishedPosts (nada los
+ * escribe desde la migracion a Supabase: la publicacion real vive ahi y el
+ * autopilot puebla analytics_daily con Meta Insights de Instagram). Convex se
+ * conserva y tiene prioridad: si alguna vez contiene datos, este fallback no
+ * se usa.
+ */
+async function supabaseLearningFallback(): Promise<{
+  collected: number;
+  adjustments: string[];
+}> {
+  try {
+    const { getSupabaseAdmin } = await import("@/lib/supabase/server");
+    const supabase = getSupabaseAdmin();
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const { data, error } = await supabase
+      .from("analytics_daily")
+      .select("platform, date, reach, likes, comments, shares, views")
+      .gte("date", since);
+    if (error || !data || data.length === 0) return { collected: 0, adjustments: [] };
+
+    const byPlatform = new Map<
+      string,
+      { posts: number; reach: number; engagement: number; views: number }
+    >();
+    interface RawRow {
+      platform: string;
+      date: number;
+      reach?: number;
+      likes?: number;
+      comments?: number;
+      shares?: number;
+      views?: number;
+    }
+    for (const row of data as RawRow[]) {
+      let s = byPlatform.get(row.platform);
+      if (!s) {
+        s = { posts: 0, reach: 0, engagement: 0, views: 0 };
+        byPlatform.set(row.platform, s);
+      }
+      const engagement = (row.likes || 0) + (row.comments || 0) + (row.shares || 0);
+      s.posts++;
+      s.reach += row.reach || 0;
+      s.engagement += engagement;
+      s.views += row.views || 0;
+    }
+
+    const adjustments: string[] = [];
+    for (const [platform, s] of byPlatform) {
+      // El horario sale del MISMO motor que usa el autopilot para publicar
+      // (getSmartSchedule): si el reporte y el scheduler dicen horas
+      // distintas, no hay sistema inteligente.
+      let scheduleText = "horario sin calcular";
+      try {
+        const sched = await getSmartSchedule(platform);
+        scheduleText = `${sched.hour} UTC (${sched.reason})`;
+      } catch {
+        // scheduler sin datos: se deja el horario sin calcular
+      }
+      adjustments.push(
+        `[${platform.toUpperCase()}] 30d: ${s.posts} posts, alcance ${s.reach}, engagement ${s.engagement}, vistas ${s.views}; horario ${scheduleText}`
+      );
+    }
+    return { collected: data.length, adjustments };
+  } catch {
+    return { collected: 0, adjustments: [] };
+  }
+}
+
 export async function runLearningLoop(campaignId?: Id<"campaigns">): Promise<LearningResult> {
   const result: LearningResult = {
     metricsCollected: 0,
@@ -329,6 +399,17 @@ export async function runLearningLoop(campaignId?: Id<"campaigns">): Promise<Lea
   // Step 1: Collect metrics
   const metricsResult = await collectMetrics();
   result.metricsCollected = metricsResult.metricsCollected;
+
+  // Step 1b: si Convex no tiene publishedPosts, el loop aprende de
+  // analytics_daily (metricas reales de Meta Insights pobladas por el
+  // autopilot). El path de Convex tiene prioridad si llega a tener datos.
+  if (result.metricsCollected === 0) {
+    const fb = await supabaseLearningFallback();
+    if (fb.collected > 0) {
+      result.metricsCollected = fb.collected;
+      result.strategyAdjustments.push(...fb.adjustments);
+    }
+  }
 
   // Step 2: Update strategy scores
   const scoresResult = await updateStrategyScores();

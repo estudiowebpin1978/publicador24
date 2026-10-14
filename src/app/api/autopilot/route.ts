@@ -16,6 +16,7 @@ import { parseJsonContent, normalizePostContent } from "@/lib/ai/json-content";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { getBufferAccount, getBufferChannels, createBufferPost, getBufferPosts, deleteBufferPost, isBufferRateLimited, type BufferChannel } from "@/lib/buffer/client";
 import { getSmartSchedule, autoImproveCampaign } from "@/lib/ai/autonomous";
+import { syncInstagramInsights } from "@/lib/analytics/meta";
 import { tryGetSavedToken } from "@/lib/youtube";
 import { publishWithRotation, getProviderStatus } from "@/lib/publisher/rotation";
 import { humanDelay, humanizeText, pickHumanTimeSlot, checkDailyQuota } from "@/lib/anti-bot";
@@ -321,6 +322,27 @@ export async function POST(request?: NextRequest) {
       await humanDelay("before_buffer");
     }
     await humanDelay("before_bulkpublish");
+
+    // Analytics: engagement real de Instagram (Meta Insights) ANTES de decidir
+    // horarios. Best-effort: si falla, getSmartSchedule sigue usando las
+    // franjas de audiencia argentina por defecto.
+    try {
+      const metaSync = await syncInstagramInsights(30);
+      result.details.push(
+        `[Analytics] Meta Insights IG: +${metaSync.inserted} filas, ${metaSync.updated} actualizadas, ${metaSync.unchanged} sin cambios (${metaSync.posts} posts / 30 días)`
+      );
+    } catch (e) {
+      result.details.push(
+        `[Analytics] Meta Insights no disponible: ${e instanceof Error ? e.message : "error"} — se usan horarios por defecto`
+      );
+    }
+
+    // Learning loop: registra el hallazgo de engagement en strategy_memory
+    // (la tabla existía desde el esquema inicial y nunca se escribía).
+    try {
+      const improve = await autoImproveCampaign(campaigns[0].id);
+      result.details.push(`[Aprendizaje] ${improve.insight} -> ${improve.action}`);
+    } catch {}
 
     for (const campaign of campaigns) {
       for (const channel of channels) {

@@ -37,6 +37,9 @@ export async function getOptimalTimeSlots(platform: string): Promise<number[]> {
 
   const sorted = Object.entries(hourlyEngagement)
     .map(([hour, score]) => ({ hour: parseInt(hour), score }))
+    // Horas con score 0 no "ganan" por azar: si el engagement total es 0 se
+    // prefieren las franjas por defecto antes que una hora inventada.
+    .filter((e) => e.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 5)
     .map((e) => e.hour);
@@ -88,7 +91,9 @@ export async function getSmartSchedule(platform: string): Promise<{ hour: number
   hourlyAverage.sort((a, b) => b.avg - a.avg);
 
   const best = hourlyAverage[0];
-  if (!best) {
+  // best.avg <= 0: existen filas pero sin engagement medible. Con promedio 0
+  // el boost daba NaN y se devolvia una hora arbitraria en vez del default.
+  if (!best || best.avg <= 0) {
     const fallback = DEFAULT_SLOTS[platform] || DEFAULT_SLOTS.instagram;
     const hour = fallback[Math.floor(Math.random() * fallback.length)];
     return { hour, reason: "Sin engagement suficiente, usando horarios por defecto" };
@@ -97,8 +102,12 @@ export async function getSmartSchedule(platform: string): Promise<{ hour: number
   const avgEngagement = hourlyAverage.reduce((s, h) => s + h.avg, 0) / hourlyAverage.length;
   const boost = Math.round((best.avg / avgEngagement) * 100);
 
+  // Con engagement chico (posts nuevos), Math.round daba "0 engagement/hora"
+  // y parecía que no había datos: se muestra un decimal cuando es < 10.
+  const avgLabel = best.avg < 10 ? Math.round(best.avg * 10) / 10 : Math.round(best.avg);
+
   return {
     hour: best.hour,
-    reason: `Hora óptima según datos: +${boost}% engagement promedio (${Math.round(best.avg)} engagement/hora)`,
+    reason: `Hora óptima según datos: +${boost}% engagement promedio (${avgLabel} engagement/hora)`,
   };
 }

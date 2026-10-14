@@ -36,8 +36,19 @@ export async function autoImproveCampaign(campaignId: string): Promise<{ insight
       .limit(10);
     if (analytics && analytics.length > 2) {
       const avgEngagement = analytics.reduce((s, r) => s + (r.engagement_rate || 0), 0) / analytics.length;
-      if (avgEngagement > 3) return { insight: "Alto engagement detectado", action: "Aumentar frecuencia de publicación" };
-      return { insight: "Engagement moderado", action: "Probar nuevos hooks y formatos" };
+      const insight = avgEngagement > 3 ? "Alto engagement detectado" : "Engagement moderado";
+      const action = avgEngagement > 3 ? "Aumentar frecuencia de publicación" : "Probar nuevos hooks y formatos";
+      // Learning loop: guarda el hallazgo en strategy_memory. La tabla existía
+      // desde el esquema inicial y nunca se escribía (loop inerte).
+      await supabase.from("strategy_memory").insert({
+        campaign_id: campaignId,
+        metric_type: "engagement_rate_avg",
+        metric_value: avgEngagement,
+        insight,
+        recommendation: action,
+        created_at: Date.now(),
+      });
+      return { insight, action };
     }
   } catch {}
   return { insight: "Datos insuficientes", action: "Continuar con publicación diaria" };

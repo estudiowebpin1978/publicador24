@@ -577,6 +577,60 @@ export async function GET(request: NextRequest) {
     out.testBpAnalytics = bp;
   }
 
+  // 8c. Meta Insights como fuente de engagement (?test=metainsights)
+  //
+  // Fuerza el sync de Instagram hacia analytics_daily y muestra que horario
+  // elige ahora el smart scheduler con esos datos reales.
+  if (url.searchParams.get("test") === "metainsights") {
+    try {
+      const { syncInstagramInsights, runBatchProbe } = await import("@/lib/analytics/meta");
+      const { getSmartSchedule } = await import("@/lib/smart-scheduler");
+      // Sondas: batch chico (3) y batch completo (50) contra el mismo endpoint
+      // que usa el sync, para ver que responde Meta desde produccion.
+      const batchProbe3 = await runBatchProbe(3);
+      const batchProbe50 = await runBatchProbe(50);
+      const sync = await syncInstagramInsights(30);
+      const schedule = await getSmartSchedule("instagram");
+      out.testMetaInsights = { ok: true, batchProbe3, batchProbe50, ...sync, schedule };
+    } catch (e) {
+      out.testMetaInsights = { ok: false, error: e instanceof Error ? e.message : "error" };
+    }
+  }
+
+  // 8d. Learning loop sin publicar (?test=learn): corre runLearningLoop()
+  //      (Convex + fallback Supabase) y verifica que autoImproveCampaign()
+  //      escriba de verdad en strategy_memory (count antes/despues).
+  if (url.searchParams.get("test") === "learn") {
+    try {
+      const { runLearningLoop } = await import("@/lib/ai/learning-loop");
+      const { autoImproveCampaign } = await import("@/lib/ai/autonomous");
+      const { data: camp } = await supabase
+        .from("campaigns")
+        .select("id")
+        .eq("status", "ACTIVE")
+        .order("created_at", { ascending: true })
+        .limit(1);
+      const { count: before } = await supabase
+        .from("strategy_memory")
+        .select("id", { count: "exact", head: true });
+      const learn = await runLearningLoop();
+      let improve: unknown = null;
+      if (camp?.[0]?.id) improve = await autoImproveCampaign(camp[0].id);
+      const { count: after } = await supabase
+        .from("strategy_memory")
+        .select("id", { count: "exact", head: true });
+      out.testLearn = {
+        ok: true,
+        learn,
+        improve,
+        strategyMemoryBefore: before,
+        strategyMemoryAfter: after,
+      };
+    } catch (e) {
+      out.testLearn = { ok: false, error: e instanceof Error ? e.message : "error" };
+    }
+  }
+
   // 9. Ultimas piezas (?last=tiktok&n=3): texto, media y estado real de lo que
   //    salio publicado, para verificar CTA, disclaimers y video adjunto.
   if (url.searchParams.get("last")) {
