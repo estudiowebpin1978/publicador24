@@ -19,7 +19,7 @@ import {
 } from '../content/duplicate-detector';
 import { scoreContent } from '../content/scoring';
 import type { MarketingCompliance } from './compliance';
-import { DEFAULT_SITE_URL } from '../ai/copywriter';
+import { DEFAULT_SITE_URL, AUDIENCE_CONTEXT } from '../ai/copywriter';
 
 export { resolveMarketingCompliance } from './compliance';
 export type { MarketingCompliance } from './compliance';
@@ -88,6 +88,9 @@ const HASHTAG_SETS: string[][] = [
   ['#tips', '#aprende', '#argentina', '#emprendedores', '#estrategia'],
   ['#datoss', '#analisis', '#tendencias', '#innovacion', '#inteligenciaartificial'],
   ['#crecimiento', '#marketing', '#contenido', '#redessociales', '#viral'],
+  // Quiniela / lotería (prioridad para la campaña principal)
+  ['#quiniela', '#quinieladehoy', '#numerosganadores', '#sorteo', '#lotería'],
+  ['#ganarquiniela', '#quinielaciudad', '#numerosdelasuerte', '#quinielanacional', '#bolilla'],
 ];
 
 /** DEMO_MODE=true evita toda llamada costosa (IA, imágenes, storage). */
@@ -140,7 +143,7 @@ export async function generateMarketingPiece(
   if (!demo) {
     try {
       const { generateImageWithFallback } = await import('../ai/multi-image');
-      const res = await generateImageWithFallback(imagePrompt, '4:5');
+      const res = await generateImageWithFallback(imagePrompt, '9:16');
       imageUrl = res.url;
     } catch {
       /* sin proveedor de imagen: queda sin URL y la campaña aporta la suya */
@@ -388,20 +391,22 @@ export function buildVisualPrompt(
   idea: string,
   meta: ContentFingerprintInput['visual_meta']
 ): string {
+  // AUDIENCE_CONTEXT fuerza rasgos latinos, escena argentina y evita rasgos asiáticos
+  const audience = AUDIENCE_CONTEXT;
   if (meta) {
     const persona = meta.persona;
     return (
       `Fotografía realista, 1080x1350, persona ${persona?.gender || 'adulta'} ` +
       `${persona?.age_range || '25-40'} ${persona?.style || 'casual argentina'}, ` +
-      `ubicación ${meta.location || 'café/ciudad'}, acción ${meta.action || 'usando teléfono'}, ` +
-      `encuadre ${meta.framing || 'plano medio'}, iluminación ${meta.lighting || 'natural tarde'}, ` +
-      `smartphone visible de forma natural, sin logo gigante, sin cartoons, ` +
-      `sin texto ficticio en pantalla. Hook: "${hook}". Idea: ${idea}.`
+      `ubicación ${meta.location || 'kiosco de barrio / lotería'}, acción ${meta.action || 'consultando app / revisando boleta'}, ` +
+      `encuadre ${meta.framing || 'plano medio'}, iluminación ${meta.lighting || 'luz natural día'}, ` +
+      `smartphone visible con app de quiniela, sin logo gigante, sin cartoons, ` +
+      `sin texto ficticio en pantalla. ${audience} Hook: "${hook}". Idea: ${idea}.`
     );
   }
   return (
-    `Fotografía realista, 1080x1350, persona adulta argentina usando el celular, ` +
-    `luz natural, estilo UGC. Hook: "${hook}".`
+    `Fotografía realista, 1080x1350, persona adulta argentina (tez morena u oliva, cabello oscuro) en kiosco de barrio con cartelera de quiniela, ` +
+    `pesos argentinos en mano, luz natural de día, estilo UGC espontáneo. ${audience} Hook: "${hook}".`
   );
 }
 
