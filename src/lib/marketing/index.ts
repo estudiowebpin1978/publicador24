@@ -373,16 +373,30 @@ function applyCompliance(
 }
 
 function buildVisualMeta(seed: number): ContentFingerprintInput['visual_meta'] {
+  // Contexto específico: quiniela / lotería argentina — ubicación y acción
+  // reflejan la audiencia real (kiosco de barrio, revisando números, boleta en mano).
   return {
     persona: {
       gender: seed % 2 === 0 ? 'mujer' : 'hombre',
-      age_range: '25-40',
-      style: 'casual argentino moderno',
+      age_range: '25-50',
+      style: 'casual argentino moderno (remera, jeans, buzo, ropa de barrio)',
     },
-    location: pick(['café', 'bar', 'casa', 'calle', 'oficina'], seed),
-    action: pick(['mirar teléfono', 'analizar datos', 'consultar app', 'comparar opciones'], seed),
-    framing: pick(['primer plano', 'plano medio', 'POV', 'detalle dispositivo'], seed),
-    lighting: pick(['luz natural tarde', 'interior cálido', 'luz de pantalla', 'mañana'], seed),
+    location: pick(
+      ['kiosco de barrio con cartelera de quiniela', 'vereda con carteles de sorteos', 'mesa con boletas y pesos', 'interior de agencia de quiniela', 'calle con publicidad de lotería'],
+      seed
+    ),
+    action: pick(
+      ['revisando resultados en el celular', 'consultando números ganadores', 'comparando opciones de juego', 'revisando boleta', 'mirando cartelera de sorteo'],
+      seed
+    ),
+    framing: pick(
+      ['primer plano con boleta visible', 'plano medio en kiosco', 'POV revisando números', 'detalle de cartelera con carteles argentinos'],
+      seed
+    ),
+    lighting: pick(
+      ['luz natural día (mañana)', 'luz natural tarde (atardecer argentino)', 'interior cálido de kiosco', 'luz de pantalla del celular'],
+      seed
+    ),
   };
 }
 
@@ -440,10 +454,19 @@ const DEMO_HOOKS: string[] = [
   '3 errores que todos cometen (y el último es caro)',
   'Si recién arrancás, leé esto antes de gastar plata',
   'Nadie te contó esto, pero es más simple de lo que parece',
+  // Variantes específicas de quiniela / lotería
+  'Estos números no son casuales — mirá por qué salen hoy',
+  'Si jugás a la quiniela, esto es lo que nadie te explica',
+  'Revisé 30 sorteos y encontré algo que se repite',
+  'El error que todos cometen con los números ganadores',
+  'Lo que pasa cuando comparás la quiniela con estos datos',
 ];
 
 const DEMO_CAPTIONS: string[] = [
   'Arrancamos simple: primero entendés el problema, después elegís la solución. Sin vueltas y sin promesas mágicas.\n\n¿Ya lo probaste? Contame en los comentarios.',
   'Lo que nadie te dice: la constancia gana siempre. Por eso armamos una guía corta, práctica y sin humo.\n\nGuardalo que te va a servir.',
   'Paso 1: mirá los datos. Paso 2: compará opciones. Paso 3: decidí con información y no con suerte.\n\n¿Qué paso es el que más te cuesta?',
+  // Variantes para quiniela
+  'Arrancamos con algo que nadie dice sobre la quiniela: los números no son azar. Mirá los datos antes de hoy.\n\n¿Querés ver cómo funciona? Entrá al link.',
+  'Si jugás a la quiniela, esto te interesa: hay un patrón que se repite y nadie te lo cuenta. Lo revisamos paso a paso.\n\nMirá más detalles en la descripción.',
 ];
