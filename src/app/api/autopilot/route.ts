@@ -595,6 +595,7 @@ export async function POST(request?: NextRequest) {
       const rotationPlan = [
         { platform: "tiktok", max: 3 },
         { platform: "instagram", max: 2 },
+        { platform: "twitter", max: 2 },
         ...(metaCanFacebook ? [{ platform: "facebook", max: 1 }] : []),
       ];
       let tiktokDone = 0;

@@ -9,6 +9,8 @@ const DEFAULT_SLOTS: Record<string, number[]> = {
   instagram: [22, 23, 0, 1, 15, 21],
   facebook: [22, 23, 15, 16, 21],
   youtube: [22, 23, 16, 17],
+  x: [22, 23, 0, 1, 15, 16, 21],
+  twitter: [22, 23, 0, 1, 15, 16, 21],
 };
 
 export async function getOptimalTimeSlots(platform: string): Promise<number[]> {

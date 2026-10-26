@@ -1,5 +1,5 @@
 // Enums
-export type SocialPlatform = 'tiktok' | 'instagram' | 'facebook' | 'x' | 'youtube' | 'linkedin';
+export type SocialPlatform = 'tiktok' | 'instagram' | 'facebook' | 'x' | 'twitter' | 'youtube' | 'linkedin';
 export type AccountStatus = 'CONNECTED' | 'TOKEN_EXPIRING' | 'TOKEN_EXPIRED' | 'REQUIRES_REAUTH' | 'ERROR' | 'DISCONNECTED';
 export type ContentStatus = 'DRAFT' | 'AI_REVIEW' | 'USER_REVIEW' | 'APPROVED' | 'REJECTED' | 'SCHEDULED' | 'PUBLISHED' | 'FAILED';
 export type PublishStatus = 'QUEUED' | 'PROCESSING' | 'PUBLISHED' | 'FAILED' | 'RETRY' | 'CANCELLED';
