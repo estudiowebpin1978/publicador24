@@ -958,7 +958,7 @@ ${avoidRepetitionNote(ytRecent)}`;
         youtubeAuthNeeded = true;
         result.youtubeAuthUrl = YOUTUBE_AUTH_URL;
         result.details.push(
-          `[youtube] Token de Google no disponible (expirado o revocado). Re-autoriz├í la cuenta para volver a publicar: ${YOUTUBE_AUTH_URL}`
+          `[youtube] Token en PENDING_EXCHANGE (intercambio OAuth pendiente). Paso obligatorio una vez: ${YOUTUBE_AUTH_URL}. Después funciona automáticamente con refresh guardado.`
         );
       }
     } catch (e) {
