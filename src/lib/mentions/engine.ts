@@ -29,6 +29,7 @@ const MAX_MENTIONS_PER_POST: Record<SocialPlatform, number> = {
   instagram: 5,
   facebook: 3,
   x: 3,
+  twitter: 3,
   youtube: 0,
   linkedin: 3,
 };

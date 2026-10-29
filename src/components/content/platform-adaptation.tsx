@@ -33,6 +33,7 @@ const platformIcons: Record<SocialPlatform, string> = {
   instagram: "📸",
   facebook: "👥",
   x: "𝕏",
+  twitter: "𝕏",
   youtube: "▶️",
   linkedin: "💼",
 }
@@ -42,6 +43,7 @@ const platformColors: Record<SocialPlatform, string> = {
   instagram: "bg-gradient-to-br from-purple-500 to-pink-500 text-white",
   facebook: "bg-blue-600 text-white",
   x: "bg-black text-white",
+  twitter: "bg-black text-white",
   youtube: "bg-red-600 text-white",
   linkedin: "bg-blue-700 text-white",
 }

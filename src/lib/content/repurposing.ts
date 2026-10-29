@@ -54,6 +54,7 @@ export function adaptCaptionForPlatform(
     instagram: (c) => c.slice(0, 2200),
     facebook: (c) => c.slice(0, 63206),
     x: (c) => c.slice(0, 280),
+    twitter: (c) => c.slice(0, 280),
     youtube: (c) => c.slice(0, 5000),
     linkedin: (c) => c.slice(0, 3000),
   };
@@ -83,6 +84,7 @@ export function generatePlatformHashtags(
     instagram: ['#instagood', '#reels', '#explore'],
     facebook: ['#facebook', '#community', '#share'],
     x: ['#trending', '#thread', '#hot'],
+    twitter: ['#trending', '#thread', '#hot'],
     youtube: ['#shorts', '#youtube', '#subscribe'],
     linkedin: ['#professional', '#career', '#leadership'],
   };

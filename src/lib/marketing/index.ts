@@ -11,6 +11,7 @@ import type { ContentPillar, CaptionStyle } from '../ai/engines';
 import { generateHooks } from '../ai/hook-engine';
 import { generateIdeas } from '../ai/idea-generator';
 import { generateCaptions } from '../ai/caption-engine';
+import { analyzeHashtags } from '../hashtags/engine';
 import {
   calculateFingerprint,
   detectDuplicates,
@@ -126,8 +127,23 @@ export async function generateMarketingPiece(
     ? pick(DEMO_HOOKS, seed)
     : await generateOneHook(idea.title, audience, options.tone, platform);
 
-  // 3. FINGERPRINT — anti-repetición (texto real, no hash)
-  const hashtags = pick(HASHTAG_SETS, seed);
+  // 3. FINGERPRINT — anti-repetición; hashtags virales según tema/nicho
+  const hashtagRes = await analyzeHashtags({
+    content: `${idea.title} ${hook}`,
+    platform,
+    language: options.language || 'es',
+    country: 'AR',
+    count: 8,
+  });
+  const hashtags = [
+    ...hashtagRes.hashtags.map((h) =>
+      typeof h === 'string' ? h : (h as { tag?: string }).tag || String(h)
+    ),
+    ...(platform === 'tiktok' ? ['#parati', '#fyp', '#foryou', '#foryoupage', '#viral', '#capcut'] : []),
+    ...(platform === 'instagram' ? ['#love', '#instagood', '#instagram', '#fashion', '#photooftheday', '#photography'] : []),
+    ...(platform === 'youtube' ? ['#shorts', '#youtubeshorts', '#viral', '#tendencia', '#music', '#comedy'] : []),
+    ...(platform === 'twitter' || platform === 'x' ? ['#QuinielaNacional', '#QuinielaProvincia', '#Quini6', '#Telekino', '#loteria'] : []),
+  ];
   const fingerprint = calculateFingerprint({
     text: `${hook} ${idea.title} ${idea.angle}`,
     caption: idea.description,

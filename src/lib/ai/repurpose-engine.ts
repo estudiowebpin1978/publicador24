@@ -8,6 +8,7 @@ const PLATFORM_SPECS: Record<SocialPlatform, { format: string; maxCaption: numbe
   instagram: { format: 'reel/carousel/post', maxCaption: 2200, features: 'hashtags, locations, mentions' },
   facebook: { format: 'post/video', maxCaption: 63206, features: 'shares, reactions, groups' },
   x: { format: 'tweet/thread', maxCaption: 280, features: 'threads, polls, media' },
+  twitter: { format: 'tweet/thread', maxCaption: 280, features: 'threads, polls, media' },
   youtube: { format: 'shorts/video', maxCaption: 5000, features: 'timestamps, cards, end screen' },
   linkedin: { format: 'post/article', maxCaption: 3000, features: 'professional tone, articles' },
 };

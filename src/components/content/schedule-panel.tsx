@@ -41,6 +41,7 @@ const platformEmoji: Record<SocialPlatform, string> = {
   instagram: "📸",
   facebook: "👥",
   x: "𝕏",
+  twitter: "𝕏",
   youtube: "▶️",
   linkedin: "💼",
 }
