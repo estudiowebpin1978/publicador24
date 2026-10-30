@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { isBufferRateLimited } from "@/lib/buffer/client";
 
 const PLATFORM_KEY = "publish_failure";
 const USER_ID = "00000000-0000-0000-0000-000000000000";
@@ -16,11 +17,7 @@ function msUntilUtcMidnight(): number {
 }
 
 function blockMsFor(reason: string): number {
-  // Errores de permisos/quotea: reintentar en seguida no cambia nada y solo
-  // gasta IA, así que espaciamos el reintento.
   if (/#?\s*200\b|#?\s*240\b|too many requests|\b429\b|rate limit|quota|not allowed|insufficient|permission/i.test(reason)) {
-    // La cuota de BulkPublish se libera a medianoche UTC: esperar menos solo
-    // hace fallar el reintento y subir el contador de backoff.
     if (/bulkpublish/i.test(reason)) return msUntilUtcMidnight();
     return PERMANENT_ERROR_BLOCK_MS;
   }
@@ -82,6 +79,57 @@ async function writeFailures(failures: Failures): Promise<void> {
   } catch {}
 }
 
+/**
+ * Detecta si un error de backoff es "estale" (de una causa ya corregida).
+ * Estos se limpian automáticamente sin esperar a que venza el tiempo.
+ */
+export function isStaleBackoff(platform: string, reason: string): boolean {
+  // "no media attached" era un error del flujo viejo (antes de normalizeMedia + waitForPostMedia).
+  // Si el fix está desplegado, este backoff ya no tiene sentido.
+  if (platform === "tiktok" && /no media attached|video requires a video/i.test(reason)) {
+    return true;
+  }
+  // "All providers in rate limit" era por Buffer rate-limited (temporal).
+  // Si Buffer ya se recuperó, este backoff es estale.
+  if (/all providers in rate limit|Todos los proveedores en rate limit/i.test(reason)) {
+    return true;
+  }
+  // "tiktok video requires a video (no media attached)" — error pre-fix
+  if (platform === "tiktok" && /VALIDATION_ERROR.*no media/i.test(reason)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Limpia automáticamente los backoffs estales. Se llama al inicio del autopilot
+ * para que un fix desplegado se propague sin intervención manual.
+ */
+export async function autoClearStaleBackoffs(): Promise<string[]> {
+  const failures = await readFailures();
+  const cleared: string[] = [];
+  const now = Date.now();
+  const bufferRecovered = !(await isBufferRateLimited());
+  for (const [platform, entry] of Object.entries(failures)) {
+    if (!entry || entry.until <= now) continue;
+    if (isStaleBackoff(platform, entry.reason)) {
+      cleared.push(platform);
+      delete failures[platform];
+      continue;
+    }
+    // Si Buffer se recuperó y el error era por Buffer rate limit, limpiar.
+    if (bufferRecovered && /buffer.*rate limit|too many requests/i.test(entry.reason)) {
+      cleared.push(platform);
+      delete failures[platform];
+      continue;
+    }
+  }
+  if (cleared.length > 0) {
+    await writeFailures(failures);
+  }
+  return cleared;
+}
+
 /** Devuelve el motivo si la plataforma está en pausa por fallos recientes. */
 export async function getPublishBlock(platform: string): Promise<string | null> {
   const failures = await readFailures();
@@ -100,11 +148,9 @@ export async function markPublishFailure(platform: string, reason: string): Prom
 
   let backoff: number;
   if (/bulkpublish/i.test(reason)) {
-    // La cuota de BulkPublish vuelve a medianoche UTC: ningún tope de 6h.
     backoff = msUntilUtcMidnight();
   } else {
     const base = blockMsFor(reason);
-    // Cada repetición duplica la espera (30min → 1h → 2h → 4h, tope 6h).
     backoff = Math.min(base * Math.pow(2, Math.max(0, count - 1)), 6 * 60 * 60_000);
   }
 
@@ -123,3 +169,6 @@ export async function clearPublishFailure(platform: string): Promise<void> {
   delete failures[platform];
   await writeFailures(failures);
 }
+
+// Re-export for compatibility
+export { readFailures, writeFailures };

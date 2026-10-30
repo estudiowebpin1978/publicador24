@@ -26,6 +26,7 @@ import {
   getPublishBlock,
   markPublishFailure,
   clearPublishFailure,
+  autoClearStaleBackoffs,
 } from "@/lib/publisher/failure-backoff";
 import { hostImagePublicly, normalizeImageForMeta } from "@/lib/media-hosting";
 import { canPublishToFacebook } from "@/lib/meta/graph";
@@ -271,6 +272,42 @@ export async function POST(request?: NextRequest) {
     if (!campaigns || campaigns.length === 0) {
       return NextResponse.json({ ...result, details: ["No hay campa├▒as activas"] });
     }
+
+    // Auto-clear stale backoffs: si un error fue de una causa ya corregida
+    // (ej: "no media attached" antes del fix de normalizeMedia, o backoff de
+    // Buffer rate limit cuando Buffer ya se recuper├│), se limpia autom├íticamente
+    // sin esperar a que venza el tiempo. Esto hace que un fix desplegado se
+    // propague sin intervenci├│n manual.
+    try {
+      const cleared = await autoClearStaleBackoffs();
+      if (cleared.length > 0) {
+        result.details.push(`[Auto] Backoffs estales limpiados: ${cleared.join(", ")}`);
+      }
+    } catch {}
+
+    // Auto-clear de backoffs de Buffer: si Buffer ya se recuper├│ del rate limit,
+    // los backoffs de plataformas que fallaron por "Buffer rate limited" ya no
+    // tienen sentido. Se limpian autom├íticamente para no penalizar a plataformas
+    // que podr├¡an publicar exitosamente ahora.
+    try {
+      const { isBufferRateLimited } = await import("@/lib/buffer/client");
+      const bufferOk = !(await isBufferRateLimited());
+      if (bufferOk) {
+        const { readFailures, writeFailures } = await import("@/lib/publisher/failure-backoff");
+        const failures = await readFailures();
+        const toClear: string[] = [];
+        for (const [platform, entry] of Object.entries(failures)) {
+          if (entry && entry.reason && /buffer.*rate limit|too many requests/i.test(entry.reason)) {
+            toClear.push(platform);
+            delete failures[platform];
+          }
+        }
+        if (toClear.length > 0) {
+          await writeFailures(failures);
+          result.details.push(`[Auto] Backoffs de Buffer limpiados: ${toClear.join(", ")}`);
+        }
+      }
+    } catch {}
 
     // Im├ígenes propias de cada campa├▒a: se usan antes de generar con IA.
     const campaignImages = await getAllCampaignImages();
