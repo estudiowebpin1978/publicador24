@@ -631,6 +631,25 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 8e. Test de refresh de YouTube (?test=ytrefresh): verifica que el
+  //     refresh_token guardado funcione y obtiene un nuevo access_token.
+  if (url.searchParams.get("test") === "ytrefresh") {
+    try {
+      const { tryGetSavedToken } = await import("@/lib/youtube");
+      const token = await tryGetSavedToken();
+      out.testYtRefresh = {
+        ok: !!token,
+        tokenPresent: !!token,
+        tokenPrefix: token ? token.slice(0, 20) + "..." : null,
+        message: token
+          ? "Token válido obtenido (access o refresh)"
+          : "No se pudo obtener token — re-autorizar en /api/auth/youtube/callback",
+      };
+    } catch (e) {
+      out.testYtRefresh = { ok: false, error: e instanceof Error ? e.message : "error" };
+    }
+  }
+
   // 9. Ultimas piezas (?last=tiktok&n=3): texto, media y estado real de lo que
   //    salio publicado, para verificar CTA, disclaimers y video adjunto.
   if (url.searchParams.get("last")) {

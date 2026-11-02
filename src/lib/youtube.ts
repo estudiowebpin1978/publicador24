@@ -5,7 +5,10 @@ const YOUTUBE_CHANNEL_ID = "UC..."; // Se llena tras primera autorización
 async function refreshYouTubeToken(refreshToken: string): Promise<string | null> {
   try {
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    if (!clientSecret) return null;
+    if (!clientSecret) {
+      console.error("[YouTube] GOOGLE_CLIENT_SECRET no configurado en env");
+      return null;
+    }
 
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -19,7 +22,7 @@ async function refreshYouTubeToken(refreshToken: string): Promise<string | null>
     });
 
     const data = await res.json();
-    if (data.access_token) {
+    if (res.ok && data.access_token) {
       const { getSupabaseAdmin } = await import("@/lib/supabase/server");
       const supabase = getSupabaseAdmin();
       await supabase
@@ -32,10 +35,14 @@ async function refreshYouTubeToken(refreshToken: string): Promise<string | null>
         .eq("platform", "youtube")
         .eq("user_id", "00000000-0000-0000-0000-000000000000");
 
+      console.log("[YouTube] Token refrescado OK (expira en", data.expires_in || 3600, "s)");
       return data.access_token;
     }
+    // Log del error real de Google para diagnóstico
+    console.error("[YouTube] Refresh falló:", res.status, JSON.stringify(data).slice(0, 300));
     return null;
-  } catch {
+  } catch (e) {
+    console.error("[YouTube] Refresh exception:", e instanceof Error ? e.message : e);
     return null;
   }
 }
@@ -61,6 +68,7 @@ export async function tryGetSavedToken(): Promise<string | null> {
         return data.access_token;
       }
 
+      // Access token expirado — intentar refresh
       if (data.refresh_token) {
         const newToken = await refreshYouTubeToken(data.refresh_token);
         if (newToken) return newToken;
@@ -78,13 +86,14 @@ export async function tryGetSavedToken(): Promise<string | null> {
       );
       if (testRes.ok) return envAccess;
     }
-    if (envRefresh) {
+    if (envRefresh && envRefresh !== "PENDING_EXCHANGE") {
       const newToken = await refreshYouTubeToken(envRefresh);
       if (newToken) return newToken;
     }
 
     return null;
-  } catch {
+  } catch (e) {
+    console.error("[YouTube] tryGetSavedToken error:", e instanceof Error ? e.message : e);
     return null;
   }
 }
