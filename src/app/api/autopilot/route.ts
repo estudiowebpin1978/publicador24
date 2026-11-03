@@ -859,6 +859,18 @@ export async function POST(request?: NextRequest) {
     }
 
     // AUTO-YOUTUBE: primero retoma renders pendientes; si no hay ninguno, arma uno nuevo.
+    // Si el token de YouTube está revocado (refresh token inválido), se omite
+    // todo el bloque de YouTube para no gastar IA ni intentar publicar.
+    let youtubeTokenRevoked = false;
+    try {
+      const { isYouTubeTokenRevoked } = await import("@/lib/youtube");
+      youtubeTokenRevoked = await isYouTubeTokenRevoked();
+      if (youtubeTokenRevoked) {
+        result.details.push(
+          "[youtube] Token revocado/expirado — re-autorizar una vez en: https://autopublicador-zeta.vercel.app/api/auth/youtube/callback"
+        );
+      }
+    } catch {}
     // El render corre en Shotstack (gratis) y se retoma en el siguiente ciclo: as├¡ nunca
     // se supera el timeout de 60s de Vercel.
     let youtubeAuthNeeded = false;

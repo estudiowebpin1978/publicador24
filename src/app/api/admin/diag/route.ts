@@ -697,6 +697,44 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 8f. Estado de YouTube (?test=ytstatus): verifica si el token es válido
+  //     y si el refresh funciona. Útil para saber si YouTube está bloqueado.
+  if (url.searchParams.get("test") === "ytstatus") {
+    try {
+      const { tryGetSavedToken, isYouTubeTokenRevoked } = await import("@/lib/youtube");
+      const revoked = await isYouTubeTokenRevoked();
+      const token = await tryGetSavedToken();
+      out.testYtStatus = {
+        ok: !!token,
+        tokenRevoked: revoked,
+        tokenPresent: !!token,
+        message: token
+          ? "Token válido — YouTube puede publicar"
+          : revoked
+            ? "Refresh token revocado/expirado — re-autorizar en /api/auth/youtube/callback"
+            : "No se pudo obtener token — re-autorizar en /api/auth/youtube/callback",
+        authUrl: "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback",
+      };
+    } catch (e) {
+      out.testYtStatus = { ok: false, error: e instanceof Error ? e.message : "error" };
+    }
+  }
+
+  // 8g. Estado de YouTube (siempre presente en diag): token revocado o válido.
+  try {
+    const { isYouTubeTokenRevoked } = await import("@/lib/youtube");
+    const revoked = await isYouTubeTokenRevoked();
+    out.youtubeAuthStatus = {
+      tokenRevoked: revoked,
+      authUrl: "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback",
+      message: revoked
+        ? "Token revocado/expirado — re-autorizar en la URL"
+        : "Token válido — YouTube puede publicar",
+    };
+  } catch (e) {
+    out.youtubeAuthStatus = { error: e instanceof Error ? e.message : "error" };
+  }
+
   // 9. Ultimas piezas (?last=tiktok&n=3): texto, media y estado real de lo que
   //    salio publicado, para verificar CTA, disclaimers y video adjunto.
   if (url.searchParams.get("last")) {
