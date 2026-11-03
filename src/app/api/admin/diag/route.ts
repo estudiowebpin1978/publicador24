@@ -633,17 +633,61 @@ export async function GET(request: NextRequest) {
 
   // 8e. Test de refresh de YouTube (?test=ytrefresh): verifica que el
   //     refresh_token guardado funcione y obtiene un nuevo access_token.
+  //     También prueba el refresh directamente con Google para diagnosticar.
   if (url.searchParams.get("test") === "ytrefresh") {
     try {
+      const { getSupabaseAdmin } = await import("@/lib/supabase/server");
+      const supabase = getSupabaseAdmin();
+      const { data } = await supabase
+        .from("social_accounts")
+        .select("access_token, refresh_token")
+        .eq("platform", "youtube")
+        .eq("user_id", "00000000-0000-0000-0000-000000000000")
+        .single();
+
+      const result: Record<string, unknown> = {
+        db_access_present: !!data?.access_token && data.access_token !== "PENDING_EXCHANGE",
+        db_refresh_present: !!data?.refresh_token && data.refresh_token !== "PENDING_EXCHANGE",
+        db_access_prefix: data?.access_token ? data.access_token.slice(0, 20) + "..." : null,
+        db_refresh_prefix: data?.refresh_token ? data.refresh_token.slice(0, 20) + "..." : null,
+        client_secret_available: !!process.env.GOOGLE_CLIENT_SECRET,
+      };
+
+      // Test refresh token directly with Google
+      if (data?.refresh_token && data.refresh_token !== "PENDING_EXCHANGE") {
+        const refreshRes = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            client_id: "197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com",
+            client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+            refresh_token: data.refresh_token,
+            grant_type: "refresh_token",
+          }).toString(),
+        });
+        const refreshData = await refreshRes.json();
+        result.refresh_http_status = refreshRes.status;
+        result.refresh_ok = refreshRes.ok && !!refreshData.access_token;
+        result.refresh_error = refreshData.error || null;
+        result.refresh_error_description = refreshData.error_description || null;
+        if (refreshData.access_token) {
+          result.new_token_prefix = refreshData.access_token.slice(0, 20) + "...";
+        }
+      }
+
       const { tryGetSavedToken } = await import("@/lib/youtube");
       const token = await tryGetSavedToken();
+      result.tryGetSavedToken_ok = !!token;
+      result.tryGetSavedToken_prefix = token ? token.slice(0, 20) + "..." : null;
+
       out.testYtRefresh = {
-        ok: !!token,
-        tokenPresent: !!token,
-        tokenPrefix: token ? token.slice(0, 20) + "..." : null,
+        ok: !!token || result.refresh_ok === true,
+        ...result,
         message: token
-          ? "Token válido obtenido (access o refresh)"
-          : "No se pudo obtener token — re-autorizar en /api/auth/youtube/callback",
+          ? "Token válido obtenido"
+          : result.refresh_ok
+            ? "Refresh funciona pero tryGetSavedToken falló — revisar"
+            : "No se pudo obtener token — re-autorizar en /api/auth/youtube/callback",
       };
     } catch (e) {
       out.testYtRefresh = { ok: false, error: e instanceof Error ? e.message : "error" };
