@@ -871,151 +871,167 @@ export async function POST(request?: NextRequest) {
         );
       }
     } catch {}
-    // El render corre en Shotstack (gratis) y se retoma en el siguiente ciclo: as├¡ nunca
-    // se supera el timeout de 60s de Vercel.
-    let youtubeAuthNeeded = false;
-    try {
-      const youtubeToken = await tryGetSavedToken();
-      if (youtubeToken) {
-        const resumed = await processPendingRenders(supabase, youtubeToken);
-        result.details.push(...resumed.details);
-        result.contentPublished += resumed.uploaded;
-        if (resumed.uploaded > 0) {
-          result.posts.push({
-            platform: "youtube",
-            id: `uploaded-${resumed.uploaded}`,
-            status: "published",
-          });
+
+    if (!youtubeTokenRevoked) {
+      // AUTO-YOUTUBE: primero retoma renders pendientes; si no hay ninguno, arma uno nuevo.
+      // Si el token de YouTube está revocado (refresh token inválido), se omite
+      // todo el bloque de YouTube para no gastar IA ni intentar publicar.
+      let youtubeTokenRevoked = false;
+      try {
+        const { isYouTubeTokenRevoked } = await import("@/lib/youtube");
+        youtubeTokenRevoked = await isYouTubeTokenRevoked();
+        if (youtubeTokenRevoked) {
+          result.details.push(
+            "[youtube] Token revocado/expirado — re-autorizar una vez en: https://autopublicador-zeta.vercel.app/api/auth/youtube/callback"
+          );
         }
-
-        if (resumed.pending > 0) {
-          result.details.push(
-            `[youtube] ${resumed.pending} render(s) en curso ÔÇö se retoma en el pr├│ximo ciclo`
-          );
-        } else if ((await isVideoRenderBlocked(supabase)) && !(await checkFFmpeg())) {
-          result.details.push(
-            `[youtube] Video autom├ítico pausado (Shotstack sin cr├®ditos y sin ffmpeg local) ÔÇö se reintenta solo`
-          );
-        } else {
-          const quotaOk = await checkDailyQuota("youtube", supabase);
-          if (!quotaOk) {
-            result.details.push("[youtube] Cuota diaria alcanzada. Se retoma ma├▒ana.");
+      } catch {}
+      // El render corre en Shotstack (gratis) y se retoma en el siguiente ciclo: as├¡ nunca
+      // se supera el timeout de 60s de Vercel.
+      try {
+        const youtubeToken = await tryGetSavedToken();
+        if (youtubeToken) {
+          const resumed = await processPendingRenders(supabase, youtubeToken);
+          result.details.push(...resumed.details);
+          result.contentPublished += resumed.uploaded;
+          if (resumed.uploaded > 0) {
+            result.posts.push({
+              platform: "youtube",
+              id: `uploaded-${resumed.uploaded}`,
+              status: "published",
+            });
           }
-
-          // El l├¡mite real lo pone la cuota diaria (3/d├¡a): as├¡ cada campa├▒a
-          // activa recibe video en el mismo ciclo, no solo las dos primeras.
-          const ytStartLimit = campaigns.length;
-          let startedThisCycle = 0;
-          for (const campaign of campaigns) {
-            if (!quotaOk || startedThisCycle >= ytStartLimit) break;
-
-            const ytRecent = await loadRecentPublishedTexts(supabase, campaign.id, "youtube");
-            const ytPrompt = `${buildYouTubePrompt(campaign)}
-
-Cada video debe usar un enfoque distinto al anterior (tema, hook y encuadre siempre nuevos).
-Estilo: natural y realista (persona real, sin est├®tica publicitaria forzada), formato reel/short.
-
-${avoidRepetitionNote(ytRecent)}`;
-
-            try {
-              const response = await generateTextWithFallback(ytPrompt, COPYWRITER_SYSTEM);
-
-              const ytContent = parseJsonContent<{
-                title?: string;
-                description?: string;
-                tags?: string[];
-                thumbnail_prompt?: string;
-              }>(response.text);
-
-              if (!ytContent?.title) {
-                result.details.push(
-                  `[youtube] IA devolvi├│ JSON sin "title" para ${campaign.name} ÔÇö se reintenta en el pr├│ximo ciclo`
-                );
-                continue;
-              }
-
-              result.contentGenerated++;
-              result.details.push(`[youtube] Contenido: ${ytContent.title}`);
-
-              // Im├ígenes propias de la campa├▒a primero (posts + frames del video).
-              const ytOwnImages = imagesFor(campaign.id);
-              let thumbnailUrl = ytOwnImages[0] || "";
-              if (!thumbnailUrl) {
-                try {
-                  // Prompt de la campa├▒a (nunca un nicho hardcodeado).
-                  const thumbPrompt =
-                    ytContent.thumbnail_prompt ||
-                    buildImagePrompt("youtube", campaign) ||
-                    `Thumbnail de YouTube natural y realista sobre: ${campaign.name}${
-                      campaign.description ? ` ÔÇö ${campaign.description.slice(0, 120)}` : ""
-                    }`;
-                  const thumb = await generateImageWithFallback(thumbPrompt, "16:9");
-                  thumbnailUrl = await hostImagePublicly(thumb.url, "youtube");
-                  result.imagesGenerated++;
-                } catch {}
-              }
-
-              const started = await startYouTubeRender(supabase, {
-                campaignId: campaign.id,
-                title: ytContent.title,
-                description: ensureSiteUrl(
-                  [
-                    (ytContent.description || "").trim(),
-                    (ytContent.tags || []).length ? (ytContent.tags || []).join(", ") : "",
-                  ]
-                    .filter(Boolean)
-                    .join("\n\n"),
-                  campaign
-                ),
-                tags: ytContent.tags || [],
-                thumbnailUrl: thumbnailUrl || undefined,
-                images: ytOwnImages,
-              });
-
-              if (started.renderId || started.pieceId) {
-                startedThisCycle++;
-                const isLocal = (started.renderId || "").startsWith("local:");
-                result.details.push(
-                  isLocal
-                    ? `[youtube] Render local encolado (ffmpeg): ${started.renderId}`
-                    : `[youtube] Render iniciado: ${started.renderId}`
-                );
-              } else {
-                result.details.push(
-                  `[youtube] No se pudo iniciar render: ${started.error || "sin detalle"}`
-                );
-                await supabase.from("content_pieces").insert({
-                  campaign_id: campaign.id,
+  
+          if (resumed.pending > 0) {
+            result.details.push(
+              `[youtube] ${resumed.pending} render(s) en curso ÔÇö se retoma en el pr├│ximo ciclo`
+            );
+          } else if ((await isVideoRenderBlocked(supabase)) && !(await checkFFmpeg())) {
+            result.details.push(
+              `[youtube] Video autom├ítico pausado (Shotstack sin cr├®ditos y sin ffmpeg local) ÔÇö se reintenta solo`
+            );
+          } else {
+            const quotaOk = await checkDailyQuota("youtube", supabase);
+            if (!quotaOk) {
+              result.details.push("[youtube] Cuota diaria alcanzada. Se retoma ma├▒ana.");
+            }
+  
+            // El l├¡mite real lo pone la cuota diaria (3/d├¡a): as├¡ cada campa├▒a
+            // activa recibe video en el mismo ciclo, no solo las dos primeras.
+            const ytStartLimit = campaigns.length;
+            let startedThisCycle = 0;
+            for (const campaign of campaigns) {
+              if (!quotaOk || startedThisCycle >= ytStartLimit) break;
+  
+              const ytRecent = await loadRecentPublishedTexts(supabase, campaign.id, "youtube");
+              const ytPrompt = `${buildYouTubePrompt(campaign)}
+  
+  Cada video debe usar un enfoque distinto al anterior (tema, hook y encuadre siempre nuevos).
+  Estilo: natural y realista (persona real, sin est├®tica publicitaria forzada), formato reel/short.
+  
+  ${avoidRepetitionNote(ytRecent)}`;
+  
+              try {
+                const response = await generateTextWithFallback(ytPrompt, COPYWRITER_SYSTEM);
+  
+                const ytContent = parseJsonContent<{
+                  title?: string;
+                  description?: string;
+                  tags?: string[];
+                  thumbnail_prompt?: string;
+                }>(response.text);
+  
+                if (!ytContent?.title) {
+                  result.details.push(
+                    `[youtube] IA devolvi├│ JSON sin "title" para ${campaign.name} ÔÇö se reintenta en el pr├│ximo ciclo`
+                  );
+                  continue;
+                }
+  
+                result.contentGenerated++;
+                result.details.push(`[youtube] Contenido: ${ytContent.title}`);
+  
+                // Im├ígenes propias de la campa├▒a primero (posts + frames del video).
+                const ytOwnImages = imagesFor(campaign.id);
+                let thumbnailUrl = ytOwnImages[0] || "";
+                if (!thumbnailUrl) {
+                  try {
+                    // Prompt de la campa├▒a (nunca un nicho hardcodeado).
+                    const thumbPrompt =
+                      ytContent.thumbnail_prompt ||
+                      buildImagePrompt("youtube", campaign) ||
+                      `Thumbnail de YouTube natural y realista sobre: ${campaign.name}${
+                        campaign.description ? ` ÔÇö ${campaign.description.slice(0, 120)}` : ""
+                      }`;
+                    const thumb = await generateImageWithFallback(thumbPrompt, "16:9");
+                    thumbnailUrl = await hostImagePublicly(thumb.url, "youtube");
+                    result.imagesGenerated++;
+                  } catch {}
+                }
+  
+                const started = await startYouTubeRender(supabase, {
+                  campaignId: campaign.id,
                   title: ytContent.title,
-                  body: ytContent.description,
-                  cta: "Suscribit├® y activ├í la campanita",
-                  hashtags: ytContent.tags || [],
-                  status: "READY",
-                  platform: "youtube",
-                  media_urls: thumbnailUrl ? [thumbnailUrl] : [],
-                  external_post_id: "",
-                  published_at: Date.now(),
+                  description: ensureSiteUrl(
+                    [
+                      (ytContent.description || "").trim(),
+                      (ytContent.tags || []).length ? (ytContent.tags || []).join(", ") : "",
+                    ]
+                      .filter(Boolean)
+                      .join("\n\n"),
+                    campaign
+                  ),
+                  tags: ytContent.tags || [],
+                  thumbnailUrl: thumbnailUrl || undefined,
+                  images: ytOwnImages,
                 });
+  
+                if (started.renderId || started.pieceId) {
+                  startedThisCycle++;
+                  const isLocal = (started.renderId || "").startsWith("local:");
+                  result.details.push(
+                    isLocal
+                      ? `[youtube] Render local encolado (ffmpeg): ${started.renderId}`
+                      : `[youtube] Render iniciado: ${started.renderId}`
+                  );
+                } else {
+                  result.details.push(
+                    `[youtube] No se pudo iniciar render: ${started.error || "sin detalle"}`
+                  );
+                  await supabase.from("content_pieces").insert({
+                    campaign_id: campaign.id,
+                    title: ytContent.title,
+                    body: ytContent.description,
+                    cta: "Suscribit├® y activ├í la campanita",
+                    hashtags: ytContent.tags || [],
+                    status: "READY",
+                    platform: "youtube",
+                    media_urls: thumbnailUrl ? [thumbnailUrl] : [],
+                    external_post_id: "",
+                    published_at: Date.now(),
+                  });
+                }
+              } catch (e) {
+                result.errors.push(
+                  `[youtube] ${e instanceof Error ? e.message : "error"}`
+                );
               }
-            } catch (e) {
-              result.errors.push(
-                `[youtube] ${e instanceof Error ? e.message : "error"}`
-              );
             }
           }
+        } else {
+          result.youtubeAuthUrl = YOUTUBE_AUTH_URL;
+          result.details.push(
+            `[youtube] Token en PENDING_EXCHANGE (intercambio OAuth pendiente). Paso obligatorio una vez: ${YOUTUBE_AUTH_URL}. Después funciona automáticamente con refresh guardado.`
+          );
         }
-      } else {
-        youtubeAuthNeeded = true;
-        result.youtubeAuthUrl = YOUTUBE_AUTH_URL;
-        result.details.push(
-          `[youtube] Token en PENDING_EXCHANGE (intercambio OAuth pendiente). Paso obligatorio una vez: ${YOUTUBE_AUTH_URL}. Después funciona automáticamente con refresh guardado.`
-        );
+      } catch (e) {
+        result.errors.push(`[youtube] ${e instanceof Error ? e.message : "error"}`);
       }
-    } catch (e) {
-      result.errors.push(`[youtube] ${e instanceof Error ? e.message : "error"}`);
+  
+  
     }
 
-    // LIMPIEZA AUTOM├üTICA (al final: primero se publica, despu├®s se libera
+        // LIMPIEZA AUTOM├üTICA (al final: primero se publica, despu├®s se libera
     // espacio). Se ejecuta en proceso (sin HTTP interno) y cada ruta aplica su
     // propio throttling, as├¡ que casi nunca consume cuota de API.
     try {
@@ -1043,7 +1059,7 @@ ${avoidRepetitionNote(ytRecent)}`;
     }
 
     // Aviso visible en el dashboard: sin re-autorizar no se sube ning├║n video.
-    if (youtubeAuthNeeded) {
+    if (youtubeTokenRevoked) {
       await supabase.from("notifications").insert({
         type: "warning",
         title: "YouTube desconectado",

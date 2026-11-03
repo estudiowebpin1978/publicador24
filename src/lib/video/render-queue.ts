@@ -171,7 +171,12 @@ export async function startYouTubeRender(
 
     return insertRendering(`render:${renderId}`)
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Render start failed" }
+    const msg = e instanceof Error ? e.message : "Render start failed";
+    // Si Shotstack no tiene creditos, bloquearlo para no reintentar en cada ciclo
+    if (/credits|plan limits|quota|billing/i.test(msg)) {
+      await setVideoRenderBlocked(supabase, msg, 24 * 60 * 60_000);
+    }
+    return { error: msg }
   }
 }
 
