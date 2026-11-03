@@ -675,10 +675,11 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      const { tryGetSavedToken } = await import("@/lib/youtube");
+      const { tryGetSavedToken, isYouTubeTokenRevoked } = await import("@/lib/youtube");
       const token = await tryGetSavedToken();
       result.tryGetSavedToken_ok = !!token;
       result.tryGetSavedToken_prefix = token ? token.slice(0, 20) + "..." : null;
+      result.is_token_revoked = await isYouTubeTokenRevoked();
 
       out.testYtRefresh = {
         ok: !!token || result.refresh_ok === true,
@@ -687,7 +688,9 @@ export async function GET(request: NextRequest) {
           ? "Token válido obtenido"
           : result.refresh_ok
             ? "Refresh funciona pero tryGetSavedToken falló — revisar"
-            : "No se pudo obtener token — re-autorizar en /api/auth/youtube/callback",
+            : result.refresh_error === "invalid_grant"
+              ? "Refresh token revocado/expirado — re-autorizar en /api/auth/youtube/callback"
+              : "No se pudo obtener token — re-autorizar en /api/auth/youtube/callback",
       };
     } catch (e) {
       out.testYtRefresh = { ok: false, error: e instanceof Error ? e.message : "error" };

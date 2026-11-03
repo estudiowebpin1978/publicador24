@@ -56,6 +56,44 @@ async function refreshYouTubeToken(refreshToken: string): Promise<string | null>
   }
 }
 
+
+/** Verifica si el refresh token de YouTube está revocado (invalid_grant). */
+export async function isYouTubeTokenRevoked(): Promise<boolean> {
+  try {
+    const { getSupabaseAdmin } = await import("@/lib/supabase/server");
+    const supabase = getSupabaseAdmin();
+    const { data } = await supabase
+      .from("social_accounts")
+      .select("refresh_token")
+      .eq("platform", "youtube")
+      .eq("user_id", "00000000-0000-0000-0000-000000000000")
+      .single();
+
+    if (!data?.refresh_token || data.refresh_token === "PENDING_EXCHANGE") {
+      return true;
+    }
+
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientSecret) return true;
+
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: "197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com",
+        client_secret: clientSecret,
+        refresh_token: data.refresh_token,
+        grant_type: "refresh_token",
+      }).toString(),
+    });
+
+    const responseData = await res.json();
+    return !res.ok || !responseData.access_token;
+  } catch {
+    return true;
+  }
+}
+
 export async function tryGetSavedToken(): Promise<string | null> {
   try {
     const { getSupabaseAdmin } = await import("@/lib/supabase/server");
