@@ -25,7 +25,7 @@ async function refreshYouTubeToken(refreshToken: string): Promise<string | null>
     if (res.ok && data.access_token) {
       const { getSupabaseAdmin } = await import("@/lib/supabase/server");
       const supabase = getSupabaseAdmin();
-      await supabase
+      const { error: updateErr } = await supabase
         .from("social_accounts")
         .update({
           access_token: data.access_token,
@@ -35,11 +35,20 @@ async function refreshYouTubeToken(refreshToken: string): Promise<string | null>
         .eq("platform", "youtube")
         .eq("user_id", "00000000-0000-0000-0000-000000000000");
 
-      console.log("[YouTube] Token refrescado OK (expira en", data.expires_in || 3600, "s)");
+      if (updateErr) {
+        console.error("[YouTube] Error guardando token refrescado:", updateErr.message);
+        // El token sigue siendo válido para esta sesión aunque no se guardó
+      } else {
+        console.log("[YouTube] Token refrescado y guardado OK (expira en", data.expires_in || 3600, "s)");
+      }
       return data.access_token;
     }
     // Log del error real de Google para diagnóstico
     console.error("[YouTube] Refresh falló:", res.status, JSON.stringify(data).slice(0, 300));
+    // Si el refresh token fue revocado, el usuario necesita re-autorizar
+    if (data.error === "invalid_grant") {
+      console.error("[YouTube] Refresh token revocado o expirado — el usuario debe re-autorizar en /api/auth/youtube/callback");
+    }
     return null;
   } catch (e) {
     console.error("[YouTube] Refresh exception:", e instanceof Error ? e.message : e);
@@ -51,12 +60,16 @@ export async function tryGetSavedToken(): Promise<string | null> {
   try {
     const { getSupabaseAdmin } = await import("@/lib/supabase/server");
     const supabase = getSupabaseAdmin();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("social_accounts")
       .select("access_token, refresh_token")
       .eq("platform", "youtube")
       .eq("user_id", "00000000-0000-0000-0000-000000000000")
       .single();
+
+    if (error) {
+      console.error("[YouTube] Error leyendo social_accounts:", error.message);
+    }
 
     if (data?.access_token && data.access_token !== "PENDING_EXCHANGE") {
       const testRes = await fetch(
