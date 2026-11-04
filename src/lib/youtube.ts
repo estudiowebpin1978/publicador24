@@ -57,19 +57,33 @@ async function refreshYouTubeToken(refreshToken: string): Promise<string | null>
 }
 
 
-/** Verifica si el refresh token de YouTube está revocado (invalid_grant). */
+/** Verifica si el refresh token de YouTube está revocado (invalid_grant) o
+ *  si el access_token actual ya no funciona. Si el access_token funciona aunque
+ *  no haya refresh_token, se considera válido (puede publicar esta sesión). */
 export async function isYouTubeTokenRevoked(): Promise<boolean> {
   try {
     const { getSupabaseAdmin } = await import("@/lib/supabase/server");
     const supabase = getSupabaseAdmin();
     const { data } = await supabase
       .from("social_accounts")
-      .select("refresh_token")
+      .select("access_token, refresh_token")
       .eq("platform", "youtube")
       .eq("user_id", "00000000-0000-0000-0000-000000000000")
       .single();
 
-    if (!data?.refresh_token || data.refresh_token === "PENDING_EXCHANGE") {
+    if (!data) return true;
+
+    if (data.access_token && data.access_token !== "PENDING_EXCHANGE") {
+      try {
+        const testRes = await fetch(
+          "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true",
+          { headers: { Authorization: `Bearer ${data.access_token}` } }
+        );
+        if (testRes.ok) return false;
+      } catch {}
+    }
+
+    if (!data.refresh_token || data.refresh_token === "" || data.refresh_token === "PENDING_EXCHANGE") {
       return true;
     }
 
@@ -88,7 +102,9 @@ export async function isYouTubeTokenRevoked(): Promise<boolean> {
     });
 
     const responseData = await res.json();
-    return !res.ok || !responseData.access_token;
+    if (res.ok && responseData.access_token) return false;
+    if (responseData.error === "invalid_grant") return true;
+    return true;
   } catch {
     return true;
   }
