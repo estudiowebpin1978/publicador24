@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     }));
 
     // Intentar refresh con lo que hay para ver error real
-    let refreshResult = null;
+    let refreshResult: any = null;
     if (info.length > 0 && info[0].refresh_token_present) {
       const refreshToken = rows?.[0]?.refresh_token || "";
       if (refreshToken && refreshToken !== "PENDING_EXCHANGE") {
