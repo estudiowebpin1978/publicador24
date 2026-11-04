@@ -115,6 +115,71 @@ function avoidRepetitionNote(recentTexts: string[]): string {
  * converge siempre al mismo gancho. Se usa el conteo total real, no la muestra
  * de recientes (que está cortada a 50 y rompería la rotación).
  */
+async function getPerformanceInsight(
+  supabase: SupabaseClient,
+  campaignId: string,
+  platform: string
+): Promise<string> {
+  try {
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const { data: analytics } = await supabase
+    .from("analytics_daily")
+    .select("reach, likes, comments, shares, views, engagement_rate, date")
+    .eq("platform", platform)
+    .gte("date", since);
+
+    if (!analytics || analytics.length === 0) {
+      return "Sin datos de rendimiento previo para esta plataforma.";
+    }
+
+    const totalReach = analytics.reduce((s, r) => s + (r.reach || 0), 0);
+    const totalLikes = analytics.reduce((s, r) => s + (r.likes || 0), 0);
+    const totalComments = analytics.reduce((s, r) => s + (r.comments || 0), 0);
+    const totalShares = analytics.reduce((s, r) => s + (r.shares || 0), 0);
+    const totalViews = analytics.reduce((s, r) => s + (r.views || 0), 0);
+    const avgEngagement = analytics.reduce((s, r) => s + (r.engagement_rate || 0), 0) / analytics.length;
+
+    const hourEngagement = {};
+    for (const row of analytics) {
+      const h = new Date(row.date).getUTCHours();
+      hourEngagement[h] = (hourEngagement[h] || 0) + (row.engagement_rate || 0);
+    }
+    const bestHourEntry = Object.entries(hourEngagement as Record<number, number>).sort((a, b) => b[1] - a[1])[0];
+    const bestHour = bestHourEntry ? bestHourEntry[0] : "n/a";
+
+    const { data: recent } = await supabase
+    .from("content_pieces")
+    .select("title, hook, platform")
+    .eq("campaign_id", campaignId)
+    .eq("platform", platform)
+    .eq("status", "PUBLISHED")
+    .order("published_at", { ascending: false })
+    .limit(5);
+
+    const recentHooks = (recent || []).map((r) => r.hook || r.title).filter(Boolean).slice(0, 3);
+
+    const parts = [
+      "DATOS DE RENDIMIENTO (" + analytics.length + " posts en 30 dias, plataforma: " + platform + "):",
+      "- Alcance total: " + totalReach,
+      "- Likes: " + totalLikes + " | Comentarios: " + totalComments + " | Shares: " + totalShares,
+      "- Vistas: " + totalViews,
+      "- Engagement rate promedio: " + avgEngagement.toFixed(1) + "%",
+      "- Mejor hora UTC: " + bestHour,
+    ];
+
+    if (recentHooks.length > 0) {
+      parts.push("- Ultimos ganchos usados (evitar repetir): " + recentHooks.join(" | "));
+    }
+
+    parts.push("");
+    parts.push("INSTRUCCION: Prioriza el tipo de contenido que tuvo mejor engagement. Si el engagement es bajo, prueba un angulo nuevo. Siempre inclui el CTA con el link del sitio.");
+
+    return parts.join("\n");
+  } catch {
+    return "Sin datos de rendimiento previo para esta plataforma.";
+  }
+}
+
 async function countPublishedForAngle(
   supabase: SupabaseClient,
   campaignId: string,
@@ -423,11 +488,14 @@ export async function POST(request?: NextRequest) {
           await countPublishedForAngle(supabase, campaign.id, platform),
           recentTexts
         );
+        // Insight de rendimiento: qué funcionó mejor en esta plataforma
+        const perfInsight = await getPerformanceInsight(supabase, campaign.id, platform);
         const prompt = buildPostPrompt(
           platform,
           campaign,
           avoidRepetitionNote(recentTexts),
-          bufferAngle
+          bufferAngle,
+          perfInsight
         );
         result.details.push(`[${platform}] Ángulo: ${bufferAngle.label}`);
 

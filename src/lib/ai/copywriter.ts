@@ -211,7 +211,8 @@ export function buildPostPrompt(
   platform: string,
   campaign?: CopyCampaignContext | null,
   extra?: string,
-  angle?: { label: string; guide: string }
+  angle?: { label: string; guide: string },
+  performanceNote?: string
 ): string {
   const style = PLATFORM_STYLES[platform] || PLATFORM_STYLES.instagram;
   const site = getSiteUrl(campaign);
@@ -226,6 +227,10 @@ export function buildPostPrompt(
     // El ángulo va antes de la TAREA: es la decisión de edición del día, y
     // condiciona todo lo que se escriba. Sin él la IA converge al mismo gancho.
     ...(angle ? [buildAngleNote(angle), ''] : []),
+    // Datos de rendimiento: qué funcionó antes para esta plataforma. La IA debe
+    // priorizar lo que ya rindió mejor (hook, ángulo, hashtag) sin repetirlo
+    // literalmente.
+    ...(performanceNote ? [performanceNote, ''] : []),
     'TAREA',
     `Escribí la publicación de hoy para ${platform}: que le hable al público de la campaña y le dé un motivo real para entrar a ${site}.`,
     '',
