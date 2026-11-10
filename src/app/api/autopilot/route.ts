@@ -35,6 +35,7 @@ import { processPendingRenders, startYouTubeRender, isVideoRenderBlocked } from 
 import { buildTikTokVideo, selectTikTokFrames } from "@/lib/video/tiktok-video";
 import { checkFFmpeg } from "@/lib/video/ffmpeg";
 import { maxSimilarityVs } from "../../../../shared/text-similarity";
+import { generateHashtagTier } from "@/lib/hashtags/engine";
 import { findProhibitedClaims } from "../../../../shared/prohibited-claims";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -106,6 +107,32 @@ function avoidRepetitionNote(recentTexts: string[]): string {
     .map((text) => `- ${text.replace(/\s+/g, " ").slice(0, 90)}`)
     .join("\n");
   return `Ya publicaste esto en este canal (NO repitas ganchos, frases, estructuras ni ideas; cambi├í el ├íngulo):\n${samples}`;
+}
+
+/**
+ * Fusiona los hashtags curados por plataforma (engine: rankings de engagement
+ * real en Argentina) con los que gener├▓ la IA, sin duplicados y con tope por
+ * plataforma. Los curados van primero: son los de mayor alcance comprobado.
+ */
+function mergedHashtags(platform: string, aiHashtags: string[] = []): string[] {
+  let curated: string[] = [];
+  try {
+    curated = generateHashtagTier(platform as never, 5).map((h) => h.tag);
+  } catch {
+    curated = [];
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const tag of [...curated, ...aiHashtags]) {
+    const clean = (tag || "").trim();
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+    if (out.length >= 6) break;
+  }
+  return out;
 }
 
 /**
@@ -561,7 +588,7 @@ export async function POST(request?: NextRequest) {
             `${ensureSiteUrl(
               `${content.hook || ""}\n\n${content.body || ""}\n\n${content.cta || ""}`.trim(),
               campaign
-            )}\n\n${(content.hashtags || []).join(" ")}`
+            )}\n\n${mergedHashtags(platform, content.hashtags || []).join(" ")}`
           );
 
           const sounds = TRENDING_SOUNDS[platform];
@@ -874,7 +901,7 @@ export async function POST(request?: NextRequest) {
               `${ensureSiteUrl(
                 `${content.hook || ""}\n\n${content.body || ""}\n\n${content.cta || ""}`.trim(),
                 campaign
-              )}\n\n${(content.hashtags || []).join(" ")}`
+              )}\n\n${mergedHashtags(platform, content.hashtags || []).join(" ")}`
             );
             const scheduledTime = pickHumanTimeSlot(platform, true, rotSmartHour);
             const tMedia = Date.now();
