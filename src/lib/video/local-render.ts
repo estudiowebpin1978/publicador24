@@ -138,7 +138,9 @@ export async function renderLocalVideo(input: LocalVideoInput): Promise<LocalVid
       // Pista de audio silenciosa: algunos (TikTok) rechazan mp4 sin audio.
       args.push("-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100");
     }
-    args.push("-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "26");
+    // veryfast + threads limitado: el plan gratis de Render tiene 512 MB y
+    // libx264 con todos los cores libres puede superarlos en 1080x1920.
+    args.push("-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-threads", "2");
     args.push("-c:a", "aac", "-b:a", "64k");
     args.push("-t", String(totalDuration), outputPath);
 

@@ -1,0 +1,68 @@
+# Blueprint de Render: crea el Web Service con un clic.
+# Dashboard → New → Blueprint → linkear este repo:
+#   https://dashboard.render.com/blueprints
+#
+# Los secrets se piden al sincronizar (sync: false) o se cargan después en
+# Environment → del servicio. Ver MIGRACION-HOSTING.md §3.2.
+services:
+  - type: web
+    name: autopublicador
+    runtime: node
+    plan: free # 0.1 CPU / 512 MB RAM
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    # El ciclo del autopilot tarda varios minutos (IA + render + publicar):
+    # Render debe esperar a que el proceso termine antes de mandar SIGTERM.
+    maxShutdownDelaySeconds: 300
+    envVars:
+      # Coincide con el build verificado localmente (node v24.14.0).
+      - key: NODE_VERSION
+        value: "24.14.0"
+      # Render inyecta RENDER_EXTERNAL_HOSTNAME; src/lib/site-url.ts la usa
+      # como fallback, pero NEXT_PUBLIC_APP_URL va en build time así que se
+      # fija explícita. Reemplazá <servicio> por el subdominio elegido.
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: APP_URL
+        sync: false
+      # Secrets de la app (mismos valores que en Vercel → ver MIGRACION-HOSTING.md)
+      - key: CRON_SECRET
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GOOGLE_STUDIO_API_KEY
+        sync: false
+      - key: SHOTSTACK_API_KEY
+        sync: false
+      - key: BUFFER_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: META_APP_ID
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: META_PAGE_ID
+        sync: false
+      - key: META_PAGE_ACCESS_TOKEN
+        sync: false
+      - key: BULKPUBLISH_CLIENT_ID
+        sync: false
+      - key: BULKPUBLISH_API_KEY
+        sync: false
+      - key: BULKPUBLISH_REDIRECT_URI
+        sync: false
+      - key: NEXT_PUBLIC_CONVEX_URL
+        sync: false

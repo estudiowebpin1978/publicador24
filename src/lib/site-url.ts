@@ -7,8 +7,10 @@
  * Históricamente este dominio estaba hardcodeado en 9 archivos. Ahora es
  * configurable para poder migrar de hosting sin tocar código:
  *
- *   NEXT_PUBLIC_APP_URL  -> prioridad (ya la usan los adapters sociales)
- *   APP_URL              -> respaldo (config.appUrl)
+ *   NEXT_PUBLIC_APP_URL      -> prioridad (ya la usan los adapters sociales)
+ *   APP_URL                  -> respaldo (config.appUrl)
+ *   RENDER_EXTERNAL_HOSTNAME -> inyectado por Render; detecta solo la URL
+ *   fallback                 -> dominio histórico (comportamiento previo)
  *
  * El fallback conserva el dominio actual para que nada se rompa si el env
  * no está seteado: el comportamiento en producción es idéntico al previo.
@@ -17,11 +19,17 @@ export const LEGACY_SITE_URL = "https://autopublicador-zeta.vercel.app";
 
 /** Devuelve la URL base del app sin barra final. */
 export function getBaseUrl(): string {
-  const raw = (
+  const explicit = (
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.APP_URL ||
-    LEGACY_SITE_URL
+    ""
   ).trim();
+
+  const renderHost = (process.env.RENDER_EXTERNAL_HOSTNAME || "").trim();
+  const raw =
+    explicit ||
+    (renderHost ? `https://${renderHost}` : "") ||
+    LEGACY_SITE_URL;
 
   if (!raw) return LEGACY_SITE_URL;
 
