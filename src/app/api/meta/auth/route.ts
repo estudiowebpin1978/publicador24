@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { absoluteUrl } from "@/lib/site-url";
 
 const APP_ID = process.env.META_APP_ID;
 const APP_SECRET = process.env.META_APP_SECRET;
-const REDIRECT_URI = "https://autopublicador-zeta.vercel.app/api/meta/callback";
+const REDIRECT_URI = absoluteUrl("/api/meta/callback");
 const SCOPES = [
   "pages_manage_posts",
   "pages_read_engagement",

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCode, getClientId, getRedirectUri } from "@/lib/bulkpublish/oauth";
+import { absoluteUrl } from "@/lib/site-url";
 
 /**
  * GET /api/auth/bulkpublish/callback
@@ -28,7 +29,7 @@ function readFlowCookie(request: NextRequest): FlowState | null {
 }
 
 function redirectToSettings(params: Record<string, string>): NextResponse {
-  const target = new URL("/settings", "https://autopublicador-zeta.vercel.app");
+  const target = new URL("/settings", absoluteUrl(""));
   for (const [k, v] of Object.entries(params)) target.searchParams.set(k, v);
   return NextResponse.redirect(target);
 }

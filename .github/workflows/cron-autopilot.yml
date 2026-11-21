@@ -1,0 +1,56 @@
+name: Autopilot diario
+
+# Reemplaza los `crons` de vercel.json cuando el deploy vive en otro hosting
+# (Render Free no incluye cron programado). Dispara el mismo endpoint a las
+# 13:00 UTC = 10:00 ARG, idéntico al schedule original.
+#
+# Requiere configurar en el repo (Settings > Secrets and variables > Actions):
+#   vars.APP_BASE_URL   -> URL base del deploy, ej. https://tu-app.onrender.com
+#   secrets.CRON_SECRET -> el mismo valor que la env CRON_SECRET de la app
+on:
+  schedule:
+    - cron: "0 13 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  autopilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Disparar /api/cron/autopilot
+        env:
+          BASE_URL: ${{ vars.APP_BASE_URL }}
+          SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BASE_URL}" ]; then
+            echo "::error::Falta la variable de repo APP_BASE_URL (ej. https://tu-app.onrender.com)"
+            exit 1
+          fi
+          if [ -z "${SECRET}" ]; then
+            echo "::error::Falta el secret de repo CRON_SECRET (debe ser igual al de la app)"
+            exit 1
+          fi
+
+          # El ciclo incluye render con ffmpeg + publicación: puede tardar varios
+          # minutos, por eso el timeout del job es de 20 min.
+          code=$(curl -sS -o body.json -w "%{http_code}" \
+            --max-time 1150 \
+            -H "Authorization: Bearer ${SECRET}" \
+            "${BASE_URL%/}/api/cron/autopilot")
+
+          echo "HTTP ${code}"
+          cat body.json || true
+          echo
+
+          # 401/403 = secreto mal configurado. 5xx = la app falló.
+          # En ambos casos el job debe fallar para que se vea en Actions.
+          if [ "${code}" = "401" ] || [ "${code}" = "403" ]; then
+            echo "::error::CRON_SECRET no coincide entre GitHub Actions y la app"
+            exit 1
+          fi
+          if [ "${code}" -ge 500 ]; then
+            echo "::error::El autopilot devolvió ${code}"
+            exit 1
+          fi

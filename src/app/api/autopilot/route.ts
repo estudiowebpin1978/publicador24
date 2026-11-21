@@ -14,6 +14,7 @@ import {
 import { generateImageWithFallback } from "@/lib/ai/multi-image";
 import { parseJsonContent, normalizePostContent } from "@/lib/ai/json-content";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { absoluteUrl } from "@/lib/site-url";
 import { getBufferAccount, getBufferChannels, createBufferPost, getBufferPosts, deleteBufferPost, isBufferRateLimited, type BufferChannel } from "@/lib/buffer/client";
 import { getSmartSchedule, autoImproveCampaign } from "@/lib/ai/autonomous";
 import { syncInstagramInsights } from "@/lib/analytics/meta";
@@ -64,7 +65,7 @@ interface LoopResult {
 const secs = (ms: number): string => `${(ms / 1000).toFixed(1)}s`;
 
 /** Link de re-autorizaci├│n de YouTube (Google revoc├│ el token en prod). */
-const YOUTUBE_AUTH_URL = "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback";
+const YOUTUBE_AUTH_URL = absoluteUrl("/api/auth/youtube/callback");
 
 const TIME_SLOTS_UTC: number[] = [15, 16, 17, 20, 21, 23, 0, 1];
 
@@ -324,7 +325,9 @@ async function generatePlatformImage(
         "quiniela-factores.png",
         "quiniela-datos.png",
       ];
-      url = `https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/${fallback[Math.floor(Math.random() * fallback.length)]}`;
+      url = absoluteUrl(
+        `/campaigns/quiniela-ia/${fallback[Math.floor(Math.random() * fallback.length)]}`
+      );
     } else {
       // Sin imagen de respaldo no publicamos una foto de otro nicho: el caller
       // decide (si hay assets de la campa├▒a se usan; si no, se omite el asset).
@@ -962,7 +965,7 @@ export async function POST(request?: NextRequest) {
       youtubeTokenRevoked = await isYouTubeTokenRevoked();
       if (youtubeTokenRevoked) {
         result.details.push(
-          "[youtube] Token revocado/expirado — re-autorizar una vez en: https://autopublicador-zeta.vercel.app/api/auth/youtube/callback"
+          `[youtube] Token revocado/expirado — re-autorizar una vez en: ${YOUTUBE_AUTH_URL}`
         );
       }
     } catch {}
@@ -977,7 +980,7 @@ export async function POST(request?: NextRequest) {
         youtubeTokenRevoked = await isYouTubeTokenRevoked();
         if (youtubeTokenRevoked) {
           result.details.push(
-            "[youtube] Token revocado/expirado — re-autorizar una vez en: https://autopublicador-zeta.vercel.app/api/auth/youtube/callback"
+            `[youtube] Token revocado/expirado — re-autorizar una vez en: ${YOUTUBE_AUTH_URL}`
           );
         }
       } catch {}

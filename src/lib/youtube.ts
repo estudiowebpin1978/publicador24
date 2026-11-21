@@ -1,3 +1,5 @@
+import { absoluteUrl } from "@/lib/site-url";
+
 const YOUTUBE_CLIENT_ID = "197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com";
 const YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3";
 const YOUTUBE_CHANNEL_ID = "UC..."; // Se llena tras primera autorización
@@ -363,6 +365,6 @@ export async function createYouTubeVideo(
 }
 
 export function getYouTubeAuthUrl(): string {
-  const REDIRECT_URI = "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback";
-  return `https://accounts.google.com/oauth2/v2/auth?client_id=197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com&redirect_uri=${encodeURIComponent("https://autopublicador-zeta.vercel.app/api/auth/youtube/callback")}&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline&prompt=consent`;
+  const REDIRECT_URI = absoluteUrl("/api/auth/youtube/callback");
+  return `https://accounts.google.com/oauth2/v2/auth?client_id=197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=https://www.googleapis.com/auth/youtube.upload%20https://www.googleapis.com/auth/youtube.readonly&response_type=code&access_type=offline&prompt=consent`;
 }

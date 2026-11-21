@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { absoluteUrl } from "@/lib/site-url";
 
 /**
  * Diagnóstico operativo (protegido con CRON_SECRET): por qué TikTok/YouTube no
@@ -180,7 +181,7 @@ export async function GET(request: NextRequest) {
         : [
             // Si la campaña no tiene assets propios se usa una imagen fija del
             // sitio para poder verificar el render igual.
-            "https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/quiniela-matematica.png",
+            absoluteUrl("/campaigns/quiniela-ia/quiniela-matematica.png"),
           ];
       const { buildTikTokVideo } = await import("@/lib/video/tiktok-video");
       const t0 = Date.now();
@@ -713,7 +714,7 @@ export async function GET(request: NextRequest) {
           : revoked
             ? "Refresh token revocado/expirado — re-autorizar en /api/auth/youtube/callback"
             : "No se pudo obtener token — re-autorizar en /api/auth/youtube/callback",
-        authUrl: "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback",
+        authUrl: absoluteUrl("/api/auth/youtube/callback"),
       };
     } catch (e) {
       out.testYtStatus = { ok: false, error: e instanceof Error ? e.message : "error" };
@@ -726,7 +727,7 @@ export async function GET(request: NextRequest) {
     const revoked = await isYouTubeTokenRevoked();
     out.youtubeAuthStatus = {
       tokenRevoked: revoked,
-      authUrl: "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback",
+      authUrl: absoluteUrl("/api/auth/youtube/callback"),
       message: revoked
         ? "Token revocado/expirado — re-autorizar en la URL"
         : "Token válido — YouTube puede publicar",

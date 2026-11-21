@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
+import { absoluteUrl } from "@/lib/site-url";
 
 const YOUTUBE_CLIENT_ID = "197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com";
-const REDIRECT_URI = "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback";
+const REDIRECT_URI = absoluteUrl("/api/auth/youtube/callback");
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -59,20 +60,22 @@ export async function GET(request: NextRequest) {
         });
 
         return NextResponse.redirect(
-          refreshToken
-            ? "https://autopublicador-zeta.vercel.app/autopilot?youtube=connected&token_ready=true"
-            : "https://autopublicador-zeta.vercel.app/autopilot?youtube=connected&token_ready=false&details=no_refresh_token"
+          absoluteUrl(
+            refreshToken
+              ? "/autopilot?youtube=connected&token_ready=true"
+              : "/autopilot?youtube=connected&token_ready=false&details=no_refresh_token"
+          )
         );
       }
 
       console.error("YouTube token exchange failed:", tokenData);
       return NextResponse.redirect(
-        "https://autopublicador-zeta.vercel.app/autopilot?youtube=error&details=token_exchange_failed"
+        absoluteUrl("/autopilot?youtube=error&details=token_exchange_failed")
       );
     } catch (error) {
       console.error("YouTube callback error:", error);
       return NextResponse.redirect(
-        "https://autopublicador-zeta.vercel.app/autopilot?youtube=error&details=callback_exception"
+        absoluteUrl("/autopilot?youtube=error&details=callback_exception")
       );
     }
   }

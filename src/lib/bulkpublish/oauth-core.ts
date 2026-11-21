@@ -40,10 +40,19 @@ export function getClientId(): string {
 
 /** URI de redirección. Debe coincidir byte a byte con la registrada en la app. */
 export function getRedirectUri(): string {
-  return (
-    (process.env.BULKPUBLISH_REDIRECT_URI || "").trim() ||
-    "https://autopublicador-zeta.vercel.app/api/auth/bulkpublish/callback"
-  );
+  const configured = (process.env.BULKPUBLISH_REDIRECT_URI || "").trim();
+  if (configured) return configured;
+
+  // Fallback autocontenido (sin imports): este módulo es Puro a propósito para
+  // poder testearlo con `node --test` sin resolver el alias @/ de Next.
+  const base = (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    "https://autopublicador-zeta.vercel.app"
+  )
+    .trim()
+    .replace(/\/+$/, "");
+  return `${base}/api/auth/bulkpublish/callback`;
 }
 
 // ---------------------------------------------------------------------------

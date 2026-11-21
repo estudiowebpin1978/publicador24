@@ -1,14 +1,16 @@
+import { absoluteUrl } from "@/lib/site-url";
+
 const SHOTSTACK_API_URL = "https://api.shotstack.io/v1";
 
 // Imagenes propias y rapidas (evita placeholders externos que no cargan y
 // dejan el render encolado hasta el timeout).
 export const DEFAULT_RENDER_IMAGES = [
-  "https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/quiniela-matematica.png",
-  "https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/quiniela-patron.png",
-  "https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/quiniela-metodo.png",
-  "https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/quiniela-factores.png",
-  "https://autopublicador-zeta.vercel.app/campaigns/quiniela-ia/quiniela-datos.png",
-];
+  "quiniela-matematica.png",
+  "quiniela-patron.png",
+  "quiniela-metodo.png",
+  "quiniela-factores.png",
+  "quiniela-datos.png",
+].map((file) => absoluteUrl(`/campaigns/quiniela-ia/${file}`));
 
 export function getShotstackApiKey(): string {
   const key = process.env.SHOTSTACK_API_KEY;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
 import { createYouTubeVideo, tryGetSavedToken } from "@/lib/youtube";
+import { absoluteUrl } from "@/lib/site-url";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
           code: body.code,
           client_id: "197688740927-424b24ggfjps171uqbccdmhsqjtgdhp7.apps.googleusercontent.com",
           client_secret: process.env.GOOGLE_CLIENT_SECRET,
-          redirect_uri: "https://autopublicador-zeta.vercel.app/api/auth/youtube/callback",
+          redirect_uri: absoluteUrl("/api/auth/youtube/callback"),
           grant_type: "authorization_code",
         }).toString(),
       });
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
     if (!accessToken) {
       return NextResponse.json(
         {
-          error: "YouTube token expirado o no encontrado. Re-autorizá en: https://autopublicador-zeta.vercel.app/api/auth/youtube/callback",
+          error: `YouTube token expirado o no encontrado. Re-autorizá en: ${absoluteUrl("/api/auth/youtube/callback")}`,
           authorized: false,
         },
         { status: 401 }
