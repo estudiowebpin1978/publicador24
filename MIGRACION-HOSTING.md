@@ -57,25 +57,51 @@ Ejemplos:
 
 ### 3.2 Variables de entorno en el nuevo hosting
 
-Copiar **todas** las env de Vercel (Settings → Environment Variables) y
-agregar/actualizar:
+Se generó `.env.render` (local, no se commitea) con **28 de 31** claves ya
+resueltas: se extrajeron de Vercel (`vercel env pull`) y se completaron con los
+valores reales que había en `.env.local`.
 
-```
-NEXT_PUBLIC_APP_URL=<URL pública nueva>
-APP_URL=<URL pública nueva>
-CRON_SECRET=<mismo valor que usaba Vercel>
-```
+**Faltan 3 valores** que Vercel guarda como tipo *Secret* (write-only, no se
+pueden leer por API) y que no están en ningún backup local:
 
-> `NEXT_PUBLIC_APP_URL` se inyecta en build: hay que **re-buildar** después de
-> cambiarla.
+| Clave | ¿Obligatoria? | Dónde obtenerla |
+|---|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | **Sí** — sin ella no funciona nada (campañas, publicaciones, tokens) | [supabase.com](https://supabase.com) → tu proyecto → **Project Settings → API → service_role** |
+| `BULKPUBLISH_API_KEY` | Casi — si el OAuth de BulkPublish está conectado publica igual; si no, TikTok no publica | Panel de BulkPublish → API Keys |
+| `META_INSTAGRAM_BUSINESS_ID` | No — solo afecta a la sync de insights de Instagram | Meta for Developers → tu app → Instagram Graph API |
+
+Además ya quedaron seteadas con valores correctos:
+`APP_URL` / `NEXT_PUBLIC_APP_URL` (placeholder a reemplazar con la URL final),
+`SUPABASE_URL` y `SUPABASE_ANON_KEY` (iguales a las `NEXT_PUBLIC_*`),
+`AI_PROVIDER=groq`, `SOCIAL_MOCK_MODE=false`.
+
+> ⚠️ **`NEXT_PUBLIC_APP_URL` se inyecta en build**: hay que re-buildar después
+> de cambiarla.
+
+También se pueden re-cargar en cualquier momento desde Vercel con:
+```bash
+npx vercel env pull --environment=production .env.migracion
+```
+(las 31 marcadas como *Secret* vuelven como `[SENSITIVE]`; el resto sí sale).
 
 ### 3.3 Deploy
 
-**Render (Web Service):**
-- Build Command: `npm ci && npm run build`
-- Start Command: `npm run start`
-- Node: 20 o 22
-- No hace falta Dockerfile
+**Render (Web Service)** — ya está el blueprint `render.yaml` en la raíz:
+
+1. [dashboard.render.com/register](https://dashboard.render.com/register) → cuenta gratis
+2. **New → Blueprint** → linkear GitHub `estudiowebpin1978/publicador24`
+3. Render lee `render.yaml`: plan `free`, build `npm ci && npm run build`,
+   start `npm run start`, health `/api/health`
+4. Al sincronizar te pide las env con `sync: false` → pegar las de `.env.render`
+5. Subdominio gratis: `https://<nombre-del-servicio>.onrender.com`
+
+Servicio manual (sin blueprint): **New → Web Service** → connect repo →
+Runtime **Node** → Plan **Free** → Build `npm ci && npm run build` →
+Start `npm run start`.
+
+> El build de Next en 0.1 CPU es lento (varios minutos): es normal.
+> Render free se duerme a los 15 min sin tráfico y tarda ~1 min en despertar;
+> el cron de GitHub Actions lo despierta solo cada día.
 
 **Oracle Cloud (VM):**
 ```bash
